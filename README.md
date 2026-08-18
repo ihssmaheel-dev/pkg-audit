@@ -194,9 +194,60 @@ _Precedence:_ CLI Arguments > Config File > Default Values.
 
 ---
 
-## CI / CD Integration
+## 🤖 Official GitHub Action & PR Bot
 
-Integrate `pkg-audit` into GitHub Actions, GitLab CI, or pre-commit hooks to prevent dependency drift:
+Automate dependency drift auditing on every Pull Request using the official GitHub Action. It analyzes cross-workspace changes, uploads a standalone HTML report artifact, and posts/updates a sticky rich PR comment with alignment scores, conflict tables, and hygiene alerts.
+
+```yaml
+# .github/workflows/dependency-audit.yml
+name: Dependency Drift Audit
+
+on:
+  pull_request:
+    paths:
+      - "**/package.json"
+      - "pnpm-workspace.yaml"
+      - "package-lock.json"
+      - "pnpm-lock.yaml"
+      - "yarn.lock"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run pkg-audit & Post PR Comment
+        uses: ihssmaheel-dev/pkg-audit@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-pr: "true"
+          html-report: "true"
+          fail-on: "major" # Optional: fail step if major version conflicts are introduced
+```
+
+### Action Inputs
+
+| Input           | Description                                                            | Default               |
+| :-------------- | :--------------------------------------------------------------------- | :-------------------- |
+| `github-token`  | GitHub Token for posting or updating pull request comments             | `${{ github.token }}` |
+| `comment-on-pr` | Whether to post or update a sticky summary comment on the Pull Request | `true`                |
+| `html-report`   | Whether to generate and upload a standalone interactive HTML report    | `true`                |
+| `fail-on`       | Fail the workflow step if conflicts exist (`major`, `range`, `none`)   | `none`                |
+| `outdated`      | Query the npm registry for upstream version drift and release notes    | `false`               |
+| `directory`     | Directory path of the monorepo root to audit                           | `.`                   |
+| `report-name`   | Artifact name for the uploaded standalone HTML report                  | `pkg-audit-report`    |
+
+---
+
+## CI / CD Integration (CLI)
+
+Integrate `pkg-audit` directly into CLI scripts or generic CI environments:
 
 ```json
 {

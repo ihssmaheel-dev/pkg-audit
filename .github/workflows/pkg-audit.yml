@@ -1,0 +1,35 @@
+name: Monorepo Dependency Audit
+
+on:
+  pull_request:
+    paths:
+      - "**/package.json"
+      - "pnpm-workspace.yaml"
+      - "lerna.json"
+      - "package-lock.json"
+      - "pnpm-lock.yaml"
+      - "yarn.lock"
+      - "bun.lockb"
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    name: Dependency Drift Audit
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run pkg-audit & Post PR Comment
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-pr: "true"
+          html-report: "true"
+          fail-on: "none"

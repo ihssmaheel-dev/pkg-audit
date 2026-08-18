@@ -1,0 +1,82 @@
+name: "pkg-audit Dependency Auditor & PR Bot"
+description: "Scan JS/TS monorepos for dependency drift, version conflicts, and manifest hygiene, and post rich PR comments"
+author: "ihssmaheel-dev"
+
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  github-token:
+    description: "GitHub Token for posting or updating pull request comments"
+    required: false
+    default: ${{ github.token }}
+  comment-on-pr:
+    description: "Whether to post or update a sticky summary comment on the Pull Request"
+    required: false
+    default: "true"
+  html-report:
+    description: "Whether to generate and upload a standalone interactive HTML report as a workflow artifact"
+    required: false
+    default: "true"
+  fail-on:
+    description: "Fail the workflow step if conflicts exist at or above this severity (major, range, none)"
+    required: false
+    default: "none"
+  outdated:
+    description: "Query the npm registry for upstream version drift and GitHub release notes"
+    required: false
+    default: "false"
+  directory:
+    description: "Directory path of the monorepo root to audit"
+    required: false
+    default: "."
+  report-name:
+    description: "Artifact name for the uploaded standalone HTML report"
+    required: false
+    default: "pkg-audit-report"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node.js runtime
+      uses: actions/setup-node@v4
+      with:
+        node-version: ">=18.18"
+
+    - name: Run pkg-audit Scan & Generate HTML Report
+      shell: bash
+      run: |
+        ARGS="${{ inputs.directory }}"
+
+        if [ "${{ inputs.outdated }}" = "true" ]; then
+          ARGS="$ARGS --outdated --changelog"
+        fi
+
+        if [ "${{ inputs.html-report }}" = "true" ]; then
+          ARGS="$ARGS --html=pkg-audit-report.html"
+        fi
+
+        if [ "${{ inputs.comment-on-pr }}" = "true" ] && [ "${{ github.event_name }}" = "pull_request" ]; then
+          ARGS="$ARGS --post-pr-comment"
+        fi
+
+        if [ "${{ inputs.fail-on }}" = "major" ] || [ "${{ inputs.fail-on }}" = "range" ]; then
+          ARGS="$ARGS --fail-on=${{ inputs.fail-on }}"
+        fi
+
+        echo "Running pkg-audit with arguments: $ARGS"
+        npx --yes pkg-audit@latest $ARGS
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+
+    - name: Upload Standalone HTML Report Artifact
+      if: inputs.html-report == 'true' && (success() || failure())
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.report-name }}
+        path: pkg-audit-report.html
+        if-no-files-found: ignore

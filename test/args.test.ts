@@ -88,11 +88,26 @@ describe("parseArgs", () => {
     expect(opts.color).toBe(false)
   })
 
+  it("parses PR comment flags", () => {
+    const opts = parseArgs([
+      "--pr-comment",
+      "--post-pr-comment",
+      "--pr-comment=pr.md",
+      "--base-json=base.json",
+    ])
+    expect(opts.prComment).toBe(true)
+    expect(opts.postPrComment).toBe(true)
+    expect(opts.prCommentFile).toBe("pr.md")
+    expect(opts.baseJson).toBe("base.json")
+  })
+
   it("defaults are sane", () => {
     const opts = parseArgs([])
     expect(opts.target).toBeNull()
     expect(opts.top).toBe(10)
     expect(opts.respectGitignore).toBe(true)
     expect(opts.port).toBe(0)
+    expect(opts.prComment).toBe(false)
+    expect(opts.postPrComment).toBe(false)
   })
 })

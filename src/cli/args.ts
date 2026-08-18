@@ -25,6 +25,10 @@ export interface CliOptions {
   port: number
   noOpen: boolean
   watch: boolean
+  prComment: boolean
+  prCommentFile: string | null
+  postPrComment: boolean
+  baseJson: string | null
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -68,6 +72,10 @@ export function parseArgs(argv: string[]): CliOptions {
     port: 0,
     noOpen: false,
     watch: false,
+    prComment: false,
+    prCommentFile: null,
+    postPrComment: false,
+    baseJson: null,
   }
 
   for (const arg of argv) {
@@ -93,6 +101,16 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.noOpen = true
     } else if (arg === "--watch") {
       opts.watch = true
+    } else if (arg === "--post-pr-comment") {
+      opts.postPrComment = true
+      opts.prComment = true
+    } else if (arg === "--pr-comment") {
+      opts.prComment = true
+    } else if (arg.startsWith("--pr-comment=")) {
+      opts.prComment = true
+      opts.prCommentFile = arg.split("=").slice(1).join("=")
+    } else if (arg.startsWith("--base-json=")) {
+      opts.baseJson = arg.split("=").slice(1).join("=")
     } else if (arg.startsWith("--changelog-lines=")) {
       const n = Number(arg.split("=")[1])
       opts.changelogLines = Number.isFinite(n) && n > 0 ? n : 6
@@ -151,6 +169,9 @@ Usage:
 Options:
   --json[=file]          Emit JSON (stdout, or to file if given)
   --html[=file]          Write standalone HTML report (default: pkg-audit-report.html)
+  --pr-comment[=file]    Generate GitHub PR comment markdown (to stdout or file)
+  --post-pr-comment      Automatically post/update PR sticky comment in GitHub Actions
+  --base-json=file       Compare with base branch JSON audit to compute delta
   --ui                   Open local dashboard in browser
   --workspace=<name>     Full dependency detail for one workspace (name or path)
   --full                 Full dependency matrix for every workspace

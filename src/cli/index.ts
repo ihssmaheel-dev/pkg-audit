@@ -9,6 +9,9 @@ import { renderTerminalReport } from "./report.js"
 import { startServer } from "../server/index.js"
 import { generateStandaloneHtml } from "../html/index.js"
 import { addRecent, loadConfig } from "../config/index.js"
+import { generatePrComment } from "./pr-comment.js"
+import { postOrUpdateGitHubPrComment } from "./github-pr.js"
+import type { ScanResult } from "../types.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -143,6 +146,38 @@ async function main(): Promise<void> {
     const outPath = merged.htmlFile ?? path.join(dir, "pkg-audit-report.html")
     fs.writeFileSync(outPath, html, "utf8")
     console.log(`Wrote HTML report to ${outPath}`)
+    exitWithCode(result, merged.failOn)
+    return
+  }
+
+  if (merged.prComment || merged.postPrComment) {
+    let baseResult: ScanResult | undefined
+    if (merged.baseJson && fs.existsSync(merged.baseJson)) {
+      try {
+        baseResult = JSON.parse(fs.readFileSync(merged.baseJson, "utf8")) as ScanResult
+      } catch {
+        // Ignore read/parse error
+      }
+    }
+
+    const comment = generatePrComment(result, {
+      baseResult,
+      artifactName: merged.htmlFile ? path.basename(merged.htmlFile) : undefined,
+    })
+
+    if (merged.prCommentFile) {
+      fs.writeFileSync(merged.prCommentFile, comment, "utf8")
+      console.log(`Wrote PR comment to ${merged.prCommentFile}`)
+    }
+
+    if (merged.postPrComment) {
+      await postOrUpdateGitHubPrComment(comment)
+    }
+
+    if (!merged.prCommentFile && !merged.postPrComment) {
+      process.stdout.write(comment + "\n")
+    }
+
     exitWithCode(result, merged.failOn)
     return
   }
