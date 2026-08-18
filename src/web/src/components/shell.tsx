@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
 import type { TabId } from "../types"
-import { IconDownload, IconRefreshCw, IconSearch, IconZap } from "./icons"
+import { IconDownload, IconGithub, IconRefreshCw, IconSearch, IconZap } from "./icons"
 
 interface TabDef {
   id: TabId
@@ -164,6 +164,16 @@ export function Shell(props: ShellProps) {
             <IconRefreshCw size={13} className={loading ? "spinner" : ""} />
             <span>{loading ? "Scanning…" : "Rescan"}</span>
           </button>
+          <a
+            class="flex items-center justify-center w-[32px] h-[32px] bg-[#101010] border border-[#3d3a39] hover:bg-[#1a1a1a] hover:border-[#8b949e] rounded-[6px] text-[#8b949e] hover:text-[#f2f2f2] transition-colors"
+            href="https://github.com/ihssmaheel-dev/pkg-audit"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="GitHub Repository"
+            aria-label="GitHub Repository"
+          >
+            <IconGithub size={15} />
+          </a>
         </div>
       </div>
 
