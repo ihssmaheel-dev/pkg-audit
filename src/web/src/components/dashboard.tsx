@@ -7,10 +7,11 @@ import {
   IconAlertTriangle,
   IconCheckCircle,
   IconFolder,
+  IconLayers,
   IconPackage,
   IconRefreshCw,
   IconSearch,
-  IconWrench,
+  IconZap,
 } from "./icons"
 
 Chart.register(...registerables)
@@ -65,9 +66,10 @@ interface StatCardProps {
   value: number | string
   label: string
   accentColor: string
+  sub?: string
 }
 
-function StatCard({ icon, value, label, accentColor }: StatCardProps) {
+function StatCard({ icon, value, label, accentColor, sub }: StatCardProps) {
   return (
     <div class="flex items-center gap-3.5 p-5 bg-[#101010] border border-[#3d3a39] rounded-[8px] hover:border-[#8b949e] transition-colors">
       <div
@@ -76,9 +78,14 @@ function StatCard({ icon, value, label, accentColor }: StatCardProps) {
       >
         {icon}
       </div>
-      <div>
-        <div class="text-2xl font-bold font-mono tracking-tight text-[#ffffff] leading-none">{value}</div>
-        <div class="text-[11px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] mt-1.5">{label}</div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-baseline gap-2">
+          <span class="text-2xl font-bold font-mono tracking-tight text-[#ffffff] leading-none">{value}</span>
+          {sub && <span class="text-[11px] font-mono text-[#8b949e]">{sub}</span>}
+        </div>
+        <div class="text-[10.5px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] mt-1.5 truncate">
+          {label}
+        </div>
       </div>
     </div>
   )
@@ -106,7 +113,7 @@ function DonutChart({
     chartRef.current = new Chart(canvasRef.current, {
       type: "doughnut",
       data: {
-        labels: ["Aligned", "Range conflicts", "Major conflicts", "Linked"],
+        labels: ["Aligned", "Range conflicts", "Major conflicts", "Linked workspaces"],
         datasets: [
           {
             data: [aligned, range, major, linked],
@@ -119,6 +126,8 @@ function DonutChart({
       },
       options: {
         cutout: "72%",
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -145,21 +154,107 @@ function DonutChart({
   ]
 
   return (
-    <div class="flex items-center gap-8">
-      <div class="relative shrink-0" style="width:140px; height:140px">
+    <div class="flex items-center gap-6">
+      <div class="relative shrink-0" style="width:130px; height:130px">
         <canvas ref={canvasRef} />
         <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span class="font-mono text-2xl font-bold text-[#ffffff] leading-none">{total}</span>
-          <span class="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#8b949e] mt-1">
+          <span class="font-mono text-xl font-bold text-[#ffffff] leading-none">{total}</span>
+          <span class="text-[9.5px] font-semibold uppercase tracking-[1.5px] text-[#8b949e] mt-1">
             packages
           </span>
         </div>
       </div>
-      <div class="flex flex-col gap-2.5 flex-1">
+      <div class="flex flex-col gap-2 flex-1 min-w-0">
         {items.map((item) => (
-          <div key={item.label} class="flex items-center gap-2.5 text-xs">
+          <div key={item.label} class="flex items-center gap-2 text-xs">
             <span class={`w-2 h-2 rounded-full shrink-0 ${item.color}`} />
-            <span class="text-[#bdbdbd] flex-1">{item.label}</span>
+            <span class="text-[#bdbdbd] flex-1 truncate">{item.label}</span>
+            <span class="font-mono font-semibold text-[#f2f2f2]">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TypeDoughnutChart({
+  prod,
+  dev,
+  peer,
+  optional,
+  total,
+}: {
+  prod: number
+  dev: number
+  peer: number
+  optional: number
+  total: number
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const chartRef = useRef<Chart | null>(null)
+
+  useEffect(() => {
+    if (!canvasRef.current) return
+    chartRef.current?.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "doughnut",
+      data: {
+        labels: ["Production", "Development", "Peer dependencies", "Optional"],
+        datasets: [
+          {
+            data: [prod, dev, peer, optional],
+            backgroundColor: ["#00d992", "#8b949e", "#8b5cf6", "#f59e0b"],
+            borderColor: "#101010",
+            borderWidth: 3,
+            hoverOffset: 4,
+          },
+        ],
+      },
+      options: {
+        cutout: "72%",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#1a1a1a",
+            borderColor: "#3d3a39",
+            borderWidth: 1,
+            titleColor: "#ffffff",
+            bodyColor: "#bdbdbd",
+            padding: 10,
+          },
+        },
+      },
+    })
+    return () => {
+      chartRef.current?.destroy()
+    }
+  }, [prod, dev, peer, optional])
+
+  const items = [
+    { label: "Production", value: prod, color: "bg-[#00d992]" },
+    { label: "Development", value: dev, color: "bg-[#8b949e]" },
+    { label: "Peer deps", value: peer, color: "bg-[#8b5cf6]" },
+    { label: "Optional", value: optional, color: "bg-[#f59e0b]" },
+  ]
+
+  return (
+    <div class="flex items-center gap-6">
+      <div class="relative shrink-0" style="width:130px; height:130px">
+        <canvas ref={canvasRef} />
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span class="font-mono text-xl font-bold text-[#ffffff] leading-none">{total}</span>
+          <span class="text-[9.5px] font-semibold uppercase tracking-[1.5px] text-[#8b949e] mt-1">
+            declared
+          </span>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2 flex-1 min-w-0">
+        {items.map((item) => (
+          <div key={item.label} class="flex items-center gap-2 text-xs">
+            <span class={`w-2 h-2 rounded-full shrink-0 ${item.color}`} />
+            <span class="text-[#bdbdbd] flex-1 truncate">{item.label}</span>
             <span class="font-mono font-semibold text-[#f2f2f2]">{item.value}</span>
           </div>
         ))}
@@ -222,7 +317,7 @@ function HBarChart({
               font: { family: "JetBrains Mono", size: 11 },
               callback: (_, i) => {
                 const label = rows[i]?.label ?? ""
-                return label.length > 22 ? label.slice(0, 22) + "…" : label
+                return label.length > 20 ? label.slice(0, 20) + "…" : label
               },
             },
             border: { color: "#3d3a39" },
@@ -236,7 +331,7 @@ function HBarChart({
   }, [rows, color])
 
   return (
-    <div style="height: 200px; position: relative">
+    <div style="height: 190px; position: relative">
       <canvas ref={canvasRef} />
     </div>
   )
@@ -296,7 +391,7 @@ function VBarChart({ rows }: { rows: { label: string; value: number; color: stri
   }, [rows])
 
   return (
-    <div style="height: 200px; position: relative">
+    <div style="height: 190px; position: relative">
       <canvas ref={canvasRef} />
     </div>
   )
@@ -314,19 +409,19 @@ function DashCard({
   children: preact.ComponentChildren
 }) {
   return (
-    <div class="bg-[#101010] border border-[#3d3a39] rounded-[8px] p-6 hover:border-[#8b949e] transition-colors">
-      <div class="mb-5">
+    <div class="bg-[#101010] border border-[#3d3a39] rounded-[8px] p-6 hover:border-[#8b949e] transition-colors flex flex-col justify-between">
+      <div class="mb-4">
         {eyebrow && (
-          <div class="text-[11px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] mb-1">
+          <div class="text-[10.5px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] mb-1">
             {eyebrow}
           </div>
         )}
-        <div class="flex items-baseline justify-between">
-          <span class="text-[15px] font-semibold text-[#ffffff]">{title}</span>
-          {sub && <span class="text-xs font-mono text-[#8b949e]">{sub}</span>}
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-[15px] font-semibold text-[#ffffff] truncate">{title}</span>
+          {sub && <span class="text-xs font-mono text-[#8b949e] shrink-0">{sub}</span>}
         </div>
       </div>
-      {children}
+      <div class="flex-1 flex flex-col justify-center">{children}</div>
     </div>
   )
 }
@@ -340,10 +435,33 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
   const linked = useMemo(() => statuses.filter((d) => d.status === "linked").length, [statuses])
   const total = aligned + range + major + linked
 
+  const typeCounts = useMemo(() => {
+    let prod = 0
+    let dev = 0
+    let peer = 0
+    let optional = 0
+    for (const ws of data.workspaces) {
+      for (const dep of Object.values(ws.deps)) {
+        if (dep.type === "prod") prod++
+        else if (dep.type === "dev") dev++
+        else if (dep.type === "peer") peer++
+        else if (dep.type === "optional") optional++
+      }
+    }
+    return { prod, dev, peer, optional }
+  }, [data.workspaces])
+
   const topPackages = useMemo(
     () => [...statuses].sort((a, b) => b.wsCount - a.wsCount).slice(0, 8),
     [statuses]
   )
+
+  const workspaceDensities = useMemo(() => {
+    return [...data.workspaces]
+      .map((w) => ({ label: w.relPath, value: w.depCount }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8)
+  }, [data.workspaces])
 
   const conflicts = useMemo(
     () =>
@@ -354,21 +472,41 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
   )
 
   const outdated = data.outdated
+  const alignmentRate = total > 0 ? Math.round((aligned / total) * 100) : 100
 
   return (
-    <div class="space-y-6">
+    <div class="space-y-6 w-full">
       {/* Eyebrow and Section Header */}
-      <div>
-        <div class="text-xs font-semibold uppercase tracking-[2.52px] text-[#00d992] mb-1">
-          MONOREPO AUDIT
+      <div class="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[2.52px] text-[#00d992] mb-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#00d992]" />
+            <span>MONOREPO INTELLIGENCE</span>
+          </div>
+          <h1 class="text-2xl font-normal tracking-[-0.6px] text-[#ffffff]">
+            Dependency Health, Drift & Structure
+          </h1>
         </div>
-        <h1 class="text-2xl font-normal tracking-[-0.6px] text-[#ffffff]">
-          Dependency Health & Drift Overview
-        </h1>
+
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 px-3.5 py-1.5 bg-[#1a1a1a] border border-[#3d3a39] rounded-[6px] font-mono text-xs text-[#f2f2f2]">
+            <span class="text-[#8b949e]">Status:</span>
+            <span class={`font-bold ${alignmentRate >= 90 ? "text-[#00d992]" : "text-[#f59e0b]"}`}>
+              {alignmentRate}% Aligned
+            </span>
+          </div>
+          <button
+            class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
+            onClick={onOutdated}
+          >
+            <IconRefreshCw size={12} />
+            <span>Sync Registry</span>
+          </button>
+        </div>
       </div>
 
-      {/* 5-up Stat Cards Grid */}
-      <div class="grid grid-cols-5 gap-3.5 max-[1024px]:grid-cols-3 max-[640px]:grid-cols-2">
+      {/* 6-up Stat Cards Grid spanning full width */}
+      <div class="grid grid-cols-6 gap-3.5 max-[1400px]:grid-cols-3 max-[768px]:grid-cols-2">
         <StatCard
           icon={<IconFolder size={17} />}
           value={data.workspaces.length}
@@ -382,32 +520,44 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
           accentColor="#2fd6a1"
         />
         <StatCard
+          icon={<IconLayers size={17} />}
+          value={data.meta.totalUniquePackages}
+          label="Unique pkgs"
+          accentColor="#ffffff"
+        />
+        <StatCard
+          icon={<IconCheckCircle size={17} />}
+          value={`${alignmentRate}%`}
+          label="Alignment"
+          accentColor="#00d992"
+        />
+        <StatCard
           icon={<IconAlertTriangle size={17} />}
           value={data.conflicts.length}
           label="Conflicts"
           accentColor={data.conflicts.length > 0 ? "#f43f5e" : "#00d992"}
+          sub={
+            data.conflicts.length > 0
+              ? `${data.conflicts.filter((c) => c.severity === "major").length} major`
+              : "clean"
+          }
         />
         <StatCard
           icon={<IconSearch size={17} />}
           value={outdated ? outdated.outdated.length : "—"}
           label="Outdated"
           accentColor="#f59e0b"
-        />
-        <StatCard
-          icon={<IconWrench size={17} />}
-          value={data.hygieneIssues.length}
-          label="Hygiene"
-          accentColor="#8b5cf6"
+          sub={outdated ? `${outdated.all.length} checked` : "not run"}
         />
       </div>
 
       {/* Dashed line rhythm divider */}
       <div class="dashed-divider" />
 
-      {/* 2-up Chart Grid */}
-      <div class="grid grid-cols-2 gap-4 max-[860px]:grid-cols-1">
-        {/* Dependency health donut */}
-        <DashCard eyebrow="DISTRIBUTION" title="Dependency Health" sub={`${total} unique packages`}>
+      {/* Row 1 Charts: 3-up Grid */}
+      <div class="grid grid-cols-3 gap-4 max-[1200px]:grid-cols-2 max-[768px]:grid-cols-1">
+        {/* Chart 1: Dependency Health Doughnut */}
+        <DashCard eyebrow="HEALTH BREAKDOWN" title="Version Alignment" sub={`${total} unique packages`}>
           {total > 0 ? (
             <DonutChart aligned={aligned} range={range} major={major} linked={linked} total={total} />
           ) : (
@@ -417,8 +567,37 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
           )}
         </DashCard>
 
-        {/* Top packages horizontal bar */}
-        <DashCard eyebrow="FREQUENCY" title="Top Packages by Usage" sub="workspaces using each">
+        {/* Chart 2: Dependency Type Composition */}
+        <DashCard
+          eyebrow="TYPE BREAKDOWN"
+          title="Dependency Composition"
+          sub={`${data.meta.totalDepDeclarations} declarations`}
+        >
+          <TypeDoughnutChart
+            prod={typeCounts.prod}
+            dev={typeCounts.dev}
+            peer={typeCounts.peer}
+            optional={typeCounts.optional}
+            total={data.meta.totalDepDeclarations}
+          />
+        </DashCard>
+
+        {/* Chart 3: Workspace Density */}
+        <DashCard eyebrow="WORKSPACE DENSITY" title="Dependencies by Workspace" sub="declared dependencies">
+          {workspaceDensities.length > 0 ? (
+            <HBarChart rows={workspaceDensities} color="#2fd6a1" />
+          ) : (
+            <div class="flex items-center justify-center h-36 text-[#8b949e] text-sm font-mono">
+              No workspaces found.
+            </div>
+          )}
+        </DashCard>
+      </div>
+
+      {/* Row 2 Charts: 3-up Grid */}
+      <div class="grid grid-cols-3 gap-4 max-[1200px]:grid-cols-2 max-[768px]:grid-cols-1">
+        {/* Chart 4: Top packages by frequency */}
+        <DashCard eyebrow="FREQUENCY" title="Top Shared Dependencies" sub="workspace references">
           {topPackages.length > 0 ? (
             <HBarChart
               rows={topPackages.map((p) => ({ label: p.name, value: p.wsCount, color: "#00d992" }))}
@@ -430,11 +609,11 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
           )}
         </DashCard>
 
-        {/* Outdated breakdown vertical bar */}
+        {/* Chart 5: Outdated breakdown vertical bar */}
         <DashCard
-          eyebrow="UPSTREAM"
+          eyebrow="UPSTREAM DRIFT"
           title="Outdated Breakdown"
-          sub={outdated ? `${outdated.all.length} checked` : "not run yet"}
+          sub={outdated ? `${outdated.all.length} queried` : "registry query pending"}
         >
           {outdated ? (
             <VBarChart
@@ -447,7 +626,7 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
             />
           ) : (
             <div class="flex flex-col items-center justify-center gap-3 h-36 text-[#8b949e] text-sm text-center">
-              <span class="text-xs">Run the outdated check to see version drift against npm.</span>
+              <span class="text-xs">Query npm to view semver drift against registry releases.</span>
               <button
                 class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
                 onClick={onOutdated}
@@ -459,8 +638,8 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
           )}
         </DashCard>
 
-        {/* Conflicts by package */}
-        <DashCard eyebrow="DRIFT" title="Conflicts by Package" sub="declared versions differ">
+        {/* Chart 6: Conflicts by package */}
+        <DashCard eyebrow="VERSION MISMATCHES" title="Active Version Conflicts" sub="differing semver specs">
           {conflicts.length > 0 ? (
             <HBarChart
               rows={conflicts.map((c) => ({
@@ -482,6 +661,39 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
             </div>
           )}
         </DashCard>
+      </div>
+
+      {/* Monorepo Quick Details & Actions Banner */}
+      <div class="p-6 bg-[#101010] border border-[#3d3a39] rounded-[8px] flex items-center justify-between flex-wrap gap-4">
+        <div class="flex items-center gap-4">
+          <div class="flex items-center justify-center w-10 h-10 rounded-[6px] bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992]">
+            <IconZap size={18} />
+          </div>
+          <div>
+            <div class="text-sm font-semibold text-[#ffffff]">{data.root}</div>
+            <div class="text-xs font-mono text-[#8b949e] mt-0.5">
+              {data.workspaces.length} workspaces · {data.meta.totalUniquePackages} unique dependencies ·{" "}
+              {data.scannedMs}ms scan time
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <button
+            class="flex items-center gap-1.5 h-8 px-3 bg-[#1a1a1a] hover:bg-[#101010] border border-[#3d3a39] hover:border-[#8b949e] rounded-[6px] text-xs font-medium text-[#f2f2f2] transition-colors"
+            onClick={() => onTabChange("matrix")}
+          >
+            <IconLayers size={13} className="text-[#8b949e]" />
+            <span>Matrix Grid</span>
+          </button>
+          <button
+            class="flex items-center gap-1.5 h-8 px-3 bg-[#1a1a1a] hover:bg-[#101010] border border-[#3d3a39] hover:border-[#8b949e] rounded-[6px] text-xs font-medium text-[#f2f2f2] transition-colors"
+            onClick={() => onTabChange("conflicts")}
+          >
+            <IconAlertTriangle size={13} className="text-[#f43f5e]" />
+            <span>Review Conflicts ({data.conflicts.length})</span>
+          </button>
+        </div>
       </div>
     </div>
   )

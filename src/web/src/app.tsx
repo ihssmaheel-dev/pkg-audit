@@ -150,7 +150,7 @@ export function App() {
         onExportHtml={() => void handleCommand("export-html")}
         onOpenPalette={() => setPaletteOpen(true)}
       />
-      <main class="max-w-[1400px] mx-auto px-6 py-8">
+      <main class="w-full px-8 py-8 max-[640px]:px-4">
         {loading && (
           <div class="flex flex-col items-center justify-center gap-3 py-24 text-[#8b949e] text-sm">
             <div class="w-5 h-5 rounded-full border-2 border-[#3d3a39] border-t-[#00d992] spinner" />

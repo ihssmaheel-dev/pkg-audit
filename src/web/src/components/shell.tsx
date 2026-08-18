@@ -53,7 +53,7 @@ export function Shell(props: ShellProps) {
   return (
     <header class="sticky top-0 z-50 bg-[#101010] border-b border-[#3d3a39]">
       {/* Top row */}
-      <div class="flex items-center gap-3.5 h-[54px] px-6">
+      <div class="flex items-center gap-3.5 h-[54px] px-8 max-[640px]:px-4">
         {/* Brand */}
         <div class="flex items-center gap-2 font-mono font-bold text-[14px] tracking-tight text-[#ffffff] shrink-0">
           <div class="flex items-center justify-center w-6 h-6 rounded-[6px] bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992]">
@@ -168,7 +168,7 @@ export function Shell(props: ShellProps) {
       </div>
 
       {/* Tabs navigation row */}
-      <nav class="flex items-center gap-1 h-10 px-6 border-t border-[#3d3a39]/70 bg-[#101010]">
+      <nav class="flex items-center gap-1 h-10 px-8 max-[640px]:px-4 border-t border-[#3d3a39]/70 bg-[#101010] overflow-x-auto">
         {TABS.map((t) => {
           const count = data && t.count ? t.count(data) : undefined
           const active = tab === t.id
