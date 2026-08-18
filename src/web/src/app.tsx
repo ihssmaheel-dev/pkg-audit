@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks"
 import { Shell } from "./components/shell"
+import { Dashboard } from "./components/dashboard"
 import { Matrix } from "./components/matrix"
 import { Conflicts } from "./components/conflicts"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
+import { WorkspaceDetails } from "./components/workspace-details"
+import { Packages } from "./components/packages"
 import { Outdated } from "./components/outdated"
 import { Drawer } from "./components/drawer"
 import { CommandPalette } from "./components/command-palette"
@@ -14,7 +17,16 @@ import type { ScanResult } from "../../types"
 import type { DrawerState, ScanUiOptions, TabId, Theme } from "./types"
 
 const THEME_KEY = "pkg-audit-theme"
-const TAB_IDS: TabId[] = ["matrix", "conflicts", "outdated", "hygiene", "workspaces"]
+const TAB_IDS: TabId[] = [
+  "dashboard",
+  "matrix",
+  "conflicts",
+  "outdated",
+  "hygiene",
+  "workspaces",
+  "workspace-details",
+  "packages",
+]
 
 function initialTheme(): Theme {
   try {
@@ -52,7 +64,7 @@ async function copyText(text: string): Promise<void> {
 export function App() {
   const embedded = window.__PKG_AUDIT__
   const { result, loading, error, scan } = useScan()
-  const [tab, setTab] = useState<TabId>("matrix")
+  const [tab, setTab] = useState<TabId>("dashboard")
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(initialTheme)
@@ -185,6 +197,13 @@ export function App() {
             {error.code === "NO_DIR" && " — choose a folder below"}
           </div>
         )}
+        {data && tab === "dashboard" && (
+          <Dashboard
+            data={data}
+            onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
+            onTabChange={setTab}
+          />
+        )}
         {data && tab === "matrix" && (
           <Matrix
             data={data}
@@ -202,6 +221,15 @@ export function App() {
         {data && tab === "hygiene" && <Hygiene data={data} />}
         {data && tab === "workspaces" && (
           <Workspaces data={data} onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })} />
+        )}
+        {data && tab === "workspace-details" && (
+          <WorkspaceDetails
+            data={data}
+            onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
+          />
+        )}
+        {data && tab === "packages" && (
+          <Packages data={data} onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })} />
         )}
       </main>
       <Drawer data={data} state={drawer} onClose={() => setDrawer(null)} notify={notify} />

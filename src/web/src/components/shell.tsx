@@ -11,6 +11,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  { id: "dashboard", label: "Dashboard" },
   { id: "matrix", label: "Matrix" },
   {
     id: "conflicts",
@@ -25,6 +26,8 @@ const TABS: TabDef[] = [
   },
   { id: "hygiene", label: "Hygiene", count: (d) => d.hygieneIssues.length },
   { id: "workspaces", label: "Workspaces", count: (d) => d.workspaces.length },
+  { id: "workspace-details", label: "Workspace Details", count: (d) => d.workspaces.length },
+  { id: "packages", label: "Packages", count: (d) => d.meta.totalUniquePackages },
 ]
 
 function rootLabel(dir: string): string {

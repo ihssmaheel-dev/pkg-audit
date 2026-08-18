@@ -9,6 +9,7 @@ import {
   IconPackage,
   IconRefreshCw,
   IconSearch,
+  IconStar,
   IconWrench,
   type IconComponent,
 } from "./icons"
@@ -62,11 +63,13 @@ export function CommandPalette({ data, onSelect, onClose }: CommandPaletteProps)
       { label: "Copy conflicts as markdown", icon: IconCopy, action: "copy-conflicts" },
     ]
     const goto: Command[] = [
+      { label: "Go to Dashboard", icon: IconStar, action: "goto", payload: "dashboard" },
       { label: "Go to Matrix", icon: IconLayers, action: "goto", payload: "matrix" },
       { label: "Go to Conflicts", icon: IconAlertTriangle, action: "goto", payload: "conflicts" },
       { label: "Go to Outdated", icon: IconPackage, action: "goto", payload: "outdated" },
       { label: "Go to Hygiene", icon: IconWrench, action: "goto", payload: "hygiene" },
       { label: "Go to Workspaces", icon: IconFolder, action: "goto", payload: "workspaces" },
+      { label: "Go to Packages", icon: IconPackage, action: "goto", payload: "packages" },
     ]
     const result: Array<{ label: string; items: Command[] }> = [
       { label: "Actions", items: actions },
