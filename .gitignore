@@ -6,6 +6,9 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
-pkg-audit-report.htmltest/.tmp/
-
+pkg-audit-report.html
+test/.tmp/
 reffs
+
+# Un-ignore test fixtures
+!test/fixtures/**
