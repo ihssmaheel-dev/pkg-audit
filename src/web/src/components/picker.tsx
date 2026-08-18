@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
+import { getToken } from "../hooks/use-scan"
 import { IconChevronRight, IconFolder, IconFolderOpen, IconRefreshCw, IconStar } from "./icons"
 
 interface RecentsResponse {
@@ -18,7 +19,8 @@ export function Picker({ onScan }: PickerProps) {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    void fetch("/api/recents")
+    const token = getToken()
+    void fetch(`/api/recents${token ? `?token=${token}` : ""}`)
       .then((res) => res.json())
       .then((body: RecentsResponse) => setRecents(body))
       .catch(() => {})
@@ -36,7 +38,8 @@ export function Picker({ onScan }: PickerProps) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/pick-folder", { method: "POST" })
+      const token = getToken()
+      const res = await fetch(`/api/pick-folder${token ? `?token=${token}` : ""}`, { method: "POST" })
       const body = (await res.json()) as { path?: string | null }
       if (body.path) {
         await scanDir(body.path)

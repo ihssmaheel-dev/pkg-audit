@@ -2,7 +2,7 @@ import { useMemo, useRef, useEffect } from "preact/hooks"
 import type { JSX } from "preact"
 import type { ScanResult } from "../../../types"
 import type { TabId } from "../types"
-import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from "chart.js"
+import { Chart, registerables } from "chart.js"
 import {
   IconAlertTriangle,
   IconCheckCircle,
@@ -13,7 +13,7 @@ import {
   IconWrench,
 } from "./icons"
 
-Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
+Chart.register(...registerables)
 
 type DepStatus = "aligned" | "range" | "major" | "linked"
 

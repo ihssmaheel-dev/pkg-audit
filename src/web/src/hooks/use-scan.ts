@@ -8,7 +8,13 @@ export interface ScanErrorState {
 }
 
 export function getToken(): string | null {
-  return document.querySelector('meta[name="pkg-audit-token"]')?.getAttribute("content") ?? null
+  const metaToken = document.querySelector('meta[name="pkg-audit-token"]')?.getAttribute("content")
+  if (metaToken) return metaToken
+  try {
+    return new URLSearchParams(window.location.search).get("token") ?? null
+  } catch {
+    return null
+  }
 }
 
 export function useScan() {
