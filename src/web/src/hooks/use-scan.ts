@@ -55,5 +55,44 @@ export function useScan() {
     }
   }, [])
 
-  return { result, loading, error, scan }
+  const applyFix = useCallback(
+    async (
+      fixes: Array<{ name: string; targetVersion: string; workspaces?: string[] }>,
+      dir?: string
+    ): Promise<{ ok: boolean; count: number; result: ScanResult | null }> => {
+      setLoading(true)
+      setError(null)
+      try {
+        const token = getToken()
+        const url = `/api/fix${token ? `?token=${token}` : ""}`
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dir, fixes }),
+        })
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          result?: ScanResult
+          changes?: Array<{ pkg: string; from: string; to: string; workspace: string }>
+          error?: string
+        }
+        if (!res.ok || !body.result) {
+          setError({ message: body.error ?? `Fix request failed (${res.status})` })
+          return { ok: false, count: 0, result: null }
+        }
+        setResult(body.result)
+        return { ok: true, count: body.changes?.length ?? 0, result: body.result }
+      } catch (err) {
+        setError({
+          message: err instanceof Error ? err.message : "Fix request network error",
+        })
+        return { ok: false, count: 0, result: null }
+      } finally {
+        setLoading(false)
+      }
+    },
+    []
+  )
+
+  return { result, loading, error, scan, applyFix }
 }

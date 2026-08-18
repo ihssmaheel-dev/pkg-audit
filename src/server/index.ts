@@ -222,6 +222,34 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
         return
       }
 
+      if (url.pathname === "/api/fix" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req)) as {
+          dir?: string
+          fixes: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
+        }
+        const targetDir = body.dir ?? resolvedDir
+        if (!targetDir) {
+          json(res, { error: "No directory selected", code: "NO_DIR" }, 400)
+          return
+        }
+        if (!body.fixes || !Array.isArray(body.fixes) || body.fixes.length === 0) {
+          json(res, { error: "No fixes provided" }, 400)
+          return
+        }
+
+        const { applyFixes } = await import("../scan/fix.js")
+        const fixResult = await applyFixes(targetDir, body.fixes)
+        const updatedScan = await scan(targetDir, {})
+        json(res, {
+          ok: fixResult.ok,
+          changes: fixResult.changes,
+          modifiedFiles: fixResult.modifiedFiles,
+          errors: fixResult.errors,
+          result: updatedScan,
+        })
+        return
+      }
+
       if (url.pathname === "/api/export.html" && req.method === "GET") {
         if (!resolvedDir) {
           json(res, { error: "No scan result available" }, 400)

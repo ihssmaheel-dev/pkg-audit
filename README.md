@@ -98,46 +98,59 @@ npm i -g pkg-audit
 
 ```bash
 pkg-audit [dir] [options]
+pkg-audit fix [dir]         # Automatically resolve and align version conflicts
 pkg-audit ui [dir]          # Alias of --ui
 pkg-audit html [dir]        # Export standalone HTML report
 pkg-audit json [dir]        # Machine-readable JSON output
 ```
 
-| Invocation                        | Output / Behavior                                          |
-| --------------------------------- | ---------------------------------------------------------- |
-| `pkg-audit`                       | Scans current directory and prints terminal report         |
-| `pkg-audit --ui`                  | Scans current directory and launches browser dashboard     |
-| `pkg-audit --ui ~/code/shop`      | Scans target directory and launches browser dashboard      |
-| `pkg-audit html`                  | Generates `pkg-audit-report.html` in current directory     |
-| `pkg-audit json --out audit.json` | Emits structured JSON for CI and custom tooling            |
-| `pkg-audit --outdated --ui`       | Scans repository, queries npm registry, opens dashboard    |
-| `pkg-audit --watch --ui`          | Live-reloads dashboard automatically when manifests change |
+| Invocation                               | Output / Behavior                                          |
+| ---------------------------------------- | ---------------------------------------------------------- |
+| `pkg-audit`                              | Scans current directory and prints terminal report         |
+| `pkg-audit fix`                          | Automatically aligns all conflicts to highest semver       |
+| `pkg-audit fix --strategy=most-frequent` | Aligns all conflicts to most frequent version              |
+| `pkg-audit fix --dry-run`                | Previews manifest modifications without writing to disk    |
+| `pkg-audit fix --pkg=react`              | Aligns version conflicts for a specific package only       |
+| `pkg-audit --ui`                         | Scans current directory and launches browser dashboard     |
+| `pkg-audit --ui ~/code/shop`             | Scans target directory and launches browser dashboard      |
+| `pkg-audit html`                         | Generates `pkg-audit-report.html` in current directory     |
+| `pkg-audit json --out audit.json`        | Emits structured JSON for CI and custom tooling            |
+| `pkg-audit --outdated --ui`              | Scans repository, queries npm registry, opens dashboard    |
+| `pkg-audit --watch --ui`                 | Live-reloads dashboard automatically when manifests change |
 
 ---
 
 ## CLI Options
 
-| Option                   | Description                                              | Default |
-| ------------------------ | -------------------------------------------------------- | ------- |
-| `--ui`                   | Launch local web dashboard in browser                    | `false` |
-| `--html[=file]`          | Write standalone self-contained HTML report to file      | `false` |
-| `--json[=file]`          | Emit structured JSON to stdout or specified file         | `false` |
-| `--outdated`             | Query npm registry for latest version drift              | `false` |
-| `--changelog`            | Fetch GitHub release notes and changelogs per package    | `false` |
-| `--changelog-lines=N`    | Maximum lines of release notes to display                | `6`     |
-| `--concurrency=N`        | Maximum concurrent registry requests                     | `8`     |
-| `--top=N`                | Number of top shared dependencies to report              | `10`    |
-| `--only-conflicts`       | Filter output to only packages with version conflicts    | `false` |
-| `--workspace=<name>`     | Inspect dependencies for a single specified workspace    | `all`   |
-| `--full`                 | Render full dependency matrix across all manifests       | `false` |
-| `--watch`                | Watch `package.json` files and rescan automatically      | `false` |
-| `--port=N`               | Custom port for `--ui` web server                        | `auto`  |
-| `--no-open`              | Prevent opening browser window automatically with `--ui` | `false` |
-| `--ignore-dir=a,b`       | Extra directory patterns to ignore during scan           | none    |
-| `--no-gitignore`         | Ignore `.gitignore` exclusions during scanning           | `false` |
-| `--fail-on=major\|range` | Exit with code 2 if conflicts at or above severity exist | none    |
-| `-h, --help`             | Display help information                                 |         |
-| `-v, --version`          | Display version number                                   |         |
+| Option                   | Description                                              | Default   |
+| ------------------------ | -------------------------------------------------------- | --------- |
+| `--fix`                  | Automatically align conflicting dependency versions      | `false`   |
+| `--strategy=<strategy>`  | Fix strategy: `highest` or `most-frequent`               | `highest` |
+| `--dry-run`              | Preview changes without modifying `package.json` files   | `false`   |
+| `--pkg=<name>`           | Limit fix remediation to a single package name           | none      |
+| `--target-version=<ver>` | Specify custom target version (used with `--pkg`)        | none      |
+| `--ui`                   | Launch local web dashboard in browser                    | `false`   |
+| `--html[=file]`          | Write standalone self-contained HTML report to file      | `false`   |
+| `--json[=file]`          | Emit structured JSON to stdout or specified file         | `false`   |
+| `--pr-comment[=file]`    | Generate GitHub PR comment markdown                      | `false`   |
+| `--post-pr-comment`      | Post or update sticky comment on PR in GitHub Actions    | `false`   |
+| `--base-json=file`       | Compare with base branch JSON audit to compute delta     | none      |
+| `--outdated`             | Query npm registry for latest version drift              | `false`   |
+| `--changelog`            | Fetch GitHub release notes and changelogs per package    | `false`   |
+| `--changelog-lines=N`    | Maximum lines of release notes to display                | `6`       |
+| `--concurrency=N`        | Maximum concurrent registry requests                     | `8`       |
+| `--top=N`                | Number of top shared dependencies to report              | `10`      |
+| `--only-conflicts`       | Filter output to only packages with version conflicts    | `false`   |
+| `--workspace=<name>`     | Inspect dependencies for a single specified workspace    | `all`     |
+| `--full`                 | Render full dependency matrix across all manifests       | `false`   |
+| `--watch`                | Watch `package.json` files and rescan automatically      | `false`   |
+| `--port=N`               | Custom port for `--ui` web server                        | `auto`    |
+| `--no-open`              | Prevent opening browser window automatically with `--ui` | `false`   |
+| `--ignore-dir=a,b`       | Extra directory patterns to ignore during scan           | none      |
+| `--no-gitignore`         | Ignore `.gitignore` exclusions during scanning           | `false`   |
+| `--fail-on=major\|range` | Exit with code 2 if conflicts at or above severity exist | none      |
+| `-h, --help`             | Display help information                                 |           |
+| `-v, --version`          | Display version number                                   |           |
 
 ---
 

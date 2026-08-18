@@ -9,6 +9,7 @@ interface DrawerProps {
   state: DrawerState | null
   onClose: () => void
   notify: (message: string) => void
+  onFix?: (fixes: Array<{ name: string; targetVersion: string }>) => Promise<void>
 }
 
 interface Usage {
@@ -69,7 +70,12 @@ interface Content {
   pin: string | null
 }
 
-function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) => void): Content | null {
+function buildContent(
+  data: ScanResult,
+  state: DrawerState,
+  notify: (m: string) => void,
+  onFix?: (fixes: Array<{ name: string; targetVersion: string }>) => Promise<void>
+): Content | null {
   if (state.type === "workspace") {
     const ws = data.workspaces.find((w) => w.relPath === state.relPath)
     if (!ws) return null
@@ -99,8 +105,8 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
                   <span class="font-mono text-[11.5px] text-[#f2f2f2] overflow-hidden text-ellipsis whitespace-nowrap">
                     {name}
                   </span>
-                  <span class="font-mono text-[11px] text-[#8b949e] shrink-0">
-                    {version} <span class="text-[#3d3a39]">· {type}</span>
+                  <span class="font-mono text-[11px] text-[#8b949e]">
+                    {version} <span class="text-[#3d3a39]">({type})</span>
                   </span>
                 </div>
               ))}
@@ -113,60 +119,65 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
     }
   }
 
-  const dep = state.type === "package" ? state.name : state.dep
-  const rows = collectUsage(data, dep)
-  if (!rows.length) return null
-  const pin = suggestedPin(rows)
-
   if (state.type === "cell") {
     const ws = data.workspaces.find((w) => w.relPath === state.workspace)
-    const usage = ws ? rows.find((r) => r.ws.relPath === ws.relPath) : undefined
-    const others = rows.filter((r) => r.ws.relPath !== state.workspace)
+    if (!ws) return null
+    const dep = ws.deps[state.dep]
+    if (!dep) return null
+    const usages = collectUsage(data, state.dep)
+    const pin = suggestedPin(usages)
     return {
-      title: dep,
-      pathToCopy: ws?.absPath ?? null,
+      title: `${ws.name} / ${state.dep}`,
+      pathToCopy: ws.absPath ?? null,
       pin,
       fields: [
-        <Field label="TARGET WORKSPACE">
-          <Mono>{state.workspace}</Mono>
+        <Field label="WORKSPACE">
+          <Mono>{ws.name}</Mono>
+        </Field>,
+        <Field label="PACKAGE">
+          <Mono>{state.dep}</Mono>
         </Field>,
         <Field label="DECLARED VERSION">
-          <Mono>{state.version}</Mono>
+          <Mono>{dep.version}</Mono>
         </Field>,
-        <Field label="DEPENDENCY FIELD">
-          <span class="text-[13px] font-mono text-[#bdbdbd]">{usage ? fieldName(usage.type) : "—"}</span>
+        <Field label="DEPENDENCY TYPE">
+          <span class="text-[12.5px] font-mono text-[#f2f2f2]">
+            {dep.type} <span class="text-[#8b949e]">({fieldName(dep.type)})</span>
+          </span>
         </Field>,
         <Field label="MANIFEST PATH">
-          <PathRow path={ws?.absPath ?? state.workspace} notify={notify} />
+          <PathRow path={ws.absPath ?? ws.relPath} notify={notify} />
         </Field>,
-        ...(others.length
+        ...(pin
           ? [
-              <Field label="OTHER WORKSPACES">
-                <div class="space-y-0 divide-y divide-[#3d3a39]/40 border border-[#3d3a39] rounded-[6px] bg-[#1a1a1a]/30 px-3">
-                  {others.map((r) => (
-                    <div key={r.ws.relPath} class="flex items-center justify-between gap-3 py-2">
-                      <span class="font-mono text-[11.5px] text-[#bdbdbd] overflow-hidden text-ellipsis whitespace-nowrap">
-                        {r.ws.relPath}
-                      </span>
-                      <span class="font-mono text-[11px] text-[#f2f2f2] shrink-0 font-medium">
-                        {r.version}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </Field>,
+              <PinField
+                pin={pin}
+                onFix={
+                  onFix
+                    ? async () => {
+                        await onFix([{ name: state.dep, targetVersion: pin }])
+                        notify(`Aligned ${state.dep} to ${pin}`)
+                      }
+                    : undefined
+                }
+              />,
             ]
           : []),
-        ...(pin ? [<PinField pin={pin} />] : []),
       ],
     }
   }
 
+  // Package drawer
+  const rows = collectUsage(data, state.name)
+  const pin = suggestedPin(rows)
   return {
-    title: dep,
-    pathToCopy: rows[0]?.ws.absPath ?? null,
+    title: state.name,
+    pathToCopy: null,
     pin,
     fields: [
+      <Field label="PACKAGE">
+        <Mono>{state.name}</Mono>
+      </Field>,
       <Field label="DECLARED ACROSS WORKSPACES">
         <div class="space-y-0 divide-y divide-[#3d3a39]/40 border border-[#3d3a39] rounded-[6px] bg-[#1a1a1a]/30 px-3">
           {rows.map((r) => (
@@ -179,7 +190,21 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
           ))}
         </div>
       </Field>,
-      ...(pin ? [<PinField pin={pin} />] : []),
+      ...(pin
+        ? [
+            <PinField
+              pin={pin}
+              onFix={
+                onFix
+                  ? async () => {
+                      await onFix([{ name: state.name, targetVersion: pin }])
+                      notify(`Aligned ${state.name} to ${pin}`)
+                    }
+                  : undefined
+              }
+            />,
+          ]
+        : []),
     ],
   }
 }
@@ -217,18 +242,28 @@ function PathRow({ path, notify }: { path: string; notify: (m: string) => void }
   )
 }
 
-function PinField({ pin }: { pin: string }) {
+function PinField({ pin, onFix }: { pin: string; onFix?: () => Promise<void> }) {
   return (
     <Field label="SUGGESTED ALIGNMENT PIN">
-      <div class="flex items-center gap-2.5 px-3.5 py-2.5 bg-[#00d992]/8 border border-[#00d992]/25 rounded-[6px]">
-        <span class="text-xs text-[#8b949e]">Pin every workspace to</span>
-        <code class="font-mono text-[12px] text-[#00d992] font-bold">{pin}</code>
+      <div class="flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-[#00d992]/8 border border-[#00d992]/25 rounded-[6px]">
+        <div>
+          <div class="text-[11px] text-[#8b949e]">Align every workspace to</div>
+          <code class="font-mono text-[12px] text-[#00d992] font-bold">{pin}</code>
+        </div>
+        {onFix && (
+          <button
+            class="h-7 px-3 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[4px] text-xs font-semibold transition-colors"
+            onClick={() => void onFix()}
+          >
+            Apply Pin
+          </button>
+        )}
       </div>
     </Field>
   )
 }
 
-export function Drawer({ data, state, onClose, notify }: DrawerProps) {
+export function Drawer({ data, state, onClose, notify, onFix }: DrawerProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -241,7 +276,7 @@ export function Drawer({ data, state, onClose, notify }: DrawerProps) {
 
   if (!data || !state) return null
 
-  const content = buildContent(data, state, notify)
+  const content = buildContent(data, state, notify, onFix)
   if (!content) return null
 
   return (

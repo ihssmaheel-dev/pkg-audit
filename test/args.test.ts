@@ -101,6 +101,16 @@ describe("parseArgs", () => {
     expect(opts.baseJson).toBe("base.json")
   })
 
+  it("parses fix command and flags", () => {
+    expect(parseArgs(["fix"]).fix).toBe(true)
+    expect(parseArgs(["--fix"]).fix).toBe(true)
+    expect(parseArgs(["fix", "--strategy=most-frequent"]).fixStrategy).toBe("most-frequent")
+    expect(parseArgs(["fix", "--strategy=highest"]).fixStrategy).toBe("highest")
+    expect(parseArgs(["fix", "--dry-run"]).dryRun).toBe(true)
+    expect(parseArgs(["fix", "--pkg=react", "--target-version=^19.0.0"]).fixPkg).toBe("react")
+    expect(parseArgs(["fix", "--pkg=react", "--target-version=^19.0.0"]).fixTargetVersion).toBe("^19.0.0")
+  })
+
   it("defaults are sane", () => {
     const opts = parseArgs([])
     expect(opts.target).toBeNull()
@@ -109,5 +119,8 @@ describe("parseArgs", () => {
     expect(opts.port).toBe(0)
     expect(opts.prComment).toBe(false)
     expect(opts.postPrComment).toBe(false)
+    expect(opts.fix).toBe(false)
+    expect(opts.fixStrategy).toBe("highest")
+    expect(opts.dryRun).toBe(false)
   })
 })

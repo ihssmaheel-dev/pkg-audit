@@ -129,6 +129,55 @@ async function main(): Promise<void> {
     changelogLines: merged.changelogLines,
   })
 
+  if (merged.fix) {
+    const { resolveConflictsAuto, applyFixes, pickTargetVersion } = await import("../scan/fix.js")
+
+    if (result.conflicts.length === 0) {
+      console.log("\n  ✔ No version conflicts found across monorepo workspaces. Everything is aligned!\n")
+      return
+    }
+
+    let fixes = resolveConflictsAuto(result, merged.fixStrategy).fixes
+
+    if (merged.fixPkg) {
+      const match = result.conflicts.find((c) => c.name === merged.fixPkg)
+      if (!match) {
+        console.log(`\n  Notice: Package '${merged.fixPkg}' has no version conflicts across workspaces.\n`)
+        return
+      }
+      const targetVersion = merged.fixTargetVersion || pickTargetVersion(match, merged.fixStrategy)
+      fixes = [{ name: merged.fixPkg, targetVersion }]
+    }
+
+    if (merged.dryRun) {
+      console.log(`\n  ⚡ pkg-audit fix (dry run — strategy: ${merged.fixStrategy})\n`)
+      console.log(`  Target fixes to be applied:`)
+      for (const f of fixes) {
+        console.log(`    • ${f.name} → ${f.targetVersion}`)
+      }
+      console.log(`\n  Run without --dry-run to apply changes to package.json files.\n`)
+      return
+    }
+
+    const fixResult = await applyFixes(dir, fixes, result)
+
+    console.log(`\n  ⚡ pkg-audit fix (strategy: ${merged.fixStrategy})\n`)
+    if (fixResult.changes.length === 0) {
+      console.log("  No modifications were needed.\n")
+      return
+    }
+
+    console.log(
+      `  ✔ Aligned ${fixes.length} package(s) across ${fixResult.modifiedFiles.length} workspace manifest(s):\n`
+    )
+    for (const ch of fixResult.changes) {
+      console.log(`    • ${ch.pkg}: ${ch.from} → ${ch.to} (${ch.workspace})`)
+    }
+
+    console.log(`\n  ${fixResult.modifiedFiles.length} package.json file(s) updated successfully.\n`)
+    return
+  }
+
   if (merged.json) {
     const json = JSON.stringify(result, null, 2)
     if (merged.jsonFile) {

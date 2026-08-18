@@ -41,7 +41,7 @@ async function copyText(text: string): Promise<void> {
 
 export function App() {
   const embedded = window.__PKG_AUDIT__
-  const { result, loading, error, scan } = useScan()
+  const { result, loading, error, scan, applyFix } = useScan()
   const [tab, setTab] = useState<TabId>("dashboard")
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -89,6 +89,16 @@ export function App() {
       return scan(dir, opts)
     },
     [scan]
+  )
+
+  const handleFix = useCallback(
+    async (fixes: Array<{ name: string; targetVersion: string; workspaces?: string[] }>) => {
+      const res = await applyFix(fixes, data?.root)
+      if (res.ok) {
+        notify(`Applied fix across manifests`)
+      }
+    },
+    [applyFix, data?.root, notify]
   )
 
   const handleCommand = useCallback(
@@ -178,7 +188,9 @@ export function App() {
             onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
           />
         )}
-        {data && tab === "conflicts" && <Conflicts data={data} notify={notify} />}
+        {data && tab === "conflicts" && (
+          <Conflicts data={data} notify={notify} onFix={embedded ? undefined : handleFix} />
+        )}
         {data && tab === "outdated" && (
           <Outdated
             data={data}
@@ -191,7 +203,13 @@ export function App() {
           <Workspaces data={data} onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })} />
         )}
       </main>
-      <Drawer data={data} state={drawer} onClose={() => setDrawer(null)} notify={notify} />
+      <Drawer
+        data={data}
+        state={drawer}
+        onClose={() => setDrawer(null)}
+        notify={notify}
+        onFix={embedded ? undefined : handleFix}
+      />
       {paletteOpen && (
         <CommandPalette
           data={data}

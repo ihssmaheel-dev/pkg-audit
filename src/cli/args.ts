@@ -29,6 +29,11 @@ export interface CliOptions {
   prCommentFile: string | null
   postPrComment: boolean
   baseJson: string | null
+  fix: boolean
+  fixStrategy: "highest" | "most-frequent"
+  dryRun: boolean
+  fixPkg: string | null
+  fixTargetVersion: string | null
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -76,6 +81,11 @@ export function parseArgs(argv: string[]): CliOptions {
     prCommentFile: null,
     postPrComment: false,
     baseJson: null,
+    fix: false,
+    fixStrategy: "highest",
+    dryRun: false,
+    fixPkg: null,
+    fixTargetVersion: null,
   }
 
   for (const arg of argv) {
@@ -101,6 +111,17 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.noOpen = true
     } else if (arg === "--watch") {
       opts.watch = true
+    } else if (arg === "--fix" || arg === "fix") {
+      opts.fix = true
+    } else if (arg === "--dry-run") {
+      opts.dryRun = true
+    } else if (arg.startsWith("--strategy=")) {
+      const s = arg.split("=")[1]
+      opts.fixStrategy = s === "most-frequent" ? "most-frequent" : "highest"
+    } else if (arg.startsWith("--pkg=")) {
+      opts.fixPkg = arg.split("=").slice(1).join("=")
+    } else if (arg.startsWith("--target-version=")) {
+      opts.fixTargetVersion = arg.split("=").slice(1).join("=")
     } else if (arg === "--post-pr-comment") {
       opts.postPrComment = true
       opts.prComment = true
@@ -162,11 +183,17 @@ export function printHelp(): void {
 
 Usage:
   pkg-audit [dir] [options]
+  pkg-audit fix [dir]          # automatically resolve and align version conflicts
   pkg-audit ui [dir]           # alias of --ui
   pkg-audit html [dir]         # write standalone HTML report
   pkg-audit json [dir]         # machine output
 
 Options:
+  --fix                  Align conflicting dependency versions across all workspaces
+  --strategy=<strategy>  Fix strategy: 'highest' (default) or 'most-frequent'
+  --dry-run              Preview changes without modifying package.json files
+  --pkg=<name>           Limit fix to a single package name
+  --target-version=<ver> Specify custom target version to align to (used with --pkg)
   --json[=file]          Emit JSON (stdout, or to file if given)
   --html[=file]          Write standalone HTML report (default: pkg-audit-report.html)
   --pr-comment[=file]    Generate GitHub PR comment markdown (to stdout or file)
