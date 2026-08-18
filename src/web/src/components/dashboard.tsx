@@ -64,19 +64,21 @@ interface StatCardProps {
   icon: JSX.Element
   value: number | string
   label: string
-  accent: string
-  iconBg: string
+  accentColor: string
 }
 
-function StatCard({ icon, value, label, accent, iconBg }: StatCardProps) {
+function StatCard({ icon, value, label, accentColor }: StatCardProps) {
   return (
-    <div class="flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors">
-      <div class={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 ${iconBg}`}>
-        <span class={accent}>{icon}</span>
+    <div class="flex items-center gap-3.5 p-5 bg-[#101010] border border-[#3d3a39] rounded-[8px] hover:border-[#8b949e] transition-colors">
+      <div
+        class="flex items-center justify-center w-10 h-10 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] shrink-0"
+        style={{ color: accentColor }}
+      >
+        {icon}
       </div>
       <div>
-        <div class="text-[22px] font-bold font-mono tracking-tight text-zinc-100 leading-none">{value}</div>
-        <div class="text-[10.5px] font-semibold uppercase tracking-widest text-zinc-500 mt-1">{label}</div>
+        <div class="text-2xl font-bold font-mono tracking-tight text-[#ffffff] leading-none">{value}</div>
+        <div class="text-[11px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] mt-1.5">{label}</div>
       </div>
     </div>
   )
@@ -108,23 +110,23 @@ function DonutChart({
         datasets: [
           {
             data: [aligned, range, major, linked],
-            backgroundColor: ["#10b981", "#f59e0b", "#f43f5e", "#8b5cf6"],
-            borderColor: "#18181b",
+            backgroundColor: ["#00d992", "#f59e0b", "#f43f5e", "#8b5cf6"],
+            borderColor: "#101010",
             borderWidth: 3,
             hoverOffset: 4,
           },
         ],
       },
       options: {
-        cutout: "70%",
+        cutout: "72%",
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#27272a",
-            borderColor: "#3f3f46",
+            backgroundColor: "#1a1a1a",
+            borderColor: "#3d3a39",
             borderWidth: 1,
-            titleColor: "#fafafa",
-            bodyColor: "#a1a1aa",
+            titleColor: "#ffffff",
+            bodyColor: "#bdbdbd",
             padding: 10,
           },
         },
@@ -136,27 +138,29 @@ function DonutChart({
   }, [aligned, range, major, linked])
 
   const items = [
-    { label: "Aligned", value: aligned, color: "bg-emerald-500" },
-    { label: "Range", value: range, color: "bg-amber-400" },
-    { label: "Major", value: major, color: "bg-rose-500" },
-    { label: "Linked", value: linked, color: "bg-violet-500" },
+    { label: "Aligned", value: aligned, color: "bg-[#00d992]" },
+    { label: "Range conflicts", value: range, color: "bg-[#f59e0b]" },
+    { label: "Major conflicts", value: major, color: "bg-[#f43f5e]" },
+    { label: "Linked workspaces", value: linked, color: "bg-[#8b5cf6]" },
   ]
 
   return (
-    <div class="flex items-center gap-6">
+    <div class="flex items-center gap-8">
       <div class="relative shrink-0" style="width:140px; height:140px">
         <canvas ref={canvasRef} />
         <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span class="font-mono text-xl font-bold text-zinc-100 leading-none">{total}</span>
-          <span class="text-[9px] font-semibold uppercase tracking-widest text-zinc-500 mt-1">packages</span>
+          <span class="font-mono text-2xl font-bold text-[#ffffff] leading-none">{total}</span>
+          <span class="text-[10px] font-semibold uppercase tracking-[1.5px] text-[#8b949e] mt-1">
+            packages
+          </span>
         </div>
       </div>
-      <div class="flex flex-col gap-2 flex-1">
+      <div class="flex flex-col gap-2.5 flex-1">
         {items.map((item) => (
-          <div key={item.label} class="flex items-center gap-2 text-xs">
+          <div key={item.label} class="flex items-center gap-2.5 text-xs">
             <span class={`w-2 h-2 rounded-full shrink-0 ${item.color}`} />
-            <span class="text-zinc-400 flex-1">{item.label}</span>
-            <span class="font-mono font-semibold text-zinc-200">{item.value}</span>
+            <span class="text-[#bdbdbd] flex-1">{item.label}</span>
+            <span class="font-mono font-semibold text-[#f2f2f2]">{item.value}</span>
           </div>
         ))}
       </div>
@@ -164,7 +168,13 @@ function DonutChart({
   )
 }
 
-function HBarChart({ rows }: { rows: { label: string; value: number; color: string }[] }) {
+function HBarChart({
+  rows,
+  color = "#00d992",
+}: {
+  rows: { label: string; value: number; color?: string }[]
+  color?: string
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef = useRef<Chart | null>(null)
 
@@ -178,7 +188,7 @@ function HBarChart({ rows }: { rows: { label: string; value: number; color: stri
         datasets: [
           {
             data: rows.map((r) => r.value),
-            backgroundColor: rows.map((r) => r.color),
+            backgroundColor: rows.map((r) => r.color ?? color),
             borderRadius: 4,
             borderSkipped: false,
           },
@@ -191,31 +201,31 @@ function HBarChart({ rows }: { rows: { label: string; value: number; color: stri
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#27272a",
-            borderColor: "#3f3f46",
+            backgroundColor: "#1a1a1a",
+            borderColor: "#3d3a39",
             borderWidth: 1,
-            titleColor: "#fafafa",
-            bodyColor: "#a1a1aa",
+            titleColor: "#ffffff",
+            bodyColor: "#bdbdbd",
             padding: 10,
           },
         },
         scales: {
           x: {
-            grid: { color: "#27272a" },
-            ticks: { color: "#71717a", font: { family: "JetBrains Mono", size: 10 } },
-            border: { color: "#3f3f46" },
+            grid: { color: "#1a1a1a" },
+            ticks: { color: "#8b949e", font: { family: "JetBrains Mono", size: 10 } },
+            border: { color: "#3d3a39" },
           },
           y: {
             grid: { display: false },
             ticks: {
-              color: "#a1a1aa",
+              color: "#bdbdbd",
               font: { family: "JetBrains Mono", size: 11 },
               callback: (_, i) => {
                 const label = rows[i]?.label ?? ""
                 return label.length > 22 ? label.slice(0, 22) + "…" : label
               },
             },
-            border: { color: "#3f3f46" },
+            border: { color: "#3d3a39" },
           },
         },
       },
@@ -223,7 +233,7 @@ function HBarChart({ rows }: { rows: { label: string; value: number; color: stri
     return () => {
       chartRef.current?.destroy()
     }
-  }, [rows])
+  }, [rows, color])
 
   return (
     <div style="height: 200px; position: relative">
@@ -258,24 +268,24 @@ function VBarChart({ rows }: { rows: { label: string; value: number; color: stri
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#27272a",
-            borderColor: "#3f3f46",
+            backgroundColor: "#1a1a1a",
+            borderColor: "#3d3a39",
             borderWidth: 1,
-            titleColor: "#fafafa",
-            bodyColor: "#a1a1aa",
+            titleColor: "#ffffff",
+            bodyColor: "#bdbdbd",
             padding: 10,
           },
         },
         scales: {
           x: {
             grid: { display: false },
-            ticks: { color: "#a1a1aa", font: { size: 11 } },
-            border: { color: "#3f3f46" },
+            ticks: { color: "#bdbdbd", font: { size: 11 } },
+            border: { color: "#3d3a39" },
           },
           y: {
-            grid: { color: "#27272a" },
-            ticks: { color: "#71717a", font: { family: "JetBrains Mono", size: 10 } },
-            border: { color: "#3f3f46" },
+            grid: { color: "#1a1a1a" },
+            ticks: { color: "#8b949e", font: { family: "JetBrains Mono", size: 10 } },
+            border: { color: "#3d3a39" },
           },
         },
       },
@@ -293,19 +303,28 @@ function VBarChart({ rows }: { rows: { label: string; value: number; color: stri
 }
 
 function DashCard({
+  eyebrow,
   title,
   sub,
   children,
 }: {
+  eyebrow?: string
   title: string
   sub?: string
   children: preact.ComponentChildren
 }) {
   return (
-    <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-      <div class="flex items-baseline justify-between mb-4">
-        <span class="text-[13px] font-semibold text-zinc-200">{title}</span>
-        {sub && <span class="text-[11px] text-zinc-500">{sub}</span>}
+    <div class="bg-[#101010] border border-[#3d3a39] rounded-[8px] p-6 hover:border-[#8b949e] transition-colors">
+      <div class="mb-5">
+        {eyebrow && (
+          <div class="text-[11px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] mb-1">
+            {eyebrow}
+          </div>
+        )}
+        <div class="flex items-baseline justify-between">
+          <span class="text-[15px] font-semibold text-[#ffffff]">{title}</span>
+          {sub && <span class="text-xs font-mono text-[#8b949e]">{sub}</span>}
+        </div>
       </div>
       {children}
     </div>
@@ -337,73 +356,84 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
   const outdated = data.outdated
 
   return (
-    <div>
-      {/* Stat cards */}
-      <div class="grid grid-cols-5 gap-3 mb-5 max-[900px]:grid-cols-3 max-[600px]:grid-cols-2">
+    <div class="space-y-6">
+      {/* Eyebrow and Section Header */}
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-[2.52px] text-[#00d992] mb-1">
+          MONOREPO AUDIT
+        </div>
+        <h1 class="text-2xl font-normal tracking-[-0.6px] text-[#ffffff]">
+          Dependency Health & Drift Overview
+        </h1>
+      </div>
+
+      {/* 5-up Stat Cards Grid */}
+      <div class="grid grid-cols-5 gap-3.5 max-[1024px]:grid-cols-3 max-[640px]:grid-cols-2">
         <StatCard
-          icon={<IconFolder size={16} />}
+          icon={<IconFolder size={17} />}
           value={data.workspaces.length}
           label="Workspaces"
-          accent="text-indigo-400"
-          iconBg="bg-indigo-500/10"
+          accentColor="#00d992"
         />
         <StatCard
-          icon={<IconPackage size={16} />}
+          icon={<IconPackage size={17} />}
           value={data.meta.totalDepDeclarations}
           label="Declarations"
-          accent="text-emerald-400"
-          iconBg="bg-emerald-500/10"
+          accentColor="#2fd6a1"
         />
         <StatCard
-          icon={<IconAlertTriangle size={16} />}
+          icon={<IconAlertTriangle size={17} />}
           value={data.conflicts.length}
           label="Conflicts"
-          accent="text-rose-400"
-          iconBg="bg-rose-500/10"
+          accentColor={data.conflicts.length > 0 ? "#f43f5e" : "#00d992"}
         />
         <StatCard
-          icon={<IconSearch size={16} />}
+          icon={<IconSearch size={17} />}
           value={outdated ? outdated.outdated.length : "—"}
           label="Outdated"
-          accent="text-amber-400"
-          iconBg="bg-amber-500/10"
+          accentColor="#f59e0b"
         />
         <StatCard
-          icon={<IconWrench size={16} />}
+          icon={<IconWrench size={17} />}
           value={data.hygieneIssues.length}
           label="Hygiene"
-          accent="text-violet-400"
-          iconBg="bg-violet-500/10"
+          accentColor="#8b5cf6"
         />
       </div>
 
-      {/* Chart grid */}
+      {/* Dashed line rhythm divider */}
+      <div class="dashed-divider" />
+
+      {/* 2-up Chart Grid */}
       <div class="grid grid-cols-2 gap-4 max-[860px]:grid-cols-1">
         {/* Dependency health donut */}
-        <DashCard title="Dependency health" sub={`${total} unique packages`}>
+        <DashCard eyebrow="DISTRIBUTION" title="Dependency Health" sub={`${total} unique packages`}>
           {total > 0 ? (
             <DonutChart aligned={aligned} range={range} major={major} linked={linked} total={total} />
           ) : (
-            <div class="flex items-center justify-center h-32 text-zinc-600 text-sm">
+            <div class="flex items-center justify-center h-36 text-[#8b949e] text-sm font-mono">
               No dependencies found.
             </div>
           )}
         </DashCard>
 
         {/* Top packages horizontal bar */}
-        <DashCard title="Top packages by usage" sub="workspaces using each">
+        <DashCard eyebrow="FREQUENCY" title="Top Packages by Usage" sub="workspaces using each">
           {topPackages.length > 0 ? (
             <HBarChart
-              rows={topPackages.map((p) => ({ label: p.name, value: p.wsCount, color: "#6366f1" }))}
+              rows={topPackages.map((p) => ({ label: p.name, value: p.wsCount, color: "#00d992" }))}
             />
           ) : (
-            <div class="flex items-center justify-center h-32 text-zinc-600 text-sm">No packages found.</div>
+            <div class="flex items-center justify-center h-36 text-[#8b949e] text-sm font-mono">
+              No packages found.
+            </div>
           )}
         </DashCard>
 
         {/* Outdated breakdown vertical bar */}
         <DashCard
-          title="Outdated breakdown"
+          eyebrow="UPSTREAM"
+          title="Outdated Breakdown"
           sub={outdated ? `${outdated.all.length} checked` : "not run yet"}
         >
           {outdated ? (
@@ -411,26 +441,26 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
               rows={[
                 { label: "Major", value: byStatus(outdated.all, "major"), color: "#f43f5e" },
                 { label: "Minor", value: byStatus(outdated.all, "minor"), color: "#f59e0b" },
-                { label: "Patch", value: byStatus(outdated.all, "patch"), color: "#6366f1" },
-                { label: "Up to date", value: byStatus(outdated.all, "up-to-date"), color: "#10b981" },
+                { label: "Patch", value: byStatus(outdated.all, "patch"), color: "#00d992" },
+                { label: "Up to date", value: byStatus(outdated.all, "up-to-date"), color: "#2fd6a1" },
               ]}
             />
           ) : (
-            <div class="flex flex-col items-center justify-center gap-3 h-32 text-zinc-500 text-sm text-center">
-              <span>Run the outdated check to see version drift.</span>
+            <div class="flex flex-col items-center justify-center gap-3 h-36 text-[#8b949e] text-sm text-center">
+              <span class="text-xs">Run the outdated check to see version drift against npm.</span>
               <button
-                class="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-colors"
+                class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
                 onClick={onOutdated}
               >
                 <IconRefreshCw size={12} />
-                Check outdated
+                <span>Check outdated</span>
               </button>
             </div>
           )}
         </DashCard>
 
         {/* Conflicts by package */}
-        <DashCard title="Conflicts by package" sub="declared versions differ">
+        <DashCard eyebrow="DRIFT" title="Conflicts by Package" sub="declared versions differ">
           {conflicts.length > 0 ? (
             <HBarChart
               rows={conflicts.map((c) => ({
@@ -440,14 +470,14 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
               }))}
             />
           ) : (
-            <div class="flex flex-col items-center justify-center gap-3 h-32 text-zinc-500 text-sm text-center">
-              <IconCheckCircle size={28} className="text-emerald-500/40" />
-              <span>No conflicts — all dependencies are aligned.</span>
+            <div class="flex flex-col items-center justify-center gap-2.5 h-36 text-[#8b949e] text-sm text-center">
+              <IconCheckCircle size={28} className="text-[#00d992]" />
+              <span class="text-xs text-[#f2f2f2]">No conflicts — all shared dependencies are aligned.</span>
               <button
-                class="text-xs text-indigo-400 hover:text-indigo-300 underline-offset-2 hover:underline"
+                class="text-xs text-[#00d992] hover:text-[#2fd6a1] hover:underline font-medium"
                 onClick={() => onTabChange("matrix")}
               >
-                View matrix
+                View version matrix →
               </button>
             </div>
           )}

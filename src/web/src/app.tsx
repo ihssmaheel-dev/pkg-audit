@@ -12,20 +12,9 @@ import { Picker } from "./components/picker"
 import { Toast } from "./components/toast"
 import { useScan, getToken } from "./hooks/use-scan"
 import type { ScanResult } from "../../types"
-import type { DrawerState, ScanUiOptions, TabId, Theme } from "./types"
+import type { DrawerState, ScanUiOptions, TabId } from "./types"
 
-const THEME_KEY = "pkg-audit-theme"
 const TAB_IDS: TabId[] = ["dashboard", "matrix", "conflicts", "outdated", "hygiene", "workspaces"]
-
-function initialTheme(): Theme {
-  try {
-    const saved = localStorage.getItem(THEME_KEY)
-    if (saved === "dark" || saved === "light") return saved
-  } catch {
-    // Storage unavailable.
-  }
-  return "dark"
-}
 
 function conflictsAsMarkdown(data: ScanResult): string {
   if (!data.conflicts.length) return ""
@@ -56,7 +45,6 @@ export function App() {
   const [tab, setTab] = useState<TabId>("dashboard")
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [theme, setTheme] = useState<Theme>(initialTheme)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 
@@ -71,14 +59,6 @@ export function App() {
   useEffect(() => {
     if (!embedded) void scan()
   }, [embedded, scan])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(THEME_KEY, theme)
-    } catch {
-      // Storage unavailable.
-    }
-  }, [theme])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -149,41 +129,36 @@ export function App() {
 
   const showPicker = !embedded && !data && !loading && !error
 
-  const bg = theme === "dark" ? "bg-zinc-950 min-h-screen" : "bg-zinc-50 min-h-screen"
-
   if (showPicker) {
     return (
-      <div class={bg} data-theme={theme}>
+      <div class="bg-[#101010] min-h-screen text-[#f2f2f2]">
         <Picker onScan={handleScan} />
       </div>
     )
   }
 
   return (
-    <div class={bg} data-theme={theme}>
+    <div class="bg-[#101010] min-h-screen text-[#f2f2f2]">
       <Shell
         dir={data?.root ?? ""}
         tab={tab}
         onTabChange={setTab}
         loading={loading}
         data={data}
-        theme={theme}
-        onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         onScan={() => void handleScan(data?.root)}
         onScanDir={(dir) => void handleScan(dir)}
-        onOutdated={() => void handleScan(data?.root, { outdated: true, changelog: true })}
         onExportHtml={() => void handleCommand("export-html")}
         onOpenPalette={() => setPaletteOpen(true)}
       />
-      <main class="px-6 py-6">
+      <main class="max-w-[1400px] mx-auto px-6 py-8">
         {loading && (
-          <div class="flex flex-col items-center justify-center gap-3 py-20 text-zinc-500 text-sm">
-            <div class="w-5 h-5 rounded-full border-2 border-zinc-700 border-t-indigo-500 spinner" />
-            <p>Scanning…</p>
+          <div class="flex flex-col items-center justify-center gap-3 py-24 text-[#8b949e] text-sm">
+            <div class="w-5 h-5 rounded-full border-2 border-[#3d3a39] border-t-[#00d992] spinner" />
+            <p class="font-mono text-xs text-[#8b949e]">Scanning dependencies…</p>
           </div>
         )}
         {error && (
-          <div class="flex items-center gap-2 my-4 px-4 py-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-sm text-rose-400">
+          <div class="flex items-center gap-2 mb-6 px-4 py-3 bg-[#f43f5e]/10 border border-[#f43f5e]/30 rounded-[8px] text-sm text-[#f43f5e]">
             {error.message}
             {error.code === "NO_DIR" && " — choose a folder below"}
           </div>

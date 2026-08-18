@@ -39,7 +39,12 @@ function buildRows(depMap: DepMap): MatrixRow[] {
   return rows
 }
 
-const CELL_ORDER: Record<MatrixRow["cellClass"], number> = { "cell-major": 0, "cell-range": 1, "cell-ok": 2 }
+const CELL_ORDER: Record<MatrixRow["cellClass"], number> = {
+  "cell-major": 0,
+  "cell-range": 1,
+  "cell-ok": 2,
+}
+
 const STATUS_LABEL: Record<string, string> = {
   "cell-major": "✗ major",
   "cell-range": "⚠ range",
@@ -99,28 +104,37 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
   const ranges = data.conflicts.length - majors
 
   return (
-    <div>
+    <div class="space-y-4">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-[2.52px] text-[#00d992] mb-1">
+          CROSS-WORKSPACE MATRIX
+        </div>
+        <h1 class="text-2xl font-normal tracking-[-0.6px] text-[#ffffff]">Dependency Alignment Grid</h1>
+      </div>
+
       {/* Filter bar */}
-      <div class="flex items-center gap-2 mb-4 flex-wrap">
+      <div class="flex items-center gap-2.5 flex-wrap">
         {(["all", "major", "prod"] as const).map((c) => (
           <button
             key={c}
-            class={`inline-flex items-center h-7 px-3 rounded-lg text-xs font-medium border transition-colors ${
+            class={`inline-flex items-center h-8 px-3 rounded-[6px] text-xs font-medium border transition-colors ${
               chip === c
-                ? "bg-zinc-800 border-zinc-700 text-zinc-100"
-                : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"
+                ? "bg-[#1a1a1a] border-[#8b949e] text-[#ffffff]"
+                : "bg-[#101010] border-[#3d3a39] text-[#8b949e] hover:text-[#f2f2f2] hover:border-[#8b949e]"
             }`}
             onClick={() => setChip(c)}
           >
-            {c === "all" ? "All" : c === "major" ? "Major only" : "Prod only"}
+            {c === "all" ? "All dependencies" : c === "major" ? "Major conflicts only" : "Production only"}
           </button>
         ))}
-        <div class="w-px h-4 bg-zinc-800 mx-1" />
-        <div class="flex items-center gap-2 h-7 px-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-500">
+
+        <div class="w-px h-5 bg-[#3d3a39] mx-1" />
+
+        <div class="flex items-center gap-2 h-8 px-3 bg-[#1a1a1a] border border-[#3d3a39] rounded-[6px] text-[#8b949e]">
           <IconSearch size={12} />
           <input
             type="text"
-            class="bg-transparent border-none outline-none text-xs text-zinc-200 w-36"
+            class="bg-transparent border-none outline-none text-xs text-[#f2f2f2] placeholder-[#8b949e] w-40 font-mono"
             placeholder="Filter dependencies…"
             value={query}
             onInput={(e) => {
@@ -129,11 +143,16 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
             }}
           />
         </div>
+
         <div class="flex-1" />
-        <div class="flex items-center gap-2 text-xs text-zinc-500">
-          Hide aligned
+
+        {/* Toggle hide aligned */}
+        <div class="flex items-center gap-2 text-xs text-[#8b949e]">
+          <span>Hide aligned rows</span>
           <div
-            class={`relative w-7 h-4 rounded-full cursor-pointer transition-colors ${hideAligned ? "bg-indigo-600" : "bg-zinc-700"}`}
+            class={`relative w-8 h-4 rounded-full cursor-pointer transition-colors ${
+              hideAligned ? "bg-[#00d992]" : "bg-[#3d3a39]"
+            }`}
             role="switch"
             aria-checked={hideAligned}
             tabIndex={0}
@@ -150,24 +169,26 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
             }}
           >
             <span
-              class={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${hideAligned ? "translate-x-3.5" : "translate-x-0.5"}`}
+              class={`absolute top-0.5 w-3 h-3 rounded-full bg-[#101010] transition-transform ${
+                hideAligned ? "translate-x-4.5" : "translate-x-0.5"
+              }`}
             />
           </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div class="overflow-x-auto border border-zinc-800 rounded-xl">
+      {/* Grid Container */}
+      <div class="overflow-x-auto border border-[#3d3a39] rounded-[8px] bg-[#101010]">
         <table class="w-full border-collapse text-xs whitespace-nowrap">
           <thead>
-            <tr class="border-b border-zinc-800">
-              <th class="sticky left-0 bg-zinc-900 text-left px-3 py-2.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-600 min-w-[200px] z-10">
+            <tr class="border-b border-[#3d3a39] bg-[#1a1a1a]/60">
+              <th class="sticky left-0 bg-[#101010] text-left px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] min-w-[220px] z-10 border-r border-[#3d3a39]">
                 Dependency
               </th>
               {wsNames.map((ws) => (
                 <th
                   key={ws}
-                  class="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-widest text-zinc-600 max-w-[120px] overflow-hidden text-ellipsis cursor-pointer hover:text-indigo-400 transition-colors"
+                  class="px-4 py-3 text-center text-[10.5px] font-semibold uppercase tracking-[1.5px] text-[#8b949e] max-w-[130px] overflow-hidden text-ellipsis cursor-pointer hover:text-[#00d992] transition-colors border-r border-[#3d3a39]/40 last:border-r-0"
                   onClick={() => onWorkspaceClick(ws)}
                   title={ws}
                 >
@@ -180,44 +201,57 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
             {pagedRows.map((row) => (
               <tr
                 key={row.name}
-                class="border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/20 transition-colors"
+                class="border-b border-[#3d3a39]/30 last:border-0 hover:bg-[#1a1a1a]/40 transition-colors"
               >
                 <th
-                  class="sticky left-0 bg-zinc-900 text-left px-3 py-2 font-medium cursor-pointer z-10"
+                  class="sticky left-0 bg-[#101010] text-left px-4 py-2.5 font-medium cursor-pointer z-10 border-r border-[#3d3a39]"
                   onClick={() => onCellClick({ type: "package", name: row.name })}
                   title={`${row.name} in ${row.wsCount} workspace${row.wsCount === 1 ? "" : "s"}`}
                 >
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2.5">
                     <span
-                      class={`w-1.5 h-1.5 rounded-full shrink-0 ${row.cellClass === "cell-ok" ? "bg-emerald-500" : row.cellClass === "cell-major" ? "bg-rose-500" : "bg-amber-400"}`}
+                      class={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        row.cellClass === "cell-ok"
+                          ? "bg-[#00d992]"
+                          : row.cellClass === "cell-major"
+                            ? "bg-[#f43f5e]"
+                            : "bg-[#f59e0b]"
+                      }`}
                     />
-                    <span class="font-mono text-[11.5px] text-zinc-300">{row.name}</span>
+                    <span class="font-mono text-[12px] text-[#f2f2f2]">{row.name}</span>
                   </div>
                 </th>
                 {wsNames.map((ws) => {
                   const hit = row.versions.filter(([, occs]) => occs.some((o) => o.workspace === ws))
-                  if (!hit.length)
+                  if (!hit.length) {
                     return (
-                      <td key={ws} class="px-3 py-2 text-center text-zinc-700">
+                      <td
+                        key={ws}
+                        class="px-3 py-2 text-center text-[#3d3a39] font-mono border-r border-[#3d3a39]/30 last:border-r-0"
+                      >
                         —
                       </td>
                     )
+                  }
                   const version = hit[0][0]
                   const isLinked =
                     version.startsWith("workspace:") ||
                     version.startsWith("catalog:") ||
                     version.startsWith("link:")
-                  let cellCls = "text-zinc-400 hover:bg-zinc-800/40"
-                  if (isLinked) cellCls = "text-violet-400 bg-violet-500/5 hover:bg-violet-500/10"
-                  else if (row.cellClass === "cell-major")
-                    cellCls = "text-rose-400 bg-rose-500/5 hover:bg-rose-500/10"
-                  else if (row.cellClass === "cell-range")
-                    cellCls = "text-amber-400 bg-amber-500/5 hover:bg-amber-500/10"
-                  else cellCls = "text-emerald-400/70 bg-emerald-500/3 hover:bg-emerald-500/8"
+                  let cellCls = "text-[#8b949e] hover:bg-[#1a1a1a]"
+                  if (isLinked) {
+                    cellCls = "text-[#8b5cf6] bg-[#8b5cf6]/5 hover:bg-[#8b5cf6]/10"
+                  } else if (row.cellClass === "cell-major") {
+                    cellCls = "text-[#f43f5e] bg-[#f43f5e]/5 hover:bg-[#f43f5e]/10"
+                  } else if (row.cellClass === "cell-range") {
+                    cellCls = "text-[#f59e0b] bg-[#f59e0b]/5 hover:bg-[#f59e0b]/10"
+                  } else {
+                    cellCls = "text-[#00d992] bg-[#00d992]/5 hover:bg-[#00d992]/10"
+                  }
                   return (
                     <td
                       key={ws}
-                      class={`px-3 py-2 text-center cursor-pointer transition-colors ${cellCls}`}
+                      class={`px-3 py-2 text-center cursor-pointer transition-colors border-r border-[#3d3a39]/30 last:border-r-0 ${cellCls}`}
                       onClick={() => onCellClick({ type: "cell", dep: row.name, workspace: ws, version })}
                       title={`${row.name} @ ${ws}: ${version}`}
                     >
@@ -225,9 +259,13 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
                         {isLinked ? version.split(":")[0] + ":" : version}
                       </span>
                       {!isLinked && row.cellClass !== "cell-ok" && (
-                        <span class="text-[9.5px] opacity-70 block">{STATUS_LABEL[row.cellClass]}</span>
+                        <span class="text-[9px] opacity-75 font-mono block">
+                          {STATUS_LABEL[row.cellClass]}
+                        </span>
                       )}
-                      {isLinked && <span class="text-[9.5px] opacity-70 block">{STATUS_LABEL.linked}</span>}
+                      {isLinked && (
+                        <span class="text-[9px] opacity-75 font-mono block">{STATUS_LABEL.linked}</span>
+                      )}
                     </td>
                   )
                 })}
@@ -238,9 +276,9 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
       </div>
 
       {pagedRows.length < filteredRows.length && (
-        <div class="flex justify-center py-4">
+        <div class="flex justify-center py-2">
           <button
-            class="h-8 px-4 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 transition-colors"
+            class="h-8 px-4 bg-[#101010] border border-[#3d3a39] hover:bg-[#1a1a1a] hover:border-[#8b949e] rounded-[6px] text-xs font-medium text-[#f2f2f2] transition-colors"
             onClick={() => setPage(page + 1)}
           >
             Show more ({pagedRows.length} of {filteredRows.length})
@@ -249,24 +287,24 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
       )}
 
       {/* Status strip */}
-      <div class="flex items-center gap-2.5 pt-3 text-xs text-zinc-600">
+      <div class="flex items-center gap-3 pt-2 text-xs font-mono text-[#8b949e]">
         <span>
-          <span class="font-semibold text-zinc-400">{data.workspaces.length}</span> manifests
+          <span class="font-bold text-[#ffffff]">{data.workspaces.length}</span> manifests
         </span>
-        <span class="text-zinc-800">·</span>
+        <span class="text-[#3d3a39]">·</span>
         <span>
-          <span class="font-semibold text-zinc-400">{data.meta.totalDepDeclarations}</span> declarations
+          <span class="font-bold text-[#ffffff]">{data.meta.totalDepDeclarations}</span> declarations
         </span>
-        <span class="text-zinc-800">·</span>
-        <span class="flex items-center gap-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
-          <span class="font-semibold text-zinc-400">{majors}</span> major
+        <span class="text-[#3d3a39]">·</span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#f43f5e] inline-block" />
+          <span class="font-bold text-[#ffffff]">{majors}</span> major
         </span>
-        <span class="flex items-center gap-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-          <span class="font-semibold text-zinc-400">{ranges}</span> range
+        <span class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#f59e0b] inline-block" />
+          <span class="font-bold text-[#ffffff]">{ranges}</span> range
         </span>
-        <span class="text-zinc-800">·</span>
+        <span class="text-[#3d3a39]">·</span>
         <span>scanned in {data.scannedMs}ms</span>
       </div>
     </div>

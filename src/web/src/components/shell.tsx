@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
-import type { TabId, Theme } from "../types"
-import { IconDownload, IconMoon, IconRefreshCw, IconSearch, IconSun } from "./icons"
+import type { TabId } from "../types"
+import { IconDownload, IconRefreshCw, IconSearch, IconZap } from "./icons"
 
 interface TabDef {
   id: TabId
@@ -30,29 +30,14 @@ interface ShellProps {
   onTabChange: (tab: TabId) => void
   loading: boolean
   data: ScanResult | null
-  theme: Theme
-  onThemeToggle: () => void
   onScan: () => void
   onScanDir: (dir: string) => void
-  onOutdated: () => void
   onExportHtml: () => void
   onOpenPalette: () => void
 }
 
 export function Shell(props: ShellProps) {
-  const {
-    dir,
-    tab,
-    onTabChange,
-    loading,
-    data,
-    theme,
-    onThemeToggle,
-    onScan,
-    onScanDir,
-    onExportHtml,
-    onOpenPalette,
-  } = props
+  const { dir, tab, onTabChange, loading, data, onScan, onScanDir, onExportHtml, onOpenPalette } = props
 
   const [dirEditing, setDirEditing] = useState(false)
   const [dirValue, setDirValue] = useState(dir)
@@ -66,22 +51,27 @@ export function Shell(props: ShellProps) {
   }
 
   return (
-    <header class="sticky top-0 z-50 bg-zinc-950/95 dark:bg-zinc-950/95 backdrop-blur border-b border-zinc-800 dark:border-zinc-800 light:bg-white/95 light:border-zinc-200">
+    <header class="sticky top-0 z-50 bg-[#101010] border-b border-[#3d3a39]">
       {/* Top row */}
-      <div class="flex items-center gap-3 h-13 px-5 h-[52px]">
+      <div class="flex items-center gap-3.5 h-[54px] px-6">
         {/* Brand */}
-        <div class="flex items-center gap-2 font-mono font-bold text-[13px] tracking-tight text-zinc-100 dark:text-zinc-100 shrink-0">
-          <span class="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-          pkg-audit
+        <div class="flex items-center gap-2 font-mono font-bold text-[14px] tracking-tight text-[#ffffff] shrink-0">
+          <div class="flex items-center justify-center w-6 h-6 rounded-[6px] bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992]">
+            <IconZap size={14} />
+          </div>
+          <span>pkg-audit</span>
         </div>
 
-        {/* Dir bar */}
-        <div class="flex items-center gap-2 flex-1 min-w-0 max-w-[480px]">
+        {/* Hairline vertical divider */}
+        <div class="w-px h-5 bg-[#3d3a39]" />
+
+        {/* Directory Bar */}
+        <div class="flex items-center gap-2.5 flex-1 min-w-0 max-w-[500px]">
           {dirEditing ? (
             <div class="flex items-center gap-2 flex-1 min-w-0">
               <input
                 type="text"
-                class="flex-1 h-[30px] px-2.5 bg-zinc-900 border border-indigo-500 rounded-lg font-mono text-[11.5px] text-zinc-100 outline-none min-w-0"
+                class="flex-1 h-[32px] px-3 bg-[#1a1a1a] border border-[#00d992] rounded-[6px] font-mono text-[12px] text-[#f2f2f2] outline-none min-w-0"
                 value={dirValue}
                 onInput={(e) => setDirValue((e.target as HTMLInputElement).value)}
                 autoFocus
@@ -103,7 +93,7 @@ export function Shell(props: ShellProps) {
                 placeholder="~/code/my-monorepo"
               />
               <button
-                class="shrink-0 h-[30px] px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-colors"
+                class="shrink-0 h-[32px] px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
                 onMouseDown={() => {
                   submitRef.current = true
                 }}
@@ -114,7 +104,7 @@ export function Shell(props: ShellProps) {
             </div>
           ) : (
             <button
-              class="flex-1 min-w-0 h-[30px] px-2.5 bg-zinc-900 border border-zinc-800 hover:border-indigo-500 rounded-lg font-mono text-[11.5px] text-zinc-400 text-left overflow-hidden text-ellipsis whitespace-nowrap transition-colors"
+              class="flex-1 min-w-0 h-[32px] px-3 bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] rounded-[6px] font-mono text-[12px] text-[#bdbdbd] hover:text-[#f2f2f2] text-left overflow-hidden text-ellipsis whitespace-nowrap transition-colors"
               onClick={() => {
                 setDirValue(dir)
                 setDirEditing(true)
@@ -125,8 +115,8 @@ export function Shell(props: ShellProps) {
             </button>
           )}
           {data && (
-            <span class="text-[11px] text-zinc-500 whitespace-nowrap shrink-0">
-              <span class="text-zinc-400 font-medium">{rootLabel(data.root)}</span>
+            <span class="text-[11.5px] text-[#8b949e] whitespace-nowrap shrink-0 font-mono">
+              <span class="text-[#f2f2f2] font-semibold">{rootLabel(data.root)}</span>
               {" · "}
               {data.workspaces.length} ws
               {pm ? ` · ${pm}` : ""}
@@ -138,69 +128,68 @@ export function Shell(props: ShellProps) {
 
         <div class="flex-1" />
 
-        {/* Search trigger */}
+        {/* Command Palette Search Trigger */}
         <button
-          class="flex items-center gap-2 h-[30px] px-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-500 hover:text-zinc-400 hover:border-zinc-700 transition-colors whitespace-nowrap min-w-[200px]"
+          class="flex items-center gap-2 h-[32px] px-3 bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] rounded-[6px] text-xs text-[#8b949e] hover:text-[#f2f2f2] transition-colors whitespace-nowrap min-w-[210px]"
           onClick={onOpenPalette}
         >
-          <IconSearch size={12} />
+          <IconSearch size={13} className="text-[#8b949e]" />
           <span class="flex-1 text-left">Search packages, workspaces…</span>
           <span class="flex items-center gap-0.5 ml-auto">
-            <kbd class="inline-flex items-center justify-center h-4 min-w-[16px] px-1 bg-zinc-800 border border-zinc-700 rounded text-[9px] font-mono text-zinc-500">
+            <kbd class="inline-flex items-center justify-center h-4 min-w-[16px] px-1 bg-[#101010] border border-[#3d3a39] rounded-[4px] text-[9px] font-mono text-[#8b949e]">
               Ctrl
             </kbd>
-            <kbd class="inline-flex items-center justify-center h-4 min-w-[16px] px-1 bg-zinc-800 border border-zinc-700 rounded text-[9px] font-mono text-zinc-500">
+            <kbd class="inline-flex items-center justify-center h-4 min-w-[16px] px-1 bg-[#101010] border border-[#3d3a39] rounded-[4px] text-[9px] font-mono text-[#8b949e]">
               K
             </kbd>
           </span>
         </button>
 
-        {/* Actions */}
-        <div class="flex items-center gap-1.5 shrink-0">
+        {/* Action Buttons */}
+        <div class="flex items-center gap-2 shrink-0">
           <button
-            class="flex items-center justify-center w-[30px] h-[30px] bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-zinc-400 transition-colors"
-            onClick={onThemeToggle}
-            title="Toggle theme"
-          >
-            {theme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
-          </button>
-          <button
-            class="flex items-center justify-center w-[30px] h-[30px] bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-zinc-400 transition-colors disabled:opacity-40"
+            class="flex items-center gap-1.5 h-[32px] px-3 bg-[#101010] border border-[#3d3a39] hover:bg-[#1a1a1a] hover:border-[#8b949e] rounded-[6px] text-xs font-medium text-[#f2f2f2] transition-colors disabled:opacity-40"
             onClick={onExportHtml}
             disabled={loading}
-            title="Export HTML"
+            title="Export standalone HTML report"
           >
-            <IconDownload size={14} />
+            <IconDownload size={13} className="text-[#8b949e]" />
+            <span>Export</span>
           </button>
           <button
-            class="flex items-center gap-1.5 h-[30px] px-3 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-[12.5px] font-medium text-zinc-300 transition-colors disabled:opacity-40"
+            class="flex items-center gap-1.5 h-[32px] px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] rounded-[6px] text-xs font-semibold text-[#101010] transition-colors disabled:opacity-40"
             onClick={onScan}
             disabled={loading}
           >
-            <IconRefreshCw size={13} />
-            {loading ? "Scanning…" : "Rescan"}
+            <IconRefreshCw size={13} className={loading ? "spinner" : ""} />
+            <span>{loading ? "Scanning…" : "Rescan"}</span>
           </button>
         </div>
       </div>
 
-      {/* Tabs row */}
-      <nav class="flex items-center gap-0.5 h-10 px-4 border-t border-zinc-800/60">
+      {/* Tabs navigation row */}
+      <nav class="flex items-center gap-1 h-10 px-6 border-t border-[#3d3a39]/70 bg-[#101010]">
         {TABS.map((t) => {
           const count = data && t.count ? t.count(data) : undefined
           const active = tab === t.id
           return (
             <button
               key={t.id}
-              class={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12.5px] font-medium transition-colors ${
-                active ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900"
+              class={`relative inline-flex items-center gap-2 h-8 px-3 rounded-[6px] text-[13px] font-medium transition-colors ${
+                active
+                  ? "bg-[#1a1a1a] text-[#ffffff] border border-[#3d3a39]"
+                  : "text-[#8b949e] hover:text-[#f2f2f2] hover:bg-[#1a1a1a]/50"
               }`}
               onClick={() => onTabChange(t.id)}
             >
-              {t.label}
+              {active && <span class="w-1.5 h-1.5 rounded-full bg-[#00d992] shrink-0" />}
+              <span>{t.label}</span>
               {typeof count === "number" && count > 0 && (
                 <span
                   class={`inline-flex items-center justify-center min-w-[18px] h-4 px-1.5 rounded-full text-[10px] font-bold font-mono ${
-                    t.warn ? "bg-rose-500/15 text-rose-400" : "bg-zinc-700 text-zinc-400"
+                    t.warn
+                      ? "bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30"
+                      : "bg-[#1a1a1a] text-[#8b949e] border border-[#3d3a39]"
                   }`}
                 >
                   {count}

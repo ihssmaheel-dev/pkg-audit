@@ -20,28 +20,28 @@ type Filter = "all" | "major" | "minor" | "patch"
 function statusStyle(status: OutdatedRecord["status"]): string {
   switch (status) {
     case "major":
-      return "bg-rose-500/10 text-rose-400"
+      return "bg-[#f43f5e]/10 text-[#f43f5e] border border-[#f43f5e]/25"
     case "minor":
-      return "bg-amber-500/10 text-amber-400"
+      return "bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/25"
     case "patch":
-      return "bg-indigo-500/10 text-indigo-400"
+      return "bg-[#00d992]/10 text-[#00d992] border border-[#00d992]/25"
     case "up-to-date":
-      return "bg-emerald-500/10 text-emerald-400"
+      return "bg-[#00d992]/10 text-[#00d992] border border-[#00d992]/25"
     default:
-      return "bg-zinc-700/50 text-zinc-500"
+      return "bg-[#1a1a1a] text-[#8b949e] border border-[#3d3a39]"
   }
 }
 
 function dotColor(status: OutdatedRecord["status"]): string {
   switch (status) {
     case "major":
-      return "bg-rose-500"
+      return "bg-[#f43f5e]"
     case "minor":
-      return "bg-amber-400"
+      return "bg-[#f59e0b]"
     case "up-to-date":
-      return "bg-emerald-500"
+      return "bg-[#00d992]"
     default:
-      return "bg-zinc-600"
+      return "bg-[#3d3a39]"
   }
 }
 
@@ -58,65 +58,83 @@ export function Outdated({ data, onOutdated }: OutdatedProps) {
   const outdated = data.outdated
   if (!outdated) {
     return (
-      <div class="flex flex-col items-center justify-center gap-3 py-20 text-zinc-500 text-center">
-        <IconPackage size={40} className="text-zinc-700" />
-        <h3 class="text-sm font-semibold text-zinc-400">Outdated check not run</h3>
-        <p class="text-xs">Check dependency versions against the npm registry.</p>
+      <div class="flex flex-col items-center justify-center gap-3.5 py-24 text-[#8b949e] text-center">
+        <IconPackage size={40} className="text-[#3d3a39]" />
+        <h3 class="text-sm font-semibold text-[#ffffff]">Outdated check not run</h3>
+        <p class="text-xs text-[#8b949e] max-w-sm">
+          Query the npm registry and GitHub release logs to detect version drift across all dependencies.
+        </p>
         <button
-          class="flex items-center gap-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold mt-1 transition-colors"
+          class="flex items-center gap-1.5 h-8 px-4 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold mt-2 transition-colors"
           onClick={onOutdated}
         >
-          <IconRefreshCw size={12} />
-          Check outdated
+          <IconRefreshCw size={13} />
+          <span>Check outdated</span>
         </button>
       </div>
     )
   }
 
   const items = outdated.all.filter((item) => {
-    if (!showUpToDate && (item.status === "up-to-date" || item.status === "not-published")) return false
+    if (!showUpToDate && (item.status === "up-to-date" || item.status === "not-published")) {
+      return false
+    }
     if (filter === "all") return true
     return item.status === filter
   })
 
   if (!items.length) {
     return (
-      <div class="flex flex-col items-center justify-center gap-3 py-20 text-zinc-500 text-center">
-        <IconCheckCircle size={40} className="text-emerald-500/40" />
-        <h3 class="text-sm font-semibold text-zinc-400">Everything is up to date</h3>
-        <p class="text-xs">All dependencies are at their latest versions.</p>
+      <div class="flex flex-col items-center justify-center gap-3 py-20 text-[#8b949e] text-center">
+        <IconCheckCircle size={40} className="text-[#00d992]" />
+        <h3 class="text-sm font-semibold text-[#ffffff]">Everything is up to date</h3>
+        <p class="text-xs text-[#8b949e]">All dependencies are aligned with their latest releases.</p>
       </div>
     )
   }
 
   return (
-    <div>
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-[2.52px] text-[#00d992] mb-1">
+            REGISTRY SYNC
+          </div>
+          <h1 class="text-2xl font-normal tracking-[-0.6px] text-[#ffffff]">Outdated Packages</h1>
+        </div>
+      </div>
+
       {outdated.networkErrors.length > 0 && (
-        <div class="flex items-center gap-2 mb-3 px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-400">
+        <div class="flex items-center gap-2 px-4 py-2.5 bg-[#f59e0b]/10 border border-[#f59e0b]/25 rounded-[6px] text-xs text-[#f59e0b]">
           <IconInfo size={14} />
-          {outdated.networkErrors.length} package(s) could not be checked — network/registry issue
+          <span>
+            {outdated.networkErrors.length} package(s) could not be queried due to network or registry limits.
+          </span>
         </div>
       )}
 
-      <div class="flex items-center gap-2 mb-4 flex-wrap">
+      {/* Filter bar */}
+      <div class="flex items-center gap-2 flex-wrap">
         {(["all", "major", "minor", "patch"] as const).map((f) => (
           <button
             key={f}
-            class={`inline-flex items-center h-7 px-3 rounded-lg text-xs font-medium border transition-colors ${
+            class={`inline-flex items-center h-7 px-3 rounded-[6px] text-xs font-medium border transition-colors ${
               filter === f
-                ? "bg-zinc-800 border-zinc-700 text-zinc-100"
-                : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"
+                ? "bg-[#1a1a1a] border-[#8b949e] text-[#ffffff]"
+                : "bg-[#101010] border-[#3d3a39] text-[#8b949e] hover:text-[#f2f2f2] hover:border-[#8b949e]"
             }`}
             onClick={() => setFilter(f)}
           >
-            {f === "all" ? "All" : f[0].toUpperCase() + f.slice(1)}
+            {f === "all" ? "All updates" : `${f[0].toUpperCase() + f.slice(1)} only`}
           </button>
         ))}
         <div class="flex-1" />
-        <div class="flex items-center gap-2 text-xs text-zinc-500">
-          Show up-to-date
+        <div class="flex items-center gap-2 text-xs text-[#8b949e]">
+          <span>Show up-to-date</span>
           <div
-            class={`relative w-7 h-4 rounded-full cursor-pointer transition-colors ${showUpToDate ? "bg-indigo-600" : "bg-zinc-700"}`}
+            class={`relative w-8 h-4 rounded-full cursor-pointer transition-colors ${
+              showUpToDate ? "bg-[#00d992]" : "bg-[#3d3a39]"
+            }`}
             role="switch"
             aria-checked={showUpToDate}
             tabIndex={0}
@@ -129,38 +147,48 @@ export function Outdated({ data, onOutdated }: OutdatedProps) {
             }}
           >
             <span
-              class={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${showUpToDate ? "translate-x-3.5" : "translate-x-0.5"}`}
+              class={`absolute top-0.5 w-3 h-3 rounded-full bg-[#101010] transition-transform ${
+                showUpToDate ? "translate-x-4.5" : "translate-x-0.5"
+              }`}
             />
           </div>
         </div>
       </div>
 
-      <div class="flex flex-col gap-2">
+      {/* Outdated list */}
+      <div class="flex flex-col gap-2.5">
         {items.map((item) => (
-          <div key={item.name} class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div
+            key={item.name}
+            class="bg-[#101010] border border-[#3d3a39] rounded-[8px] overflow-hidden hover:border-[#8b949e] transition-colors"
+          >
             <div
-              class="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-zinc-800/30 transition-colors"
+              class="flex items-center gap-3.5 px-5 py-3 cursor-pointer hover:bg-[#1a1a1a]/50 transition-colors"
               onClick={() => setExpanded(expanded === item.name ? null : item.name)}
             >
               <span class={`w-2 h-2 rounded-full shrink-0 ${dotColor(item.status)}`} />
-              <span class="font-mono text-[12.5px] font-semibold text-zinc-200 flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+              <span class="font-mono text-[13px] font-semibold text-[#ffffff] flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                 {item.name}
               </span>
-              <span class="font-mono text-xs text-zinc-500">{item.current ?? "—"}</span>
-              <span class="text-zinc-700 text-xs">→</span>
-              <span class="font-mono text-xs text-zinc-300">{item.latest ?? "—"}</span>
+              <span class="font-mono text-xs text-[#8b949e]">{item.current ?? "—"}</span>
+              <span class="text-[#3d3a39] text-xs">→</span>
+              <span class="font-mono text-xs text-[#f2f2f2] font-medium">{item.latest ?? "—"}</span>
               <span
-                class={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusStyle(item.status)}`}
+                class={`inline-flex items-center justify-center h-5 px-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusStyle(
+                  item.status
+                )}`}
               >
                 {item.status}
               </span>
               <IconChevronRight
                 size={13}
-                className={`text-zinc-600 transition-transform shrink-0 ${expanded === item.name ? "rotate-90" : ""}`}
+                className={`text-[#8b949e] transition-transform shrink-0 ${
+                  expanded === item.name ? "rotate-90" : ""
+                }`}
               />
             </div>
             {expanded === item.name && (
-              <div class="border-t border-zinc-800/60 px-4 py-3">
+              <div class="border-t border-[#3d3a39] bg-[#1a1a1a]/40 px-5 py-4">
                 <ChangelogBlock changelog={item.changelog} />
               </div>
             )}
@@ -175,24 +203,28 @@ function ChangelogBlock({ changelog }: { changelog?: Changelog }) {
   if (!changelog || (changelog.status !== "ok" && changelog.status !== "approx")) {
     const status = changelog?.status ?? "no-release"
     return (
-      <div class="flex items-center gap-2 text-xs text-zinc-500">
-        <IconInfo size={12} />
-        {NO_CHANGELOG_MESSAGES[status] ?? "Release notes not fetched."}
+      <div class="flex items-center gap-2 text-xs text-[#8b949e]">
+        <IconInfo size={13} />
+        <span>{NO_CHANGELOG_MESSAGES[status] ?? "Release notes not fetched."}</span>
       </div>
     )
   }
   return (
     <div class="text-xs">
-      <div class="flex items-baseline gap-2 mb-1 flex-wrap">
-        <span class="font-semibold text-zinc-300">{changelog.title}</span>
-        {changelog.status === "approx" && <span class="text-zinc-600">(closest release)</span>}
-        {changelog.repo && <span class="text-zinc-600">{changelog.repo}</span>}
+      <div class="flex items-baseline gap-2.5 mb-1.5 flex-wrap">
+        <span class="font-semibold text-[#ffffff] text-[13px]">{changelog.title}</span>
+        {changelog.status === "approx" && (
+          <span class="text-[#8b949e] font-mono text-[11px]">(closest release)</span>
+        )}
+        {changelog.repo && <span class="text-[#8b949e] font-mono text-[11px]">{changelog.repo}</span>}
       </div>
       {changelog.publishedAt && (
-        <div class="text-zinc-600 mb-2">{new Date(changelog.publishedAt).toISOString().slice(0, 10)}</div>
+        <div class="text-[#8b949e] font-mono text-[11px] mb-2.5">
+          {new Date(changelog.publishedAt).toISOString().slice(0, 10)}
+        </div>
       )}
       {changelog.bodyLines && changelog.bodyLines.length > 0 && (
-        <ul class="list-disc pl-4 text-zinc-400 leading-relaxed space-y-0.5">
+        <ul class="list-disc pl-4 text-[#bdbdbd] leading-relaxed space-y-1 font-mono text-[11.5px]">
           {changelog.bodyLines.map((line, i) => (
             <li key={i}>{line}</li>
           ))}
@@ -200,13 +232,13 @@ function ChangelogBlock({ changelog }: { changelog?: Changelog }) {
       )}
       {changelog.url && (
         <a
-          class="inline-flex items-center gap-1 mt-2 text-indigo-400 hover:text-indigo-300 hover:underline underline-offset-2"
+          class="inline-flex items-center gap-1 mt-3 text-[#00d992] hover:text-[#2fd6a1] hover:underline text-xs font-medium"
           href={changelog.url}
           target="_blank"
           rel="noopener noreferrer"
         >
-          <IconExternalLink size={10} />
-          View full release notes
+          <IconExternalLink size={11} />
+          <span>View full release notes on GitHub</span>
         </a>
       )}
     </div>

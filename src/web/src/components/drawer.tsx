@@ -79,34 +79,34 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
       pathToCopy: ws.absPath ?? null,
       pin: null,
       fields: [
-        <Field label="Manifest path">
+        <Field label="MANIFEST PATH">
           <PathRow path={ws.absPath ?? ws.relPath} notify={notify} />
         </Field>,
-        <Field label="Version">
+        <Field label="VERSION">
           <Mono>{ws.version || "—"}</Mono>
         </Field>,
-        <Field label="Visibility">
-          <span class="text-[13px] text-zinc-300">
+        <Field label="VISIBILITY">
+          <span class="text-[13px] font-mono text-[#bdbdbd]">
             {ws.private ? "private" : "public"}
             {ws.isRoot ? " · root" : ""}
           </span>
         </Field>,
-        <Field label={`Dependencies (${deps.length})`}>
+        <Field label={`DECLARED DEPENDENCIES (${deps.length})`}>
           {deps.length ? (
-            <div class="space-y-0 divide-y divide-zinc-800/40">
+            <div class="space-y-0 divide-y divide-[#3d3a39]/40 border border-[#3d3a39] rounded-[6px] bg-[#1a1a1a]/30 px-3">
               {deps.map(([name, { version, type }]) => (
-                <div key={name} class="flex items-center justify-between gap-3 py-1.5">
-                  <span class="font-mono text-[11.5px] text-zinc-300 overflow-hidden text-ellipsis whitespace-nowrap">
+                <div key={name} class="flex items-center justify-between gap-3 py-2">
+                  <span class="font-mono text-[11.5px] text-[#f2f2f2] overflow-hidden text-ellipsis whitespace-nowrap">
                     {name}
                   </span>
-                  <span class="font-mono text-[11px] text-zinc-500 shrink-0">
-                    {version} <span class="text-zinc-700">· {type}</span>
+                  <span class="font-mono text-[11px] text-[#8b949e] shrink-0">
+                    {version} <span class="text-[#3d3a39]">· {type}</span>
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <span class="text-xs text-zinc-600">No dependencies declared.</span>
+            <span class="text-xs font-mono text-[#8b949e]">No dependencies declared.</span>
           )}
         </Field>,
       ],
@@ -127,28 +127,30 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
       pathToCopy: ws?.absPath ?? null,
       pin,
       fields: [
-        <Field label="Workspace">
+        <Field label="TARGET WORKSPACE">
           <Mono>{state.workspace}</Mono>
         </Field>,
-        <Field label="Declared version">
+        <Field label="DECLARED VERSION">
           <Mono>{state.version}</Mono>
         </Field>,
-        <Field label="Field">
-          <span class="text-[13px] text-zinc-300">{usage ? fieldName(usage.type) : "—"}</span>
+        <Field label="DEPENDENCY FIELD">
+          <span class="text-[13px] font-mono text-[#bdbdbd]">{usage ? fieldName(usage.type) : "—"}</span>
         </Field>,
-        <Field label="Manifest path">
+        <Field label="MANIFEST PATH">
           <PathRow path={ws?.absPath ?? state.workspace} notify={notify} />
         </Field>,
         ...(others.length
           ? [
-              <Field label="Other workspaces">
-                <div class="space-y-0 divide-y divide-zinc-800/40">
+              <Field label="OTHER WORKSPACES">
+                <div class="space-y-0 divide-y divide-[#3d3a39]/40 border border-[#3d3a39] rounded-[6px] bg-[#1a1a1a]/30 px-3">
                   {others.map((r) => (
-                    <div key={r.ws.relPath} class="flex items-center justify-between gap-3 py-1.5">
-                      <span class="font-mono text-[11.5px] text-zinc-400 overflow-hidden text-ellipsis whitespace-nowrap">
+                    <div key={r.ws.relPath} class="flex items-center justify-between gap-3 py-2">
+                      <span class="font-mono text-[11.5px] text-[#bdbdbd] overflow-hidden text-ellipsis whitespace-nowrap">
                         {r.ws.relPath}
                       </span>
-                      <span class="font-mono text-[11px] text-zinc-500 shrink-0">{r.version}</span>
+                      <span class="font-mono text-[11px] text-[#f2f2f2] shrink-0 font-medium">
+                        {r.version}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -162,17 +164,17 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
 
   return {
     title: dep,
-    pathToCopy: rows[0].ws.absPath ?? null,
+    pathToCopy: rows[0]?.ws.absPath ?? null,
     pin,
     fields: [
-      <Field label="Declared across workspaces">
-        <div class="space-y-0 divide-y divide-zinc-800/40">
+      <Field label="DECLARED ACROSS WORKSPACES">
+        <div class="space-y-0 divide-y divide-[#3d3a39]/40 border border-[#3d3a39] rounded-[6px] bg-[#1a1a1a]/30 px-3">
           {rows.map((r) => (
-            <div key={r.ws.relPath} class="flex items-center justify-between gap-3 py-1.5">
-              <span class="font-mono text-[11.5px] text-zinc-400 overflow-hidden text-ellipsis whitespace-nowrap">
+            <div key={r.ws.relPath} class="flex items-center justify-between gap-3 py-2">
+              <span class="font-mono text-[11.5px] text-[#bdbdbd] overflow-hidden text-ellipsis whitespace-nowrap">
                 {r.ws.relPath}
               </span>
-              <span class="font-mono text-[11px] text-zinc-500 shrink-0">{r.version}</span>
+              <span class="font-mono text-[11px] text-[#f2f2f2] shrink-0 font-medium">{r.version}</span>
             </div>
           ))}
         </div>
@@ -184,23 +186,23 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
 
 function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
   return (
-    <div class="mb-4">
-      <div class="text-[10.5px] font-semibold uppercase tracking-widest text-zinc-600 mb-2">{label}</div>
+    <div class="mb-5">
+      <div class="text-[10.5px] font-semibold uppercase tracking-[2.52px] text-[#8b949e] mb-2">{label}</div>
       {children}
     </div>
   )
 }
 
 function Mono({ children }: { children: preact.ComponentChildren }) {
-  return <span class="font-mono text-[12px] text-zinc-300">{children}</span>
+  return <span class="font-mono text-[12.5px] text-[#f2f2f2]">{children}</span>
 }
 
 function PathRow({ path, notify }: { path: string; notify: (m: string) => void }) {
   return (
     <div class="flex items-center gap-2">
-      <span class="font-mono text-[11.5px] text-zinc-400 break-all flex-1">{path}</span>
+      <span class="font-mono text-[11.5px] text-[#8b949e] break-all flex-1">{path}</span>
       <button
-        class="flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+        class="flex items-center justify-center w-6 h-6 rounded-[4px] hover:bg-[#1a1a1a] border border-transparent hover:border-[#3d3a39] text-[#8b949e] hover:text-[#f2f2f2] transition-colors shrink-0"
         title="Copy path"
         onClick={() =>
           navigator.clipboard
@@ -217,10 +219,10 @@ function PathRow({ path, notify }: { path: string; notify: (m: string) => void }
 
 function PinField({ pin }: { pin: string }) {
   return (
-    <Field label="Suggested alignment">
-      <div class="flex items-center gap-2 px-3 py-2 bg-emerald-500/8 border border-emerald-500/20 rounded-lg">
-        <span class="text-xs text-zinc-500">Pin every workspace to</span>
-        <code class="font-mono text-[12px] text-emerald-400 font-semibold">{pin}</code>
+    <Field label="SUGGESTED ALIGNMENT PIN">
+      <div class="flex items-center gap-2.5 px-3.5 py-2.5 bg-[#00d992]/8 border border-[#00d992]/25 rounded-[6px]">
+        <span class="text-xs text-[#8b949e]">Pin every workspace to</span>
+        <code class="font-mono text-[12px] text-[#00d992] font-bold">{pin}</code>
       </div>
     </Field>
   )
@@ -237,13 +239,7 @@ export function Drawer({ data, state, onClose, notify }: DrawerProps) {
     return () => window.removeEventListener("keydown", handler)
   }, [onClose])
 
-  if (!data || !state)
-    return (
-      <>
-        <div class="fixed inset-0 z-40 pointer-events-none opacity-0 transition-opacity" />
-        <div class="fixed top-0 right-0 bottom-0 w-[360px] z-50 translate-x-full transition-transform duration-200" />
-      </>
-    )
+  if (!data || !state) return null
 
   const content = buildContent(data, state, notify)
   if (!content) return null
@@ -252,23 +248,23 @@ export function Drawer({ data, state, onClose, notify }: DrawerProps) {
     <>
       <div
         ref={overlayRef}
-        class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+        class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
         onClick={(e) => {
           if (e.target === overlayRef.current) onClose()
         }}
       />
       <div
-        class="fixed top-0 right-0 bottom-0 w-[360px] z-50 bg-zinc-900 border-l border-zinc-800 flex flex-col"
+        class="fixed top-0 right-0 bottom-0 w-[380px] z-50 bg-[#101010] border-l border-[#3d3a39] flex flex-col"
         role="dialog"
         aria-modal="true"
       >
-        {/* Head */}
-        <div class="flex items-center gap-3 px-5 py-4 border-b border-zinc-800 shrink-0">
-          <div class="font-mono font-bold text-sm text-zinc-100 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+        {/* Header */}
+        <div class="flex items-center gap-3 px-6 py-4.5 border-b border-[#3d3a39] bg-[#1a1a1a]/30 shrink-0">
+          <div class="font-mono font-bold text-sm text-[#ffffff] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
             {content.title}
           </div>
           <button
-            class="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            class="flex items-center justify-center w-7 h-7 rounded-[6px] hover:bg-[#1a1a1a] border border-transparent hover:border-[#3d3a39] text-[#8b949e] hover:text-[#f2f2f2] transition-colors"
             onClick={onClose}
             title="Close (Esc)"
           >
@@ -276,24 +272,25 @@ export function Drawer({ data, state, onClose, notify }: DrawerProps) {
           </button>
         </div>
 
-        {/* Body */}
-        <div class="flex-1 overflow-y-auto px-5 py-5">{content.fields}</div>
+        {/* Content body */}
+        <div class="flex-1 overflow-y-auto px-6 py-5">{content.fields}</div>
 
-        {/* Actions */}
-        <div class="flex gap-2 px-5 py-4 border-t border-zinc-800 shrink-0">
+        {/* Bottom Actions */}
+        <div class="flex gap-2.5 px-6 py-4 border-t border-[#3d3a39] bg-[#1a1a1a]/20 shrink-0">
           <button
-            class="flex items-center gap-1.5 h-8 px-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs text-zinc-300 transition-colors disabled:opacity-40"
+            class="flex items-center gap-1.5 h-8 px-3 bg-[#101010] hover:bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] rounded-[6px] text-xs font-medium text-[#f2f2f2] transition-colors disabled:opacity-40"
             disabled={!content.pathToCopy}
             onClick={() => content.pathToCopy && copy(content.pathToCopy, "Path copied", notify)}
           >
-            <IconCopy size={11} /> Copy path
+            <IconCopy size={11} className="text-[#8b949e]" />
+            <span>Copy path</span>
           </button>
           <button
-            class="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs text-white font-semibold transition-colors disabled:opacity-40"
+            class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] rounded-[6px] text-xs text-[#101010] font-semibold transition-colors disabled:opacity-40"
             disabled={!content.pin}
             onClick={() => content.pin && copy(content.pin, "Suggested pin copied", notify)}
           >
-            Copy suggested pin
+            <span>Copy suggested pin</span>
           </button>
         </div>
       </div>
