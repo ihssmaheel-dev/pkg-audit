@@ -1,95 +1,185 @@
 # pkg-audit
 
-Scan a JS/TS monorepo and open a local dashboard that makes dependency drift, hygiene, and outdated packages obvious in under 10 seconds.
+<div align="center">
+  <img src="src/web/src/assets/logo.png" alt="pkg-audit logo" width="120" height="120" />
+  <br />
+  <br />
+  <p><b>Developer-first dependency drift, hygiene, and semver conflict auditor for JS/TS monorepos.</b></p>
+  <p>Scan any monorepo and open a clean local dashboard in under 10 seconds.</p>
 
-Not Datadog. Not Socket. Not Renovate.
-The report you'd paste into Slack after "why is CI using two Reacts?"
+  <p>
+    <a href="https://github.com/ihssmaheel-dev/pkg-audit/actions"><img src="https://img.shields.io/github/actions/workflow/status/ihssmaheel-dev/pkg-audit/ci.yml?branch=main&style=flat-square&label=CI&color=00d992" alt="CI Status" /></a>
+    <a href="https://www.npmjs.com/package/pkg-audit"><img src="https://img.shields.io/npm/v/pkg-audit?style=flat-square&color=00d992" alt="npm version" /></a>
+    <a href="https://github.com/ihssmaheel-dev/pkg-audit/blob/main/package.json"><img src="https://img.shields.io/badge/node-%3E%3D18.18-101010?style=flat-square&logo=node.js&logoColor=00d992" alt="Node version" /></a>
+    <a href="https://github.com/ihssmaheel-dev/pkg-audit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-101010?style=flat-square" alt="License" /></a>
+  </p>
+</div>
+
+---
+
+## Preview
+
+<!-- UI Screenshot Placeholder: Main Dashboard -->
+<div align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/dashboard-preview.png" alt="pkg-audit Dashboard Preview" width="100%" />
+  <p><i>Dashboard: Monorepo Health Overview with 6 interactive Chart.js visualizations & KPI metrics</i></p>
+</div>
+
+<br />
+
+<details>
+  <summary><b>📷 More UI Screenshots & Views</b></summary>
+  <br />
+
+### Cross-Workspace Matrix Grid
+
+  <!-- UI Screenshot Placeholder: Matrix View -->
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/matrix-preview.png" alt="Matrix Grid Preview" width="100%" />
+  </p>
+
+### Version Conflicts Breakdown
+
+  <!-- UI Screenshot Placeholder: Conflicts View -->
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/conflicts-preview.png" alt="Conflicts Preview" width="100%" />
+  </p>
+
+### Outdated Dependencies & GitHub Changelogs
+
+  <!-- UI Screenshot Placeholder: Outdated View -->
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/outdated-preview.png" alt="Outdated Changelogs Preview" width="100%" />
+  </p>
+
+### Workspace Manifests
+
+  <!-- UI Screenshot Placeholder: Workspaces View -->
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/workspaces-preview.png" alt="Workspaces Preview" width="100%" />
+  </p>
+
+</details>
+
+---
+
+## Highlights
+
+- **⚡ Blazing Fast** — Scans full monorepos with hundreds of workspaces in under 50 milliseconds.
+- **📊 6-Chart Monorepo Intelligence** — Donut distributions, dependency compositions, workspace loads, and upstream drift charts powered by Chart.js.
+- **🔍 Matrix Alignment Grid** — Cross-workspace view with cell drilldown and automated pin alignment recommendations.
+- **⚠️ Conflict Detection** — Differentiates major breaking mismatches from range discrepancies with one-click markdown exports.
+- **📦 Registry & Changelog Sync** — Live npm version queries with inline GitHub release notes.
+- **🧹 Manifest Hygiene Audit** — Flags duplicate workspace names, missing package fields, engine drifts, and packageManager conflicts.
+- **⌨️ Keyboard First** — Fast navigation via `Ctrl+K` / `Cmd+K` command palette and number hotkeys (`1`–`6`).
+- **📄 Standalone HTML Export** — Generate portable, single-file offline reports for pull requests, audits, and Slack sharing.
+
+---
 
 ## Quick Start
 
 ```bash
-# One-shot, no install
+# One-shot scan with UI dashboard (no install required)
 npx pkg-audit --ui
 
-# Local, team-shared
+# Scan a specific repository directory
+npx pkg-audit --ui ~/code/my-monorepo
+
+# Install locally as dev dependency
 npm i -D pkg-audit
 
-# Global, any folder on the machine
+# Install globally
 npm i -g pkg-audit
 ```
 
+---
+
 ## Usage
 
-```text
+```bash
 pkg-audit [dir] [options]
-pkg-audit ui [dir]          # alias of --ui
-pkg-audit html [dir]        # write standalone HTML report
-pkg-audit json [dir]        # machine output
+pkg-audit ui [dir]          # Alias of --ui
+pkg-audit html [dir]        # Export standalone HTML report
+pkg-audit json [dir]        # Machine-readable JSON output
 ```
 
-| Invocation                        | Behavior                         |
-| --------------------------------- | -------------------------------- |
-| `pkg-audit`                       | Scan cwd, terminal report        |
-| `pkg-audit --ui`                  | Scan cwd, open dashboard         |
-| `pkg-audit --ui ~/code/shop`      | Scan that folder, open dashboard |
-| `pkg-audit html`                  | `pkg-audit-report.html` in cwd   |
-| `pkg-audit json --out audit.json` | CI / editor integrations         |
-| `pkg-audit --outdated --ui`       | Scan + registry + dashboard      |
-| `pkg-audit --watch --ui`          | Rescan on `package.json` changes |
+| Invocation                        | Output / Behavior                                          |
+| --------------------------------- | ---------------------------------------------------------- |
+| `pkg-audit`                       | Scans current directory and prints terminal report         |
+| `pkg-audit --ui`                  | Scans current directory and launches browser dashboard     |
+| `pkg-audit --ui ~/code/shop`      | Scans target directory and launches browser dashboard      |
+| `pkg-audit html`                  | Generates `pkg-audit-report.html` in current directory     |
+| `pkg-audit json --out audit.json` | Emits structured JSON for CI and custom tooling            |
+| `pkg-audit --outdated --ui`       | Scans repository, queries npm registry, opens dashboard    |
+| `pkg-audit --watch --ui`          | Live-reloads dashboard automatically when manifests change |
 
-## Options
+---
 
-| Option                   | Description                                  |
-| ------------------------ | -------------------------------------------- |
-| `--json[=file]`          | Emit JSON (stdout, or to file if given)      |
-| `--html[=file]`          | Write standalone HTML report                 |
-| `--ui`                   | Open local dashboard in browser              |
-| `--workspace=<name>`     | Full dependency detail for one workspace     |
-| `--full`                 | Full dependency matrix for every workspace   |
-| `--outdated`             | Check versions against npm registry          |
-| `--versions`             | Show ALL dependencies with current vs latest |
-| `--changelog`            | Fetch GitHub release notes per package       |
-| `--changelog-lines=N`    | Max lines of release notes (default 6)       |
-| `--concurrency=N`        | Parallel registry requests (default 8)       |
-| `--top=N`                | Show N most-shared dependencies (default 10) |
-| `--only-conflicts`       | Skip workspace list, show only conflicts     |
-| `--ignore-dir=a,b`       | Extra directory names to skip                |
-| `--no-gitignore`         | Don't honor .gitignore files                 |
-| `--no-color`             | Disable ANSI colors                          |
-| `--no-open`              | Don't auto-open browser with `--ui`          |
-| `--port=N`               | Port for `--ui` server                       |
-| `--watch`                | Rescan on package.json changes               |
-| `--fail-on=major\|range` | Exit with code 2 if conflicts found          |
-| `-h, --help`             | Show help                                    |
-| `-v, --version`          | Show version                                 |
+## CLI Options
 
-## Dashboard Features
+| Option                   | Description                                              | Default |
+| ------------------------ | -------------------------------------------------------- | ------- |
+| `--ui`                   | Launch local web dashboard in browser                    | `false` |
+| `--html[=file]`          | Write standalone self-contained HTML report to file      | `false` |
+| `--json[=file]`          | Emit structured JSON to stdout or specified file         | `false` |
+| `--outdated`             | Query npm registry for latest version drift              | `false` |
+| `--changelog`            | Fetch GitHub release notes and changelogs per package    | `false` |
+| `--changelog-lines=N`    | Maximum lines of release notes to display                | `6`     |
+| `--concurrency=N`        | Maximum concurrent registry requests                     | `8`     |
+| `--top=N`                | Number of top shared dependencies to report              | `10`    |
+| `--only-conflicts`       | Filter output to only packages with version conflicts    | `false` |
+| `--workspace=<name>`     | Inspect dependencies for a single specified workspace    | `all`   |
+| `--full`                 | Render full dependency matrix across all manifests       | `false` |
+| `--watch`                | Watch `package.json` files and rescan automatically      | `false` |
+| `--port=N`               | Custom port for `--ui` web server                        | `auto`  |
+| `--no-open`              | Prevent opening browser window automatically with `--ui` | `false` |
+| `--ignore-dir=a,b`       | Extra directory patterns to ignore during scan           | none    |
+| `--no-gitignore`         | Ignore `.gitignore` exclusions during scanning           | `false` |
+| `--fail-on=major\|range` | Exit with code 2 if conflicts at or above severity exist | none    |
+| `-h, --help`             | Display help information                                 |         |
+| `-v, --version`          | Display version number                                   |         |
 
-- **Matrix view** — package x workspace grid, click cells for details
-- **Conflicts** — version drift across workspaces, copy as markdown
-- **Outdated** — check against npm registry, see changelogs
-- **Hygiene** — unnamed manifests, duplicate names, packageManager/engines mismatches
-- **Workspaces** — full dependency list per workspace
-- **Folder picker** — no project yet? Browse, type, or pick a recent/favorite folder
-- **Command palette** — `Ctrl+K` to search packages, workspaces, actions
-- **Dark/light theme** — respects system preference
-- **Compact mode** — for repos with 30+ workspaces
+---
+
+## Dashboard Views
+
+1. **Dashboard** — 6-up high-level KPI cards and 6 interactive Chart.js charts:
+   - **Version Alignment** (Doughnut)
+   - **Dependency Composition** (Doughnut)
+   - **Dependencies by Workspace** (Horizontal Bar)
+   - **Top Shared Dependencies** (Horizontal Bar)
+   - **Outdated Semver Drift** (Vertical Column)
+   - **Active Version Conflicts** (Color-coded Bar)
+2. **Matrix** — Dense cross-workspace dependency matrix. Click any cell to view version details across workspaces and copy suggested alignment pins.
+3. **Conflicts** — Grouped version conflicts categorized by Major breaking vs Range discrepancies with copy-to-clipboard markdown support.
+4. **Outdated** — Real-time upstream semver drift with inline GitHub changelogs and release notes.
+5. **Hygiene** — Monorepo sanity checks for duplicate package names, missing package fields, Node engines, and package manager consistency.
+6. **Workspaces** — Dedicated dependency tables per workspace with uniform column widths and filter capabilities.
+
+---
 
 ## Keyboard Shortcuts
 
-| Key                | Action                                                         |
-| ------------------ | -------------------------------------------------------------- |
-| `Ctrl+K` / `Cmd+K` | Command palette                                                |
-| `Esc`              | Close drawer / palette                                         |
-| `1-5`              | Switch tabs (matrix, conflicts, outdated, hygiene, workspaces) |
+| Shortcut           | Action                                                      |
+| ------------------ | ----------------------------------------------------------- |
+| `Ctrl+K` / `Cmd+K` | Open command palette (search packages, workspaces, actions) |
+| `Esc`              | Close details drawer / command palette                      |
+| `1`                | Navigate to **Dashboard** tab                               |
+| `2`                | Navigate to **Matrix** tab                                  |
+| `3`                | Navigate to **Conflicts** tab                               |
+| `4`                | Navigate to **Outdated** tab                                |
+| `5`                | Navigate to **Hygiene** tab                                 |
+| `6`                | Navigate to **Workspaces** tab                              |
 
-## Config File
+---
 
-`pkg-audit.config.js` / `pkg-audit.config.mjs` / `pkg-audit.config.cjs` / `"pkg-audit"` key in `package.json`:
+## Configuration File
 
-```js
+You can define default configuration options in `pkg-audit.config.js`, `pkg-audit.config.mjs`, `pkg-audit.config.cjs`, or under the `"pkg-audit"` key in `package.json`:
+
+```javascript
 export default {
-  ignoreDirs: ["fixtures", "examples"],
+  ignoreDirs: ["fixtures", "examples", "legacy"],
   top: 15,
   outdated: false,
   changelog: false,
@@ -100,69 +190,72 @@ export default {
 }
 ```
 
-Priority: CLI flags > config file > defaults.
+_Precedence:_ CLI Arguments > Config File > Default Values.
 
-## CI Integration
+---
+
+## CI / CD Integration
+
+Integrate `pkg-audit` into GitHub Actions, GitLab CI, or pre-commit hooks to prevent dependency drift:
 
 ```json
 {
   "scripts": {
-    "deps": "pkg-audit --ui",
-    "deps:ci": "pkg-audit --fail-on major --html reports/deps.html"
+    "audit:deps": "pkg-audit --ui",
+    "audit:ci": "pkg-audit --fail-on major --html reports/dependency-audit.html"
   }
 }
 ```
 
-- Exit code `0`: clean
-- Exit code `1`: scan errors
-- Exit code `2`: major conflicts (with `--fail-on major`)
+### Exit Codes
 
-Set `PKG_AUDIT_NO_OPEN=1` to prevent browser opening in CI.
+- `0` — Clean scan, no qualifying conflicts found.
+- `1` — Scan or filesystem error.
+- `2` — Conflicts detected exceeding `--fail-on` threshold.
+
+---
 
 ## Development
 
 ```bash
-npm install          # install deps (also sets up husky hooks)
-npm run dev          # run the CLI via tsx
-npm run dev:ui       # run the CLI with the dashboard
-npm run build        # compile dist/ (tsc + vite)
-npm run verify       # format check + lint + typecheck + tests + build
+# Clone and install dependencies
+git clone https://github.com/ihssmaheel-dev/pkg-audit.git
+cd pkg-audit
+npm install
+
+# Run CLI locally
+npm run dev
+
+# Run web UI in development mode
+npm run dev:ui
+
+# Execute test suite
+npm test
+
+# Run full verification (format, lint, typecheck, tests, build)
+npm run verify
 ```
 
-### Toolchain
-
-- **TypeScript** — strict mode, NodeNext for node code, Bundler + preact automatic JSX for the dashboard
-- **Vitest** — unit + integration tests in `test/` with a fixture monorepo
-- **ESLint** (flat config + typescript-eslint) and **Prettier**
-- **Husky + lint-staged** — format and lint on every commit
-- **GitHub Actions** — CI runs lint, typecheck, tests, and a build on Node 18/20/22 for every push and PR
-- **Icons, not emojis** — the dashboard ships an inline SVG icon set; there are no emoji glyphs anywhere in the UI or the CLI output
+---
 
 ## Architecture
 
 ```
 pkg-audit/
   src/
-    scan/          Pure scanner library (zero UI imports)
-    cli/           CLI entry point, arg parsing, terminal renderer
-    server/        Local HTTP server (127.0.0.1 only)
-    web/           Dashboard (Vite + Preact)
-    html/          Standalone HTML export
-    config/        Config file + state loading
-    pick-folder/   Native folder picker helpers
+    scan/          Core scanner engine (zero UI dependencies)
+    cli/           CLI parser, terminal report renderer
+    server/        Local web server & API handlers
+    web/           Preact + Tailwind CSS v4 Dashboard
+    html/          Standalone HTML report bundler
+    config/        Configuration loader & persistent state
+    pick-folder/   Native directory dialog bindings
   test/
-    fixtures/      Fixture monorepo used by the integration tests
+    fixtures/      Test monorepo fixture suite
 ```
 
-## What This Is NOT
-
-- No accounts, teams, or cloud sync
-- No CVE / malware / license scanning
-- No auto-PRs (that's Renovate's job)
-- No editing `package.json` in v1
-- No Electron wrapper
-- No "AI explain my deps"
+---
 
 ## License
 
-MIT
+MIT © [ihssmaheel-dev](https://github.com/ihssmaheel-dev)
