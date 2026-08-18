@@ -1,5 +1,6 @@
 import { defineConfig } from "vite"
 import preact from "@preact/preset-vite"
+import tailwindcss from "@tailwindcss/vite"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -7,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   root: __dirname,
-  plugins: [preact()],
+  plugins: [preact(), tailwindcss()],
   build: {
     outDir: path.join(__dirname, "..", "..", "dist", "ui"),
     emptyOutDir: true,

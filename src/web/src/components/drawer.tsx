@@ -18,25 +18,20 @@ interface Usage {
 }
 
 function collectUsage(data: ScanResult, dep: string): Usage[] {
-  const rows: Usage[] = []
-  for (const ws of data.workspaces) {
-    const depRecord = ws.deps[dep]
-    if (depRecord) rows.push({ ws, version: depRecord.version, type: depRecord.type })
-  }
-  return rows
+  return data.workspaces.flatMap((ws) => {
+    const d = ws.deps[dep]
+    return d ? [{ ws, version: d.version, type: d.type }] : []
+  })
 }
 
 function fieldName(type: DepType): string {
-  switch (type) {
-    case "prod":
-      return "dependencies"
-    case "dev":
-      return "devDependencies"
-    case "peer":
-      return "peerDependencies"
-    case "optional":
-      return "optionalDependencies"
+  const names: Record<DepType, string> = {
+    prod: "dependencies",
+    dev: "devDependencies",
+    peer: "peerDependencies",
+    optional: "optionalDependencies",
   }
+  return names[type]
 }
 
 function suggestedPin(rows: Usage[]): string | null {
@@ -84,39 +79,36 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
       pathToCopy: ws.absPath ?? null,
       pin: null,
       fields: [
-        <div class="drawer-field">
-          <div class="drawer-label">Manifest path</div>
+        <Field label="Manifest path">
           <PathRow path={ws.absPath ?? ws.relPath} notify={notify} />
-        </div>,
-        <div class="drawer-field">
-          <div class="drawer-label">Version</div>
-          <div class="drawer-value mono">{ws.version || "—"}</div>
-        </div>,
-        <div class="drawer-field">
-          <div class="drawer-label">Visibility</div>
-          <div class="drawer-value">
+        </Field>,
+        <Field label="Version">
+          <Mono>{ws.version || "—"}</Mono>
+        </Field>,
+        <Field label="Visibility">
+          <span class="text-[13px] text-zinc-300">
             {ws.private ? "private" : "public"}
             {ws.isRoot ? " · root" : ""}
-          </div>
-        </div>,
-        <div class="drawer-field">
-          <div class="drawer-label">Dependencies ({deps.length})</div>
+          </span>
+        </Field>,
+        <Field label={`Dependencies (${deps.length})`}>
           {deps.length ? (
-            <div>
+            <div class="space-y-0 divide-y divide-zinc-800/40">
               {deps.map(([name, { version, type }]) => (
-                <div class="drawer-kv" key={name}>
-                  <span class="kv-key">{name}</span>
-                  <span class="kv-value">
-                    {version}
-                    <span class="dim"> · {type}</span>
+                <div key={name} class="flex items-center justify-between gap-3 py-1.5">
+                  <span class="font-mono text-[11.5px] text-zinc-300 overflow-hidden text-ellipsis whitespace-nowrap">
+                    {name}
+                  </span>
+                  <span class="font-mono text-[11px] text-zinc-500 shrink-0">
+                    {version} <span class="text-zinc-700">· {type}</span>
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div class="drawer-value dim">No dependencies declared.</div>
+            <span class="text-xs text-zinc-600">No dependencies declared.</span>
           )}
-        </div>,
+        </Field>,
       ],
     }
   }
@@ -124,8 +116,6 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
   const dep = state.type === "package" ? state.name : state.dep
   const rows = collectUsage(data, dep)
   if (!rows.length) return null
-
-  const title = dep
   const pin = suggestedPin(rows)
 
   if (state.type === "cell") {
@@ -133,98 +123,84 @@ function buildContent(data: ScanResult, state: DrawerState, notify: (m: string) 
     const usage = ws ? rows.find((r) => r.ws.relPath === ws.relPath) : undefined
     const others = rows.filter((r) => r.ws.relPath !== state.workspace)
     return {
-      title,
+      title: dep,
       pathToCopy: ws?.absPath ?? null,
       pin,
       fields: [
-        <div class="drawer-field">
-          <div class="drawer-label">Workspace</div>
-          <div class="drawer-value mono">{state.workspace}</div>
-        </div>,
-        <div class="drawer-field">
-          <div class="drawer-label">Declared version</div>
-          <div class="drawer-value mono">{state.version}</div>
-        </div>,
-        <div class="drawer-field">
-          <div class="drawer-label">Field</div>
-          <div class="drawer-value">{usage ? fieldName(usage.type) : "—"}</div>
-        </div>,
-        <div class="drawer-field">
-          <div class="drawer-label">Manifest path</div>
+        <Field label="Workspace">
+          <Mono>{state.workspace}</Mono>
+        </Field>,
+        <Field label="Declared version">
+          <Mono>{state.version}</Mono>
+        </Field>,
+        <Field label="Field">
+          <span class="text-[13px] text-zinc-300">{usage ? fieldName(usage.type) : "—"}</span>
+        </Field>,
+        <Field label="Manifest path">
           <PathRow path={ws?.absPath ?? state.workspace} notify={notify} />
-        </div>,
+        </Field>,
         ...(others.length
           ? [
-              <div class="drawer-field">
-                <div class="drawer-label">Other workspaces</div>
-                <div>
+              <Field label="Other workspaces">
+                <div class="space-y-0 divide-y divide-zinc-800/40">
                   {others.map((r) => (
-                    <div class="drawer-kv" key={r.ws.relPath}>
-                      <span class="kv-key">{r.ws.relPath}</span>
-                      <span class="kv-value">{r.version}</span>
+                    <div key={r.ws.relPath} class="flex items-center justify-between gap-3 py-1.5">
+                      <span class="font-mono text-[11.5px] text-zinc-400 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {r.ws.relPath}
+                      </span>
+                      <span class="font-mono text-[11px] text-zinc-500 shrink-0">{r.version}</span>
                     </div>
                   ))}
                 </div>
-              </div>,
+              </Field>,
             ]
           : []),
-        ...(pin
-          ? [
-              <div class="drawer-field">
-                <div class="drawer-label">Suggested alignment</div>
-                <div class="drawer-suggest">
-                  <div class="lbl">Pin every workspace to</div>
-                  <code>{pin}</code>
-                </div>
-              </div>,
-            ]
-          : []),
+        ...(pin ? [<PinField pin={pin} />] : []),
       ],
     }
   }
 
   return {
-    title,
+    title: dep,
     pathToCopy: rows[0].ws.absPath ?? null,
     pin,
     fields: [
-      <div class="drawer-field">
-        <div class="drawer-label">Declared across workspaces</div>
-        <div>
+      <Field label="Declared across workspaces">
+        <div class="space-y-0 divide-y divide-zinc-800/40">
           {rows.map((r) => (
-            <div class="drawer-kv" key={r.ws.relPath}>
-              <span class="kv-key">{r.ws.relPath}</span>
-              <span class="kv-value">{r.version}</span>
+            <div key={r.ws.relPath} class="flex items-center justify-between gap-3 py-1.5">
+              <span class="font-mono text-[11.5px] text-zinc-400 overflow-hidden text-ellipsis whitespace-nowrap">
+                {r.ws.relPath}
+              </span>
+              <span class="font-mono text-[11px] text-zinc-500 shrink-0">{r.version}</span>
             </div>
           ))}
         </div>
-      </div>,
-      ...(pin
-        ? [
-            <div class="drawer-field">
-              <div class="drawer-label">Suggested alignment</div>
-              <div class="drawer-suggest">
-                <div class="lbl">Pin every workspace to</div>
-                <code>{pin}</code>
-              </div>
-            </div>,
-          ]
-        : []),
+      </Field>,
+      ...(pin ? [<PinField pin={pin} />] : []),
     ],
   }
 }
 
-interface PathRowProps {
-  path: string
-  notify: (message: string) => void
+function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
+  return (
+    <div class="mb-4">
+      <div class="text-[10.5px] font-semibold uppercase tracking-widest text-zinc-600 mb-2">{label}</div>
+      {children}
+    </div>
+  )
 }
 
-function PathRow({ path, notify }: PathRowProps) {
+function Mono({ children }: { children: preact.ComponentChildren }) {
+  return <span class="font-mono text-[12px] text-zinc-300">{children}</span>
+}
+
+function PathRow({ path, notify }: { path: string; notify: (m: string) => void }) {
   return (
-    <div class="drawer-path-row">
-      <span>{path}</span>
+    <div class="flex items-center gap-2">
+      <span class="font-mono text-[11.5px] text-zinc-400 break-all flex-1">{path}</span>
       <button
-        class="icon-btn"
+        class="flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
         title="Copy path"
         onClick={() =>
           navigator.clipboard
@@ -233,9 +209,20 @@ function PathRow({ path, notify }: PathRowProps) {
             .catch(() => {})
         }
       >
-        <IconCopy size={13} />
+        <IconCopy size={12} />
       </button>
     </div>
+  )
+}
+
+function PinField({ pin }: { pin: string }) {
+  return (
+    <Field label="Suggested alignment">
+      <div class="flex items-center gap-2 px-3 py-2 bg-emerald-500/8 border border-emerald-500/20 rounded-lg">
+        <span class="text-xs text-zinc-500">Pin every workspace to</span>
+        <code class="font-mono text-[12px] text-emerald-400 font-semibold">{pin}</code>
+      </div>
+    </Field>
   )
 }
 
@@ -250,7 +237,13 @@ export function Drawer({ data, state, onClose, notify }: DrawerProps) {
     return () => window.removeEventListener("keydown", handler)
   }, [onClose])
 
-  if (!data || !state) return null
+  if (!data || !state)
+    return (
+      <>
+        <div class="fixed inset-0 z-40 pointer-events-none opacity-0 transition-opacity" />
+        <div class="fixed top-0 right-0 bottom-0 w-[360px] z-50 translate-x-full transition-transform duration-200" />
+      </>
+    )
 
   const content = buildContent(data, state, notify)
   if (!content) return null
@@ -258,31 +251,45 @@ export function Drawer({ data, state, onClose, notify }: DrawerProps) {
   return (
     <>
       <div
-        class={`overlay ${state ? "show" : ""}`}
         ref={overlayRef}
+        class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
         onClick={(e) => {
           if (e.target === overlayRef.current) onClose()
         }}
       />
-      <div class={`drawer ${state ? "show" : ""}`} role="dialog" aria-modal="true">
-        <div class="drawer-head">
-          <div class="drawer-title">{content.title}</div>
-          <button class="icon-btn" onClick={onClose} title="Close (Esc)">
-            <IconX size={16} />
+      <div
+        class="fixed top-0 right-0 bottom-0 w-[360px] z-50 bg-zinc-900 border-l border-zinc-800 flex flex-col"
+        role="dialog"
+        aria-modal="true"
+      >
+        {/* Head */}
+        <div class="flex items-center gap-3 px-5 py-4 border-b border-zinc-800 shrink-0">
+          <div class="font-mono font-bold text-sm text-zinc-100 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+            {content.title}
+          </div>
+          <button
+            class="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            onClick={onClose}
+            title="Close (Esc)"
+          >
+            <IconX size={15} />
           </button>
         </div>
-        <div class="drawer-body">{content.fields}</div>
-        <div class="drawer-actions">
+
+        {/* Body */}
+        <div class="flex-1 overflow-y-auto px-5 py-5">{content.fields}</div>
+
+        {/* Actions */}
+        <div class="flex gap-2 px-5 py-4 border-t border-zinc-800 shrink-0">
           <button
-            class="btn"
+            class="flex items-center gap-1.5 h-8 px-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs text-zinc-300 transition-colors disabled:opacity-40"
             disabled={!content.pathToCopy}
             onClick={() => content.pathToCopy && copy(content.pathToCopy, "Path copied", notify)}
           >
-            <IconCopy size={12} />
-            Copy path
+            <IconCopy size={11} /> Copy path
           </button>
           <button
-            class="btn btn-primary"
+            class="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs text-white font-semibold transition-colors disabled:opacity-40"
             disabled={!content.pin}
             onClick={() => content.pin && copy(content.pin, "Suggested pin copied", notify)}
           >

@@ -1,7 +1,8 @@
-import { useMemo } from "preact/hooks"
+import { useMemo, useRef, useEffect } from "preact/hooks"
 import type { JSX } from "preact"
 import type { ScanResult } from "../../../types"
 import type { TabId } from "../types"
+import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from "chart.js"
 import {
   IconAlertTriangle,
   IconCheckCircle,
@@ -12,15 +13,11 @@ import {
   IconWrench,
 } from "./icons"
 
+Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
+
 type DepStatus = "aligned" | "range" | "major" | "linked"
 
-interface DepStat {
-  name: string
-  status: DepStatus
-  wsCount: number
-}
-
-function buildStatuses(data: ScanResult): DepStat[] {
+function buildStatuses(data: ScanResult) {
   const map = new Map<string, { versions: Set<string>; wsCount: number }>()
   for (const ws of data.workspaces) {
     for (const [name, dep] of Object.entries(ws.deps)) {
@@ -33,9 +30,7 @@ function buildStatuses(data: ScanResult): DepStat[] {
       entry.wsCount += 1
     }
   }
-
-  const out: DepStat[] = []
-  for (const [name, entry] of map) {
+  return [...map.entries()].map(([name, entry]) => {
     const real = [...entry.versions].filter(
       (v) => !v.startsWith("workspace:") && !v.startsWith("catalog:") && !v.startsWith("link:")
     )
@@ -43,28 +38,21 @@ function buildStatuses(data: ScanResult): DepStat[] {
     if (real.length === 0) status = "linked"
     else if (real.length > 1) {
       const majors = new Set(
-        real
-          .map((v) => v.replace(/^[\^~<>=\s]+/, "").match(/^(\d+)/)?.[1])
-          .filter((m): m is string => m !== undefined)
+        real.map((v) => v.replace(/^[^~<>=\s]+/, "").match(/^(\d+)/)?.[1]).filter(Boolean)
       )
       status = majors.size > 1 ? "major" : "range"
-    } else {
-      status = "aligned"
-    }
-    out.push({ name, status, wsCount: entry.wsCount })
-  }
-  return out
+    } else status = "aligned"
+    return { name, status, wsCount: entry.wsCount }
+  })
 }
 
-interface DonutSegment {
-  label: string
-  color: string
-  count: number
+function occurrencesOf(conflict: ScanResult["conflicts"][number]) {
+  return conflict.versions.reduce((sum, v) => sum + v.occurrences.length, 0)
 }
 
-const DONUT_R = 54
-const DONUT_C = 2 * Math.PI * DONUT_R
-const DONUT_GAP = 2.5
+function byStatus(records: NonNullable<ScanResult["outdated"]>["all"], status: string) {
+  return records.filter((r) => r.status === status).length
+}
 
 interface DashboardProps {
   data: ScanResult
@@ -72,230 +60,103 @@ interface DashboardProps {
   onTabChange: (tab: TabId) => void
 }
 
-export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
-  const statuses = useMemo(() => buildStatuses(data), [data])
-
-  const segments: DonutSegment[] = useMemo(() => {
-    const count = (s: DepStatus) => statuses.filter((d) => d.status === s).length
-    return [
-      { label: "Major conflicts", color: "var(--red)", count: count("major") },
-      { label: "Range conflicts", color: "var(--amber)", count: count("range") },
-      { label: "Aligned", color: "var(--green)", count: count("aligned") },
-      { label: "Linked", color: "var(--violet)", count: count("linked") },
-    ]
-  }, [statuses])
-
-  const totalPackages = segments.reduce((sum, s) => sum + s.count, 0)
-
-  const topPackages = useMemo(
-    () => [...statuses].sort((a, b) => b.wsCount - a.wsCount || a.name.localeCompare(b.name)).slice(0, 8),
-    [statuses]
-  )
-  const maxUsage = topPackages[0]?.wsCount ?? 1
-
-  const conflicts = useMemo(
-    () =>
-      [...data.conflicts]
-        .sort(
-          (a, b) =>
-            (a.severity === "major" ? 0 : 1) - (b.severity === "major" ? 0 : 1) ||
-            occurrencesOf(b) - occurrencesOf(a) ||
-            a.name.localeCompare(b.name)
-        )
-        .slice(0, 6),
-    [data.conflicts]
-  )
-  const maxConflictRows = conflicts.reduce((m, c) => Math.max(m, occurrencesOf(c)), 1)
-
-  const outdated = data.outdated
-
-  return (
-    <div>
-      <div class="stats-grid">
-        <StatCard
-          icon={<IconFolder size={17} />}
-          color="accent"
-          value={data.workspaces.length}
-          label="Workspaces"
-        />
-        <StatCard
-          icon={<IconPackage size={17} />}
-          color="green"
-          value={data.meta.totalDepDeclarations}
-          label="Declarations"
-        />
-        <StatCard
-          icon={<IconAlertTriangle size={17} />}
-          color="red"
-          value={data.conflicts.length}
-          label="Conflicts"
-        />
-        <StatCard
-          icon={<IconSearch size={17} />}
-          color="amber"
-          value={outdated ? outdated.outdated.length : "—"}
-          label="Outdated"
-        />
-        <StatCard
-          icon={<IconWrench size={17} />}
-          color="violet"
-          value={data.hygieneIssues.length}
-          label="Hygiene issues"
-        />
-      </div>
-
-      <div class="dash-grid">
-        <div class="dash-card">
-          <div class="dash-title">
-            <span>Dependency health</span>
-            <span class="dim">{totalPackages} unique packages</span>
-          </div>
-          {totalPackages > 0 ? (
-            <DonutChart segments={segments} total={totalPackages} />
-          ) : (
-            <div class="dash-empty">No dependencies found.</div>
-          )}
-        </div>
-
-        <div class="dash-card">
-          <div class="dash-title">
-            <span>Outdated breakdown</span>
-            <span class="dim">{outdated ? `${outdated.all.length} checked` : "not run"}</span>
-          </div>
-          {outdated ? (
-            <Bars
-              rows={[
-                { label: "Major", count: byStatus(outdated.all, "major"), color: "red" },
-                { label: "Minor", count: byStatus(outdated.all, "minor"), color: "amber" },
-                { label: "Patch", count: byStatus(outdated.all, "patch"), color: "accent" },
-                { label: "Up to date", count: byStatus(outdated.all, "up-to-date"), color: "green" },
-              ]}
-            />
-          ) : (
-            <div class="dash-empty">
-              <span>Run the outdated check to see version drift.</span>
-              <button class="btn btn-primary" onClick={onOutdated}>
-                <IconRefreshCw size={13} />
-                Check outdated
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div class="dash-card">
-          <div class="dash-title">
-            <span>Top packages by usage</span>
-            <span class="dim">workspaces using each</span>
-          </div>
-          {topPackages.length > 0 ? (
-            <Bars
-              rows={topPackages.map((d) => ({
-                label: d.name,
-                count: d.wsCount,
-                color: "accent",
-                max: maxUsage,
-              }))}
-            />
-          ) : (
-            <div class="dash-empty">No packages found.</div>
-          )}
-        </div>
-
-        <div class="dash-card">
-          <div class="dash-title">
-            <span>Conflicts by package</span>
-            <span class="dim">declared versions differ</span>
-          </div>
-          {conflicts.length > 0 ? (
-            <Bars
-              rows={conflicts.map((c) => ({
-                label: c.name,
-                count: occurrencesOf(c),
-                color: c.severity === "major" ? "red" : "amber",
-                max: maxConflictRows,
-              }))}
-            />
-          ) : (
-            <div class="dash-empty">
-              <IconCheckCircle size={22} />
-              <span>No conflicts — every shared dependency is aligned.</span>
-              <button class="btn" onClick={() => onTabChange("matrix")}>
-                View matrix
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 interface StatCardProps {
   icon: JSX.Element
-  color: "accent" | "green" | "red" | "amber" | "violet"
   value: number | string
   label: string
+  accent: string
+  iconBg: string
 }
 
-function StatCard({ icon, color, value, label }: StatCardProps) {
+function StatCard({ icon, value, label, accent, iconBg }: StatCardProps) {
   return (
-    <div class="stat-card">
-      <div class={`stat-icon ${color}`}>{icon}</div>
-      <div class="stat-info">
-        <span class="stat-value">{value}</span>
-        <span class="stat-label">{label}</span>
+    <div class="flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors">
+      <div class={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 ${iconBg}`}>
+        <span class={accent}>{icon}</span>
+      </div>
+      <div>
+        <div class="text-[22px] font-bold font-mono tracking-tight text-zinc-100 leading-none">{value}</div>
+        <div class="text-[10.5px] font-semibold uppercase tracking-widest text-zinc-500 mt-1">{label}</div>
       </div>
     </div>
   )
 }
 
-interface DonutChartProps {
-  segments: DonutSegment[]
+function DonutChart({
+  aligned,
+  range,
+  major,
+  linked,
+  total,
+}: {
+  aligned: number
+  range: number
+  major: number
+  linked: number
   total: number
-}
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const chartRef = useRef<Chart | null>(null)
 
-function DonutChart({ segments, total }: DonutChartProps) {
-  let offset = 0
-  const arcs = segments
-    .filter((s) => s.count > 0)
-    .map((s) => {
-      const frac = s.count / total
-      const arc = { ...s, dash: Math.max(frac * DONUT_C - DONUT_GAP, 0), offset }
-      offset += frac * DONUT_C
-      return arc
+  useEffect(() => {
+    if (!canvasRef.current) return
+    chartRef.current?.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "doughnut",
+      data: {
+        labels: ["Aligned", "Range conflicts", "Major conflicts", "Linked"],
+        datasets: [
+          {
+            data: [aligned, range, major, linked],
+            backgroundColor: ["#10b981", "#f59e0b", "#f43f5e", "#8b5cf6"],
+            borderColor: "#18181b",
+            borderWidth: 3,
+            hoverOffset: 4,
+          },
+        ],
+      },
+      options: {
+        cutout: "70%",
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#27272a",
+            borderColor: "#3f3f46",
+            borderWidth: 1,
+            titleColor: "#fafafa",
+            bodyColor: "#a1a1aa",
+            padding: 10,
+          },
+        },
+      },
     })
+    return () => {
+      chartRef.current?.destroy()
+    }
+  }, [aligned, range, major, linked])
+
+  const items = [
+    { label: "Aligned", value: aligned, color: "bg-emerald-500" },
+    { label: "Range", value: range, color: "bg-amber-400" },
+    { label: "Major", value: major, color: "bg-rose-500" },
+    { label: "Linked", value: linked, color: "bg-violet-500" },
+  ]
 
   return (
-    <div class="donut-wrap">
-      <div class="donut">
-        <svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true">
-          <circle cx="64" cy="64" r={DONUT_R} fill="none" stroke="var(--surface-2)" stroke-width="14" />
-          {arcs.map((s) => (
-            <circle
-              key={s.label}
-              cx="64"
-              cy="64"
-              r={DONUT_R}
-              fill="none"
-              stroke={s.color}
-              stroke-width="14"
-              stroke-dasharray={`${s.dash} ${DONUT_C}`}
-              stroke-dashoffset={-s.offset}
-              transform="rotate(-90 64 64)"
-            />
-          ))}
-        </svg>
-        <div class="donut-center">
-          <b>{total}</b>
-          <span>packages</span>
+    <div class="flex items-center gap-6">
+      <div class="relative shrink-0" style="width:140px; height:140px">
+        <canvas ref={canvasRef} />
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span class="font-mono text-xl font-bold text-zinc-100 leading-none">{total}</span>
+          <span class="text-[9px] font-semibold uppercase tracking-widest text-zinc-500 mt-1">packages</span>
         </div>
       </div>
-      <div class="legend">
-        {segments.map((s) => (
-          <div class="legend-item" key={s.label}>
-            <span class="legend-dot" style={{ background: s.color }} />
-            {s.label}
-            <b>{s.count}</b>
+      <div class="flex flex-col gap-2 flex-1">
+        {items.map((item) => (
+          <div key={item.label} class="flex items-center gap-2 text-xs">
+            <span class={`w-2 h-2 rounded-full shrink-0 ${item.color}`} />
+            <span class="text-zinc-400 flex-1">{item.label}</span>
+            <span class="font-mono font-semibold text-zinc-200">{item.value}</span>
           </div>
         ))}
       </div>
@@ -303,37 +164,295 @@ function DonutChart({ segments, total }: DonutChartProps) {
   )
 }
 
-interface BarRow {
-  label: string
-  count: number
-  color: string
-  max?: number
-}
+function HBarChart({ rows }: { rows: { label: string; value: number; color: string }[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const chartRef = useRef<Chart | null>(null)
 
-function Bars({ rows }: { rows: BarRow[] }) {
-  const max = rows.reduce((m, r) => Math.max(m, r.max ?? r.count), 1)
+  useEffect(() => {
+    if (!canvasRef.current) return
+    chartRef.current?.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "bar",
+      data: {
+        labels: rows.map((r) => r.label),
+        datasets: [
+          {
+            data: rows.map((r) => r.value),
+            backgroundColor: rows.map((r) => r.color),
+            borderRadius: 4,
+            borderSkipped: false,
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#27272a",
+            borderColor: "#3f3f46",
+            borderWidth: 1,
+            titleColor: "#fafafa",
+            bodyColor: "#a1a1aa",
+            padding: 10,
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: "#27272a" },
+            ticks: { color: "#71717a", font: { family: "JetBrains Mono", size: 10 } },
+            border: { color: "#3f3f46" },
+          },
+          y: {
+            grid: { display: false },
+            ticks: {
+              color: "#a1a1aa",
+              font: { family: "JetBrains Mono", size: 11 },
+              callback: (_, i) => {
+                const label = rows[i]?.label ?? ""
+                return label.length > 22 ? label.slice(0, 22) + "…" : label
+              },
+            },
+            border: { color: "#3f3f46" },
+          },
+        },
+      },
+    })
+    return () => {
+      chartRef.current?.destroy()
+    }
+  }, [rows])
+
   return (
-    <div>
-      {rows.map((r) => {
-        const pct = (r.count / (r.max ?? max)) * 100
-        return (
-          <div class="bar-row" key={r.label}>
-            <span class="bar-label">{r.label}</span>
-            <div class="bar-track">
-              <div class={`bar-fill ${r.color === "accent" ? "" : r.color}`} style={{ width: `${pct}%` }} />
-            </div>
-            <span class="bar-value">{r.count}</span>
-          </div>
-        )
-      })}
+    <div style="height: 200px; position: relative">
+      <canvas ref={canvasRef} />
     </div>
   )
 }
 
-function occurrencesOf(conflict: ScanResult["conflicts"][number]): number {
-  return conflict.versions.reduce((sum, v) => sum + v.occurrences.length, 0)
+function VBarChart({ rows }: { rows: { label: string; value: number; color: string }[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const chartRef = useRef<Chart | null>(null)
+
+  useEffect(() => {
+    if (!canvasRef.current) return
+    chartRef.current?.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "bar",
+      data: {
+        labels: rows.map((r) => r.label),
+        datasets: [
+          {
+            data: rows.map((r) => r.value),
+            backgroundColor: rows.map((r) => r.color),
+            borderRadius: 4,
+            borderSkipped: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#27272a",
+            borderColor: "#3f3f46",
+            borderWidth: 1,
+            titleColor: "#fafafa",
+            bodyColor: "#a1a1aa",
+            padding: 10,
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: "#a1a1aa", font: { size: 11 } },
+            border: { color: "#3f3f46" },
+          },
+          y: {
+            grid: { color: "#27272a" },
+            ticks: { color: "#71717a", font: { family: "JetBrains Mono", size: 10 } },
+            border: { color: "#3f3f46" },
+          },
+        },
+      },
+    })
+    return () => {
+      chartRef.current?.destroy()
+    }
+  }, [rows])
+
+  return (
+    <div style="height: 200px; position: relative">
+      <canvas ref={canvasRef} />
+    </div>
+  )
 }
 
-function byStatus(records: NonNullable<ScanResult["outdated"]>["all"], status: string): number {
-  return records.filter((r) => r.status === status).length
+function DashCard({
+  title,
+  sub,
+  children,
+}: {
+  title: string
+  sub?: string
+  children: preact.ComponentChildren
+}) {
+  return (
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div class="flex items-baseline justify-between mb-4">
+        <span class="text-[13px] font-semibold text-zinc-200">{title}</span>
+        {sub && <span class="text-[11px] text-zinc-500">{sub}</span>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
+  const statuses = useMemo(() => buildStatuses(data), [data])
+
+  const aligned = useMemo(() => statuses.filter((d) => d.status === "aligned").length, [statuses])
+  const range = useMemo(() => statuses.filter((d) => d.status === "range").length, [statuses])
+  const major = useMemo(() => statuses.filter((d) => d.status === "major").length, [statuses])
+  const linked = useMemo(() => statuses.filter((d) => d.status === "linked").length, [statuses])
+  const total = aligned + range + major + linked
+
+  const topPackages = useMemo(
+    () => [...statuses].sort((a, b) => b.wsCount - a.wsCount).slice(0, 8),
+    [statuses]
+  )
+
+  const conflicts = useMemo(
+    () =>
+      [...data.conflicts]
+        .sort((a, b) => (a.severity === "major" ? 0 : 1) - (b.severity === "major" ? 0 : 1))
+        .slice(0, 8),
+    [data.conflicts]
+  )
+
+  const outdated = data.outdated
+
+  return (
+    <div>
+      {/* Stat cards */}
+      <div class="grid grid-cols-5 gap-3 mb-5 max-[900px]:grid-cols-3 max-[600px]:grid-cols-2">
+        <StatCard
+          icon={<IconFolder size={16} />}
+          value={data.workspaces.length}
+          label="Workspaces"
+          accent="text-indigo-400"
+          iconBg="bg-indigo-500/10"
+        />
+        <StatCard
+          icon={<IconPackage size={16} />}
+          value={data.meta.totalDepDeclarations}
+          label="Declarations"
+          accent="text-emerald-400"
+          iconBg="bg-emerald-500/10"
+        />
+        <StatCard
+          icon={<IconAlertTriangle size={16} />}
+          value={data.conflicts.length}
+          label="Conflicts"
+          accent="text-rose-400"
+          iconBg="bg-rose-500/10"
+        />
+        <StatCard
+          icon={<IconSearch size={16} />}
+          value={outdated ? outdated.outdated.length : "—"}
+          label="Outdated"
+          accent="text-amber-400"
+          iconBg="bg-amber-500/10"
+        />
+        <StatCard
+          icon={<IconWrench size={16} />}
+          value={data.hygieneIssues.length}
+          label="Hygiene"
+          accent="text-violet-400"
+          iconBg="bg-violet-500/10"
+        />
+      </div>
+
+      {/* Chart grid */}
+      <div class="grid grid-cols-2 gap-4 max-[860px]:grid-cols-1">
+        {/* Dependency health donut */}
+        <DashCard title="Dependency health" sub={`${total} unique packages`}>
+          {total > 0 ? (
+            <DonutChart aligned={aligned} range={range} major={major} linked={linked} total={total} />
+          ) : (
+            <div class="flex items-center justify-center h-32 text-zinc-600 text-sm">
+              No dependencies found.
+            </div>
+          )}
+        </DashCard>
+
+        {/* Top packages horizontal bar */}
+        <DashCard title="Top packages by usage" sub="workspaces using each">
+          {topPackages.length > 0 ? (
+            <HBarChart
+              rows={topPackages.map((p) => ({ label: p.name, value: p.wsCount, color: "#6366f1" }))}
+            />
+          ) : (
+            <div class="flex items-center justify-center h-32 text-zinc-600 text-sm">No packages found.</div>
+          )}
+        </DashCard>
+
+        {/* Outdated breakdown vertical bar */}
+        <DashCard
+          title="Outdated breakdown"
+          sub={outdated ? `${outdated.all.length} checked` : "not run yet"}
+        >
+          {outdated ? (
+            <VBarChart
+              rows={[
+                { label: "Major", value: byStatus(outdated.all, "major"), color: "#f43f5e" },
+                { label: "Minor", value: byStatus(outdated.all, "minor"), color: "#f59e0b" },
+                { label: "Patch", value: byStatus(outdated.all, "patch"), color: "#6366f1" },
+                { label: "Up to date", value: byStatus(outdated.all, "up-to-date"), color: "#10b981" },
+              ]}
+            />
+          ) : (
+            <div class="flex flex-col items-center justify-center gap-3 h-32 text-zinc-500 text-sm text-center">
+              <span>Run the outdated check to see version drift.</span>
+              <button
+                class="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-colors"
+                onClick={onOutdated}
+              >
+                <IconRefreshCw size={12} />
+                Check outdated
+              </button>
+            </div>
+          )}
+        </DashCard>
+
+        {/* Conflicts by package */}
+        <DashCard title="Conflicts by package" sub="declared versions differ">
+          {conflicts.length > 0 ? (
+            <HBarChart
+              rows={conflicts.map((c) => ({
+                label: c.name,
+                value: occurrencesOf(c),
+                color: c.severity === "major" ? "#f43f5e" : "#f59e0b",
+              }))}
+            />
+          ) : (
+            <div class="flex flex-col items-center justify-center gap-3 h-32 text-zinc-500 text-sm text-center">
+              <IconCheckCircle size={28} className="text-emerald-500/40" />
+              <span>No conflicts — all dependencies are aligned.</span>
+              <button
+                class="text-xs text-indigo-400 hover:text-indigo-300 underline-offset-2 hover:underline"
+                onClick={() => onTabChange("matrix")}
+              >
+                View matrix
+              </button>
+            </div>
+          )}
+        </DashCard>
+      </div>
+    </div>
+  )
 }

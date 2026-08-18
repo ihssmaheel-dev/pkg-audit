@@ -5,8 +5,6 @@ import { Matrix } from "./components/matrix"
 import { Conflicts } from "./components/conflicts"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
-import { WorkspaceDetails } from "./components/workspace-details"
-import { Packages } from "./components/packages"
 import { Outdated } from "./components/outdated"
 import { Drawer } from "./components/drawer"
 import { CommandPalette } from "./components/command-palette"
@@ -17,16 +15,7 @@ import type { ScanResult } from "../../types"
 import type { DrawerState, ScanUiOptions, TabId, Theme } from "./types"
 
 const THEME_KEY = "pkg-audit-theme"
-const TAB_IDS: TabId[] = [
-  "dashboard",
-  "matrix",
-  "conflicts",
-  "outdated",
-  "hygiene",
-  "workspaces",
-  "workspace-details",
-  "packages",
-]
+const TAB_IDS: TabId[] = ["dashboard", "matrix", "conflicts", "outdated", "hygiene", "workspaces"]
 
 function initialTheme(): Theme {
   try {
@@ -35,7 +24,7 @@ function initialTheme(): Theme {
   } catch {
     // Storage unavailable.
   }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  return "dark"
 }
 
 function conflictsAsMarkdown(data: ScanResult): string {
@@ -160,16 +149,18 @@ export function App() {
 
   const showPicker = !embedded && !data && !loading && !error
 
+  const bg = theme === "dark" ? "bg-zinc-950 min-h-screen" : "bg-zinc-50 min-h-screen"
+
   if (showPicker) {
     return (
-      <div class="app" data-theme={theme}>
+      <div class={bg} data-theme={theme}>
         <Picker onScan={handleScan} />
       </div>
     )
   }
 
   return (
-    <div class="app" data-theme={theme}>
+    <div class={bg} data-theme={theme}>
       <Shell
         dir={data?.root ?? ""}
         tab={tab}
@@ -184,15 +175,15 @@ export function App() {
         onExportHtml={() => void handleCommand("export-html")}
         onOpenPalette={() => setPaletteOpen(true)}
       />
-      <main class="shell content">
+      <main class="px-6 py-6">
         {loading && (
-          <div class="loading">
-            <div class="spinner" />
+          <div class="flex flex-col items-center justify-center gap-3 py-20 text-zinc-500 text-sm">
+            <div class="w-5 h-5 rounded-full border-2 border-zinc-700 border-t-indigo-500 spinner" />
             <p>Scanning…</p>
           </div>
         )}
         {error && (
-          <div class="error-banner">
+          <div class="flex items-center gap-2 my-4 px-4 py-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-sm text-rose-400">
             {error.message}
             {error.code === "NO_DIR" && " — choose a folder below"}
           </div>
@@ -221,15 +212,6 @@ export function App() {
         {data && tab === "hygiene" && <Hygiene data={data} />}
         {data && tab === "workspaces" && (
           <Workspaces data={data} onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })} />
-        )}
-        {data && tab === "workspace-details" && (
-          <WorkspaceDetails
-            data={data}
-            onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
-          />
-        )}
-        {data && tab === "packages" && (
-          <Packages data={data} onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })} />
         )}
       </main>
       <Drawer data={data} state={drawer} onClose={() => setDrawer(null)} notify={notify} />

@@ -1,14 +1,8 @@
-import { IconCheckCircle } from "./icons"
-
-interface ToastProps {
-  message: string | null
-}
-
-export function Toast({ message }: ToastProps) {
+export function Toast({ message }: { message: string | null }) {
+  if (!message) return null
   return (
-    <div class={`toast ${message ? "show" : ""}`} role="status" aria-live="polite">
-      <IconCheckCircle size={14} />
-      <span>{message ?? ""}</span>
+    <div class="fixed bottom-5 right-5 z-[300] px-4 py-2.5 bg-zinc-100 text-zinc-900 rounded-lg text-sm font-semibold shadow-xl toast-in">
+      {message}
     </div>
   )
 }
