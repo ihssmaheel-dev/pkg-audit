@@ -3,4 +3,5 @@ node_modules
 coverage
 package-lock.json
 pkg-audit-base.mjs
+reffs
 test/fixtures/mono/bad-json/package.json

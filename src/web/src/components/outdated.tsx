@@ -1,30 +1,47 @@
 import { useState } from "preact/hooks"
-import type { OutdatedRecord, ScanResult } from "../../../types"
-import type { JSX } from "preact"
+import type { Changelog, OutdatedRecord, ScanResult } from "../../../types"
 import {
-  IconAlertTriangle,
-  IconArrowRight,
-  IconCalendar,
   IconCheckCircle,
-  IconCircleDot,
+  IconChevronRight,
   IconExternalLink,
   IconInfo,
   IconPackage,
   IconRefreshCw,
 } from "./icons"
 
-function statusMarker(record: OutdatedRecord): JSX.Element {
-  switch (record.status) {
+const NO_CHANGELOG_MESSAGES: Record<string, string> = {
+  "rate-limited": "GitHub API rate limit hit — try again later.",
+  "no-release": "No GitHub releases found for this repository.",
+  "no-repo": "No changelog available — no GitHub repository listed on npm.",
+}
+
+type Filter = "all" | "major" | "minor" | "patch"
+
+function badgeClass(status: OutdatedRecord["status"]): string {
+  switch (status) {
     case "major":
-      return <IconAlertTriangle size={14} className="marker-major" />
+      return "major"
     case "minor":
-      return <IconAlertTriangle size={14} className="marker-minor" />
+      return "minor"
+    case "patch":
+      return "patch"
     case "up-to-date":
-      return <IconCheckCircle size={14} className="marker-ok" />
-    case "not-published":
-      return <IconCircleDot size={14} className="marker-muted" />
+      return "ok"
     default:
-      return <IconInfo size={14} className="marker-muted" />
+      return "muted"
+  }
+}
+
+function dotClass(status: OutdatedRecord["status"]): string {
+  switch (status) {
+    case "major":
+      return "major"
+    case "minor":
+      return "minor"
+    case "up-to-date":
+      return "ok"
+    default:
+      return "muted"
   }
 }
 
@@ -34,7 +51,8 @@ interface OutdatedProps {
 }
 
 export function Outdated({ data, onOutdated }: OutdatedProps) {
-  const [showAll, setShowAll] = useState(false)
+  const [filter, setFilter] = useState<Filter>("all")
+  const [showUpToDate, setShowUpToDate] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const outdated = data.outdated
@@ -45,14 +63,20 @@ export function Outdated({ data, onOutdated }: OutdatedProps) {
         <h3>Outdated check not run</h3>
         <p>Check dependency versions against the npm registry.</p>
         <button class="btn btn-primary" onClick={onOutdated}>
-          <IconRefreshCw size={14} />
-          Check Outdated
+          <IconRefreshCw size={13} />
+          Check outdated
         </button>
       </div>
     )
   }
 
-  const items = showAll ? outdated.all : outdated.outdated
+  const items = outdated.all.filter((item) => {
+    if (!showUpToDate && (item.status === "up-to-date" || item.status === "not-published")) {
+      return false
+    }
+    if (filter === "all") return true
+    return item.status === filter
+  })
 
   if (!items.length) {
     return (
@@ -65,36 +89,56 @@ export function Outdated({ data, onOutdated }: OutdatedProps) {
   }
 
   return (
-    <div class="outdated-view">
+    <div>
       {outdated.networkErrors.length > 0 && (
         <div class="rate-limit-banner">
-          <IconInfo size={14} />
+          <IconInfo size={15} />
           {outdated.networkErrors.length} package(s) could not be checked — network/registry issue
         </div>
       )}
-      <div class="outdated-toolbar">
-        <button class={`btn btn-sm ${!showAll ? "btn-active" : ""}`} onClick={() => setShowAll(false)}>
-          Outdated ({outdated.outdated.length})
-        </button>
-        <button class={`btn btn-sm ${showAll ? "btn-active" : ""}`} onClick={() => setShowAll(true)}>
-          All ({outdated.all.length})
-        </button>
+
+      <div class="filterbar">
+        {(["all", "major", "minor", "patch"] as const).map((f) => (
+          <button class={`chip ${filter === f ? "active" : ""}`} key={f} onClick={() => setFilter(f)}>
+            {f === "all" ? "All" : f[0].toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+        <div class="filterbar-spacer" />
+        <div class="toggle-row">
+          Show up-to-date
+          <div
+            class={`switch ${showUpToDate ? "on" : ""}`}
+            role="switch"
+            aria-checked={showUpToDate}
+            tabIndex={0}
+            onClick={() => setShowUpToDate((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                setShowUpToDate((v) => !v)
+              }
+            }}
+          />
+        </div>
       </div>
 
-      <div class="outdated-list">
+      <div class="stack">
         {items.map((item) => (
-          <div class={`outdated-row outdated-${item.status}`} key={item.name}>
-            <div class="outdated-main" onClick={() => setExpanded(expanded === item.name ? null : item.name)}>
-              {statusMarker(item)}
-              <span class="outdated-name">{item.name}</span>
-              <span class="outdated-current">{item.current ?? "-"}</span>
-              <IconArrowRight size={12} className="outdated-arrow" />
-              <span class={`outdated-latest ${item.status === "major" ? "bold" : ""}`}>
-                {item.latest ?? "-"}
-              </span>
-              <span class={`outdated-status outdated-status-${item.status}`}>{item.status}</span>
+          <div class={`card od-row ${expanded === item.name ? "open" : ""}`} key={item.name}>
+            <div class="od-summary" onClick={() => setExpanded(expanded === item.name ? null : item.name)}>
+              <span class={`od-dot ${dotClass(item.status)}`} />
+              <span class="od-name">{item.name}</span>
+              <span class="od-current">{item.current ?? "—"}</span>
+              <span class="od-arrow">→</span>
+              <span class="od-latest">{item.latest ?? "—"}</span>
+              <span class={`od-badge ${badgeClass(item.status)}`}>{item.status}</span>
+              <IconChevronRight size={14} className="od-chevron" />
             </div>
-            {expanded === item.name && item.changelog && <ChangelogBlock changelog={item.changelog} />}
+            {expanded === item.name && (
+              <div class="od-detail">
+                <ChangelogBlock changelog={item.changelog} />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -103,58 +147,43 @@ export function Outdated({ data, onOutdated }: OutdatedProps) {
 }
 
 interface ChangelogBlockProps {
-  changelog: NonNullable<OutdatedRecord["changelog"]>
+  changelog?: Changelog
 }
 
 function ChangelogBlock({ changelog }: ChangelogBlockProps) {
-  if (changelog.status === "rate-limited") {
+  if (!changelog || (changelog.status !== "ok" && changelog.status !== "approx")) {
+    const status = changelog?.status ?? "no-release"
     return (
-      <div class="outdated-changelog">
-        <div class="changelog-error">
-          <IconInfo size={12} /> GitHub API rate limit hit. Changelogs paused — try again later.
-        </div>
-      </div>
-    )
-  }
-
-  if (changelog.status !== "ok" && changelog.status !== "approx") {
-    return (
-      <div class="outdated-changelog">
-        <div class="changelog-error">
-          No changelog available ({changelog.status}){changelog.reason ? ` — ${changelog.reason}` : ""}
-        </div>
+      <div class="od-no-changelog">
+        <IconInfo size={13} />
+        {NO_CHANGELOG_MESSAGES[status] ?? "Release notes not fetched."}
       </div>
     )
   }
 
   return (
-    <div class="outdated-changelog">
-      <div class="changelog-title">
-        {changelog.title}
-        {changelog.status === "approx" && (
-          <span class="changelog-note"> (closest release — tag didn't match exactly)</span>
-        )}
+    <div class="od-changelog">
+      <div class="od-changelog-head">
+        <span class="od-changelog-title">
+          {changelog.title}
+          {changelog.status === "approx" && <span class="od-changelog-approx"> (closest release)</span>}
+        </span>
+        {changelog.repo && <span class="od-changelog-repo">{changelog.repo}</span>}
       </div>
-      {changelog.repo && <div class="changelog-repo">{changelog.repo}</div>}
       {changelog.publishedAt && (
-        <div class="changelog-date">
-          <IconCalendar size={12} />
-          {new Date(changelog.publishedAt).toISOString().slice(0, 10)}
-        </div>
+        <div class="od-changelog-date">{new Date(changelog.publishedAt).toISOString().slice(0, 10)}</div>
       )}
       {changelog.bodyLines && changelog.bodyLines.length > 0 && (
-        <div class="changelog-body">
+        <ul class="od-changelog-body">
           {changelog.bodyLines.map((line, i) => (
-            <div class="changelog-line" key={i}>
-              {line}
-            </div>
+            <li key={i}>{line}</li>
           ))}
-        </div>
+        </ul>
       )}
       {changelog.url && (
-        <a class="changelog-link" href={changelog.url} target="_blank" rel="noreferrer">
-          <IconExternalLink size={12} />
-          {changelog.url}
+        <a class="od-changelog-link" href={changelog.url} target="_blank" rel="noopener noreferrer">
+          <IconExternalLink size={11} />
+          View full release notes
         </a>
       )}
     </div>

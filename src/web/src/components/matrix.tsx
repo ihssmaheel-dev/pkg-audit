@@ -1,6 +1,7 @@
 import { useMemo, useState } from "preact/hooks"
 import type { DepMap, ScanResult } from "../../../types"
-import type { DrawerState, FilterState } from "../types"
+import type { DrawerState } from "../types"
+import { IconSearch } from "./icons"
 
 interface MatrixRow {
   name: string
@@ -53,18 +54,25 @@ const CELL_ORDER: Record<MatrixRow["cellClass"], number> = {
   "cell-ok": 2,
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  "cell-major": "✗ major",
+  "cell-range": "⚠ range",
+  "cell-ok": "",
+  linked: "linked",
+}
+
+type Chip = "all" | "major" | "prod"
+
 interface MatrixProps {
   data: ScanResult
-  search: string
-  filter: FilterState
-  compact: boolean
   onCellClick: (state: DrawerState) => void
   onWorkspaceClick: (relPath: string) => void
 }
 
 export function Matrix(props: MatrixProps) {
-  const { data, search, filter, compact, onCellClick, onWorkspaceClick } = props
-  const [sortBy, setSortBy] = useState<"conflicts" | "name" | "workspaces">("conflicts")
+  const { data, onCellClick, onWorkspaceClick } = props
+  const [chip, setChip] = useState<Chip>("all")
+  const [query, setQuery] = useState("")
   const [hideAligned, setHideAligned] = useState(true)
   const [page, setPage] = useState(0)
   const pageSize = 50
@@ -90,70 +98,81 @@ export function Matrix(props: MatrixProps) {
   const filteredRows = useMemo(() => {
     let r = rows
 
-    if (search) {
-      const q = search.toLowerCase()
+    if (query) {
+      const q = query.toLowerCase()
       r = r.filter((row) => row.name.toLowerCase().includes(q))
     }
 
     if (hideAligned) r = r.filter((row) => row.cellClass !== "cell-ok")
 
-    if (filter.severity === "major") r = r.filter((row) => row.cellClass === "cell-major")
-    else if (filter.severity === "range") r = r.filter((row) => row.cellClass === "cell-range")
+    if (chip === "major") r = r.filter((row) => row.cellClass === "cell-major")
+    else if (chip === "prod") r = r.filter((row) => row.types.has("prod"))
 
-    if (filter.type === "prod") r = r.filter((row) => row.types.has("prod"))
-    else if (filter.type === "dev") r = r.filter((row) => row.types.has("dev") && !row.types.has("prod"))
-
-    const sorted = [...r]
-    if (sortBy === "conflicts") {
-      sorted.sort((a, b) => CELL_ORDER[a.cellClass] - CELL_ORDER[b.cellClass] || a.name.localeCompare(b.name))
-    } else if (sortBy === "name") {
-      sorted.sort((a, b) => a.name.localeCompare(b.name))
-    } else {
-      sorted.sort((a, b) => b.wsCount - a.wsCount || a.name.localeCompare(b.name))
-    }
-    return sorted
-  }, [rows, search, filter, hideAligned, sortBy])
+    return [...r].sort(
+      (a, b) => CELL_ORDER[a.cellClass] - CELL_ORDER[b.cellClass] || a.name.localeCompare(b.name)
+    )
+  }, [rows, query, chip, hideAligned])
 
   const pagedRows = filteredRows.slice(0, (page + 1) * pageSize)
 
+  const majors = data.conflicts.filter((c) => c.severity === "major").length
+  const ranges = data.conflicts.length - majors
+
   return (
-    <div class="matrix-container">
-      <div class="matrix-toolbar">
-        <span class="matrix-info">
-          {filteredRows.length} of {rows.length} packages shown
-        </span>
-        <label class="filter-toggle">
+    <div>
+      <div class="filterbar">
+        <button class={`chip ${chip === "all" ? "active" : ""}`} onClick={() => setChip("all")}>
+          All
+        </button>
+        <button class={`chip ${chip === "major" ? "active" : ""}`} onClick={() => setChip("major")}>
+          Major only
+        </button>
+        <button class={`chip ${chip === "prod" ? "active" : ""}`} onClick={() => setChip("prod")}>
+          Prod only
+        </button>
+        <div class="filter-sep" />
+        <div class="filter-search">
+          <IconSearch size={12} />
           <input
-            type="checkbox"
-            checked={hideAligned}
-            onChange={(e) => {
-              setHideAligned((e.target as HTMLInputElement).checked)
+            type="text"
+            placeholder="Filter dependencies…"
+            value={query}
+            onInput={(e) => {
+              setQuery((e.target as HTMLInputElement).value)
               setPage(0)
             }}
           />
-          Hide aligned
-        </label>
-        <div class="matrix-sort">
-          <span class="sort-label">Sort:</span>
-          {(["conflicts", "name", "workspaces"] as const).map((s) => (
-            <button
-              class={`btn btn-sm ${sortBy === s ? "btn-active" : ""}`}
-              key={s}
-              onClick={() => setSortBy(s)}
-            >
-              {s === "conflicts" ? "Conflicts" : s === "name" ? "A-Z" : "Workspaces"}
-            </button>
-          ))}
+        </div>
+        <div class="filterbar-spacer" />
+        <div class="toggle-row">
+          Hide aligned rows
+          <div
+            class={`switch ${hideAligned ? "on" : ""}`}
+            role="switch"
+            aria-checked={hideAligned}
+            tabIndex={0}
+            onClick={() => {
+              setHideAligned((v) => !v)
+              setPage(0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                setHideAligned((v) => !v)
+                setPage(0)
+              }
+            }}
+          />
         </div>
       </div>
 
       <div class="matrix-scroll">
-        <table class={`matrix-table ${compact ? "compact" : ""}`}>
+        <table class="matrix">
           <thead>
             <tr>
-              <th class="matrix-th sticky-col">Package</th>
+              <th>Dependency</th>
               {wsNames.map((ws) => (
-                <th class="matrix-th" key={ws} onClick={() => onWorkspaceClick(ws)}>
+                <th class="ws-head" key={ws} onClick={() => onWorkspaceClick(ws)} title={ws}>
                   {ws}
                 </th>
               ))}
@@ -161,18 +180,29 @@ export function Matrix(props: MatrixProps) {
           </thead>
           <tbody>
             {pagedRows.map((row) => (
-              <tr class={`matrix-row ${row.cellClass}`} key={row.name}>
-                <td
-                  class="matrix-td sticky-col dep-name"
+              <tr key={row.name}>
+                <th
                   onClick={() => onCellClick({ type: "package", name: row.name })}
+                  title={`${row.name} in ${row.wsCount} workspace${row.wsCount === 1 ? "" : "s"}`}
                 >
-                  {row.name}
-                </td>
+                  <div class="pkgname">
+                    <span
+                      class={`status-dot ${
+                        row.cellClass === "cell-ok"
+                          ? "ok"
+                          : row.cellClass === "cell-major"
+                            ? "major"
+                            : "range"
+                      }`}
+                    />
+                    {row.name}
+                  </div>
+                </th>
                 {wsNames.map((ws) => {
                   const hit = row.versions.filter(([, occs]) => occs.some((o) => o.workspace === ws))
                   if (!hit.length) {
                     return (
-                      <td class="matrix-cell cell-empty" key={ws}>
+                      <td class="v-empty" key={ws}>
                         —
                       </td>
                     )
@@ -182,14 +212,27 @@ export function Matrix(props: MatrixProps) {
                     version.startsWith("workspace:") ||
                     version.startsWith("catalog:") ||
                     version.startsWith("link:")
+                  const cls = isLinked ? "v-linked" : `v-${row.cellClass.slice(5)}`
                   return (
                     <td
-                      class={`matrix-cell ${isLinked ? "cell-linked" : ""}`}
+                      class={cls}
                       key={ws}
                       onClick={() => onCellClick({ type: "cell", dep: row.name, workspace: ws, version })}
                       title={`${row.name} @ ${ws}: ${version}`}
                     >
-                      {isLinked ? version.split(":")[0] + ":" : version}
+                      {isLinked ? (
+                        <>
+                          <span class="cell-version">{version.split(":")[0] + ":"}</span>
+                          <span class="cell-tag">{STATUS_LABEL.linked}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span class="cell-version">{version}</span>
+                          {row.cellClass !== "cell-ok" && (
+                            <span class="cell-tag">{STATUS_LABEL[row.cellClass]}</span>
+                          )}
+                        </>
+                      )}
                     </td>
                   )
                 })}
@@ -206,6 +249,27 @@ export function Matrix(props: MatrixProps) {
           </button>
         </div>
       )}
+
+      <div class="status-strip">
+        <span>
+          <b>{data.workspaces.length}</b> manifests
+        </span>
+        <span class="sep">·</span>
+        <span>
+          <b>{data.meta.totalDepDeclarations}</b> declarations
+        </span>
+        <span class="sep">·</span>
+        <span>
+          <span class="status-dot-inline" style={{ background: "var(--red)" }} />
+          <b>{majors}</b> major conflicts
+        </span>
+        <span>
+          <span class="status-dot-inline" style={{ background: "var(--amber)" }} />
+          <b>{ranges}</b> range conflicts
+        </span>
+        <span class="sep">·</span>
+        <span>scanned in {data.scannedMs}ms</span>
+      </div>
     </div>
   )
 }

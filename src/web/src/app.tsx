@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks"
+import { useCallback, useEffect, useRef, useState } from "preact/hooks"
 import { Shell } from "./components/shell"
 import { Matrix } from "./components/matrix"
 import { Conflicts } from "./components/conflicts"
@@ -8,9 +8,10 @@ import { Outdated } from "./components/outdated"
 import { Drawer } from "./components/drawer"
 import { CommandPalette } from "./components/command-palette"
 import { Picker } from "./components/picker"
+import { Toast } from "./components/toast"
 import { useScan, getToken } from "./hooks/use-scan"
 import type { ScanResult } from "../../types"
-import type { DrawerState, FilterState, ScanUiOptions, TabId, Theme } from "./types"
+import type { DrawerState, ScanUiOptions, TabId, Theme } from "./types"
 
 const THEME_KEY = "pkg-audit-theme"
 const TAB_IDS: TabId[] = ["matrix", "conflicts", "outdated", "hygiene", "workspaces"]
@@ -54,12 +55,17 @@ export function App() {
   const [tab, setTab] = useState<TabId>("matrix")
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<FilterState>({ severity: "all", type: "all" })
-  const [compact, setCompact] = useState(false)
   const [theme, setTheme] = useState<Theme>(initialTheme)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<number | null>(null)
 
   const data: ScanResult | null = result ?? embedded ?? null
+
+  const notify = useCallback((message: string) => {
+    setToast(message)
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 2200)
+  }, [])
 
   useEffect(() => {
     if (!embedded) void scan()
@@ -124,37 +130,40 @@ export function App() {
           break
         }
         case "copy-conflicts":
-          if (data) await copyText(conflictsAsMarkdown(data))
+          if (data) {
+            await copyText(conflictsAsMarkdown(data))
+            notify("Copied conflicts as markdown")
+          }
+          break
+        case "open-package":
+          if (payload) setDrawer({ type: "package", name: payload })
+          break
+        case "open-workspace":
+          if (payload) setDrawer({ type: "workspace", relPath: payload })
           break
       }
     },
-    [data, handleScan]
+    [data, handleScan, notify]
   )
 
   const showPicker = !embedded && !data && !loading && !error
 
   if (showPicker) {
     return (
-      <div class={`app ${theme}`}>
+      <div class="app" data-theme={theme}>
         <Picker onScan={handleScan} />
       </div>
     )
   }
 
   return (
-    <div class={`app ${theme}`}>
+    <div class="app" data-theme={theme}>
       <Shell
         dir={data?.root ?? ""}
         tab={tab}
         onTabChange={setTab}
         loading={loading}
         data={data}
-        search={search}
-        onSearchChange={setSearch}
-        filter={filter}
-        onFilterChange={setFilter}
-        compact={compact}
-        onCompactChange={setCompact}
         theme={theme}
         onThemeToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         onScan={() => void handleScan(data?.root)}
@@ -163,7 +172,7 @@ export function App() {
         onExportHtml={() => void handleCommand("export-html")}
         onOpenPalette={() => setPaletteOpen(true)}
       />
-      <main class="main-content">
+      <main class="shell content">
         {loading && (
           <div class="loading">
             <div class="spinner" />
@@ -179,14 +188,11 @@ export function App() {
         {data && tab === "matrix" && (
           <Matrix
             data={data}
-            search={search}
-            filter={filter}
-            compact={compact}
             onCellClick={setDrawer}
             onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
           />
         )}
-        {data && tab === "conflicts" && <Conflicts data={data} search={search} />}
+        {data && tab === "conflicts" && <Conflicts data={data} notify={notify} />}
         {data && tab === "outdated" && (
           <Outdated
             data={data}
@@ -195,14 +201,10 @@ export function App() {
         )}
         {data && tab === "hygiene" && <Hygiene data={data} />}
         {data && tab === "workspaces" && (
-          <Workspaces
-            data={data}
-            search={search}
-            onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
-          />
+          <Workspaces data={data} onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })} />
         )}
       </main>
-      {drawer && <Drawer data={data} state={drawer} onClose={() => setDrawer(null)} />}
+      <Drawer data={data} state={drawer} onClose={() => setDrawer(null)} notify={notify} />
       {paletteOpen && (
         <CommandPalette
           data={data}
@@ -210,6 +212,7 @@ export function App() {
           onClose={() => setPaletteOpen(false)}
         />
       )}
+      <Toast message={toast} />
     </div>
   )
 }

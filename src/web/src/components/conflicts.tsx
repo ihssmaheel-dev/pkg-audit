@@ -16,43 +16,26 @@ function conflictsAsMarkdown(conflicts: Conflict[]): string {
   return md
 }
 
-function suggestedPin(conflict: Conflict): string {
-  const counts = new Map<string, number>()
-  for (const v of conflict.versions) {
-    counts.set(v.version, (counts.get(v.version) ?? 0) + v.occurrences.length)
-  }
-  let best = ""
-  let bestCount = 0
-  for (const [version, count] of counts) {
-    if (count > bestCount) {
-      best = version
-      bestCount = count
-    }
-  }
-  return `"${conflict.name}": "${best}"`
-}
+type Severity = "all" | "major" | "range"
 
 interface ConflictsProps {
   data: ScanResult
-  search: string
+  notify: (message: string) => void
 }
 
-export function Conflicts({ data, search }: ConflictsProps) {
-  const [severity, setSeverity] = useState<"all" | "major" | "range">("all")
-  const [copied, setCopied] = useState<string | null>(null)
+export function Conflicts({ data, notify }: ConflictsProps) {
+  const [severity, setSeverity] = useState<Severity>("all")
 
   const conflicts = (data.conflicts ?? []).filter((c) => {
     if (severity === "major" && c.severity !== "major") return false
     if (severity === "range" && c.severity !== "range") return false
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
 
-  const copy = async (text: string, key: string) => {
+  const copy = async (text: string, message: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      setCopied(key)
-      setTimeout(() => setCopied(null), 2000)
+      notify(message)
     } catch {
       // Clipboard unavailable.
     }
@@ -69,54 +52,52 @@ export function Conflicts({ data, search }: ConflictsProps) {
   }
 
   return (
-    <div class="conflicts-view">
-      <div class="conflicts-toolbar">
-        <div class="filter-group">
-          {(["all", "major", "range"] as const).map((s) => (
-            <button
-              class={`btn btn-sm ${severity === s ? "btn-active" : ""}`}
-              key={s}
-              onClick={() => setSeverity(s)}
-            >
-              {s === "all" ? "All" : s === "major" ? "Major" : "Range"}
-            </button>
-          ))}
-        </div>
-        <button class="btn" onClick={() => void copy(conflictsAsMarkdown(data.conflicts), "all")}>
-          <IconCopy size={14} />
-          {copied === "all" ? "Copied!" : "Copy as Markdown"}
+    <div>
+      <div class="filterbar">
+        {(["all", "major", "range"] as const).map((s) => (
+          <button class={`chip ${severity === s ? "active" : ""}`} key={s} onClick={() => setSeverity(s)}>
+            {s === "all" ? "All" : s === "major" ? "Major" : "Range"}
+          </button>
+        ))}
+        <div class="filterbar-spacer" />
+        <button
+          class="btn"
+          onClick={() => void copy(conflictsAsMarkdown(data.conflicts), "Copied conflicts as markdown")}
+        >
+          <IconCopy size={13} />
+          Copy all as markdown
         </button>
       </div>
 
-      <div class="conflicts-list">
+      <div class="stack">
         {conflicts.map((conflict) => (
-          <div class={`conflict-card conflict-${conflict.severity}`} key={conflict.name}>
-            <div class="conflict-header">
-              {conflict.severity === "major" ? (
-                <IconXCircle size={18} className="conflict-marker major" />
-              ) : (
-                <IconAlertTriangle size={18} className="conflict-marker range" />
-              )}
-              <span class="conflict-name">{conflict.name}</span>
-              <span class={`conflict-tag ${conflict.severity}`}>
-                {conflict.severity === "major" ? "major version differs" : "range differs"}
-              </span>
+          <div class="card" key={conflict.name}>
+            <div class="conflict-head">
+              <div class={`status-icon ${conflict.severity}`}>
+                {conflict.severity === "major" ? <IconXCircle size={13} /> : <IconAlertTriangle size={13} />}
+              </div>
+              <div class="conflict-titles">
+                <span class="conflict-name">{conflict.name}</span>
+                <span class="conflict-tag">
+                  {conflict.severity === "major" ? "major version differs" : "range differs"}
+                </span>
+              </div>
+              <div class="conflict-head-spacer" />
               <button
-                class="btn btn-sm"
-                onClick={() => void copy(suggestedPin(conflict), `pin-${conflict.name}`)}
-                title="Copy suggested pin"
+                class="icon-btn"
+                title="Copy as markdown"
+                onClick={() => void copy(conflictsAsMarkdown([conflict]), "Copied conflict as markdown")}
               >
-                <IconCopy size={12} />
-                {copied === `pin-${conflict.name}` ? "Copied!" : "Pin"}
+                <IconCopy size={13} />
               </button>
             </div>
-            <div class="conflict-versions">
+            <div class="conflict-rows">
               {conflict.versions.flatMap((v) =>
                 v.occurrences.map((occ) => (
                   <div class="conflict-row" key={`${occ.workspace}-${v.version}`}>
-                    <span class="conflict-ws">{occ.workspace}</span>
-                    <span class="conflict-version">{v.version}</span>
-                    <span class={`conflict-type conflict-type-${occ.type}`}>{occ.type}</span>
+                    <span class="ws-name">{occ.workspace}</span>
+                    <span class="ws-version">{v.version}</span>
+                    <span class="ws-type">{occ.type}</span>
                   </div>
                 ))
               )}

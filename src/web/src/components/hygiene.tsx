@@ -1,19 +1,11 @@
 import type { HygieneIssue, HygieneKind, ScanResult } from "../../../types"
-import {
-  IconCheckCircle,
-  IconCircleDot,
-  IconLayers,
-  IconPackage,
-  IconSettings,
-  IconWrench,
-  type IconComponent,
-} from "./icons"
+import { IconAlertTriangle, IconCheckCircle } from "./icons"
 
-const KIND_META: Record<HygieneKind, { icon: IconComponent; label: string }> = {
-  unnamed: { icon: IconCircleDot, label: "Unnamed manifest" },
-  "duplicate-name": { icon: IconLayers, label: "Duplicate name" },
-  packageManager: { icon: IconWrench, label: "packageManager mismatch" },
-  engines: { icon: IconSettings, label: "engines.node mismatch" },
+const KIND_LABELS: Record<HygieneKind, string> = {
+  unnamed: "Unnamed manifest",
+  "duplicate-name": "Duplicate name",
+  packageManager: "packageManager differs across manifests",
+  engines: "engines.node differs across manifests",
 }
 
 interface HygieneProps {
@@ -34,24 +26,18 @@ export function Hygiene({ data }: HygieneProps) {
   }
 
   return (
-    <div class="hygiene-view">
-      <div class="hygiene-list">
-        {issues.map((issue, i) => {
-          const meta = KIND_META[issue.kind]
-          const Icon = meta ? meta.icon : IconPackage
-          return (
-            <div class="hygiene-card" key={`${issue.kind}-${i}`}>
-              <div class="hygiene-icon">
-                <Icon size={18} />
-              </div>
-              <div class="hygiene-body">
-                <div class="hygiene-kind">{meta ? meta.label : issue.kind}</div>
-                <div class="hygiene-message">{issue.message}</div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+    <div class="stack">
+      {issues.map((issue, i) => (
+        <div class="card hygiene-card" key={`${issue.kind}-${i}`}>
+          <div class="status-icon range">
+            <IconAlertTriangle size={14} />
+          </div>
+          <div>
+            <div class="hygiene-title">{KIND_LABELS[issue.kind] ?? issue.kind}</div>
+            <div class="hygiene-desc">{issue.message}</div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

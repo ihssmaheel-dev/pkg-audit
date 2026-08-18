@@ -1,46 +1,36 @@
 import { useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
-import type { FilterState, TabId, Theme } from "../types"
-import {
-  IconAlertTriangle,
-  IconChevronDown,
-  IconFileText,
-  IconFolder,
-  IconKeyboard,
-  IconLayers,
-  IconMoon,
-  IconPackage,
-  IconRefreshCw,
-  IconSearch,
-  IconSun,
-  IconWrench,
-  type IconComponent,
-} from "./icons"
+import type { TabId, Theme } from "../types"
+import { IconChevronDown, IconDownload, IconMoon, IconRefreshCw, IconSearch, IconSun } from "./icons"
 
 interface TabDef {
   id: TabId
   label: string
-  icon: IconComponent
   count?: (data: ScanResult) => number
+  warn?: boolean
 }
 
 const TABS: TabDef[] = [
-  { id: "matrix", label: "Matrix", icon: IconLayers, count: (d) => d.conflicts.length },
+  { id: "matrix", label: "Matrix" },
   {
     id: "conflicts",
     label: "Conflicts",
-    icon: IconAlertTriangle,
+    warn: true,
     count: (d) => d.conflicts.length,
   },
   {
     id: "outdated",
     label: "Outdated",
-    icon: IconPackage,
     count: (d) => d.outdated?.outdated.length ?? 0,
   },
-  { id: "hygiene", label: "Hygiene", icon: IconWrench, count: (d) => d.hygieneIssues.length },
-  { id: "workspaces", label: "Workspaces", icon: IconFolder, count: (d) => d.workspaces.length },
+  { id: "hygiene", label: "Hygiene", count: (d) => d.hygieneIssues.length },
+  { id: "workspaces", label: "Workspaces", count: (d) => d.workspaces.length },
 ]
+
+function rootLabel(dir: string): string {
+  const parts = dir.split(/[\\/]/).filter(Boolean)
+  return parts[parts.length - 1] ?? dir
+}
 
 interface ShellProps {
   dir: string
@@ -48,12 +38,6 @@ interface ShellProps {
   onTabChange: (tab: TabId) => void
   loading: boolean
   data: ScanResult | null
-  search: string
-  onSearchChange: (value: string) => void
-  filter: FilterState
-  onFilterChange: (filter: FilterState) => void
-  compact: boolean
-  onCompactChange: (compact: boolean) => void
   theme: Theme
   onThemeToggle: () => void
   onScan: () => void
@@ -70,12 +54,6 @@ export function Shell(props: ShellProps) {
     onTabChange,
     loading,
     data,
-    search,
-    onSearchChange,
-    filter,
-    onFilterChange,
-    compact,
-    onCompactChange,
     theme,
     onThemeToggle,
     onScan,
@@ -88,150 +66,120 @@ export function Shell(props: ShellProps) {
   const [dirEditing, setDirEditing] = useState(false)
   const [dirValue, setDirValue] = useState(dir)
 
-  const showFilters = tab === "matrix" || tab === "conflicts" || tab === "workspaces"
+  const rootWs = data?.workspaces.find((w) => w.isRoot)
+  const pm = rootWs?.packageManager ?? null
 
   return (
-    <header class="shell">
-      <div class="shell-top">
-        <div class="shell-brand">
-          <IconPackage size={18} />
-          <span>pkg-audit</span>
-        </div>
+    <div class="shell">
+      <header class="header">
+        <div class="header-row">
+          <div class="brand">
+            <span class="dot" />
+            pkg-audit
+          </div>
 
-        <div class="shell-search">
-          <div class="search-wrap">
-            <IconSearch size={14} className="search-icon" />
-            <input
-              type="text"
-              class="search-input"
-              placeholder="Search packages, workspaces…"
-              value={search}
-              onInput={(e) => onSearchChange((e.target as HTMLInputElement).value)}
-            />
-            <button class="search-kbd" onClick={onOpenPalette} title="Command palette (Ctrl+K)">
-              <IconKeyboard size={14} />
+          <button class="search-trigger" onClick={onOpenPalette}>
+            <IconSearch size={14} />
+            <span>Search packages, workspaces…</span>
+            <span class="kbd-hint">
+              <kbd>Ctrl</kbd>
+              <kbd>K</kbd>
+            </span>
+          </button>
+
+          <div class="header-spacer" />
+
+          <div class="header-actions">
+            <button
+              class="btn btn-icon"
+              onClick={onThemeToggle}
+              title="Toggle theme"
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? <IconSun size={15} /> : <IconMoon size={15} />}
+            </button>
+            <button
+              class="btn btn-icon"
+              onClick={onExportHtml}
+              disabled={loading}
+              title="Export standalone HTML"
+              aria-label="Export HTML"
+            >
+              <IconDownload size={15} />
+            </button>
+            <button class="btn" onClick={onScan} disabled={loading}>
+              <IconRefreshCw size={13} />
+              {loading ? "Scanning…" : "Rescan"}
+            </button>
+            <button class="btn btn-primary" onClick={onOutdated} disabled={loading}>
+              <IconSearch size={13} />
+              Check outdated
             </button>
           </div>
         </div>
 
-        <div class="shell-actions">
-          <button class="btn" onClick={onOutdated} disabled={loading} title="Check against npm registry">
-            <IconPackage size={14} />
-            Outdated
-          </button>
-          <button class="btn" onClick={onExportHtml} disabled={loading} title="Export standalone HTML">
-            <IconFileText size={14} />
-            HTML
-          </button>
-          <button class="btn btn-primary" onClick={onScan} disabled={loading} title="Rescan">
-            <IconRefreshCw size={14} />
-            {loading ? "Scanning…" : "Scan"}
-          </button>
-          <button class="btn btn-icon" onClick={onThemeToggle} title="Toggle theme">
-            {theme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
-          </button>
-        </div>
-      </div>
-
-      <div class="shell-dir">
-        {dirEditing ? (
-          <form
-            class="dir-form"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (dirValue.trim()) onScanDir(dirValue.trim())
-              setDirEditing(false)
-            }}
-          >
-            <input
-              type="text"
-              class="dir-input"
-              value={dirValue}
-              onInput={(e) => setDirValue((e.target as HTMLInputElement).value)}
-              autoFocus
-              onBlur={() => setDirEditing(false)}
-            />
-            <button type="submit" class="btn btn-sm">
-              Go
-            </button>
-          </form>
-        ) : (
-          <button
-            class="dir-display"
-            onClick={() => {
-              setDirValue(dir)
-              setDirEditing(true)
-            }}
-          >
-            <IconFolder size={14} />
-            <span class="dir-path">{dir || "No folder selected"}</span>
-            <IconChevronDown size={12} className="dir-chevron" />
-          </button>
-        )}
-        {data && (
-          <span class="scan-meta">
-            {data.workspaces.length} manifests · scanned in {data.scannedMs}ms
-          </span>
-        )}
-      </div>
-
-      <nav class="shell-tabs">
-        {TABS.map((t) => {
-          const count = data && t.count ? t.count(data) : undefined
-          return (
-            <button
-              class={`tab ${tab === t.id ? "tab-active" : ""}`}
-              key={t.id}
-              onClick={() => onTabChange(t.id)}
+        <div class="header-row breadcrumb-row">
+          {dirEditing ? (
+            <form
+              class="dir-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (dirValue.trim()) onScanDir(dirValue.trim())
+                setDirEditing(false)
+              }}
             >
-              <t.icon size={14} />
-              {t.label}
-              {typeof count === "number" && count > 0 && <span class="tab-count">{count}</span>}
+              <input
+                type="text"
+                class="dir-input"
+                value={dirValue}
+                onInput={(e) => setDirValue((e.target as HTMLInputElement).value)}
+                autoFocus
+                onBlur={() => setDirEditing(false)}
+                placeholder="~/code/my-monorepo"
+              />
+              <button type="submit" class="btn">
+                Go
+              </button>
+            </form>
+          ) : (
+            <button
+              class="breadcrumb"
+              onClick={() => {
+                setDirValue(dir)
+                setDirEditing(true)
+              }}
+              title="Change folder"
+            >
+              <span>{dir || "No folder selected"}</span>
+              <IconChevronDown size={12} />
             </button>
-          )
-        })}
-      </nav>
-
-      {showFilters && (
-        <div class="shell-filters">
-          <select
-            class="filter-select"
-            value={filter.severity}
-            onChange={(e) =>
-              onFilterChange({
-                ...filter,
-                severity: (e.target as HTMLSelectElement).value as FilterState["severity"],
-              })
-            }
-          >
-            <option value="all">All severities</option>
-            <option value="major">Major only</option>
-            <option value="range">Range only</option>
-          </select>
-          <select
-            class="filter-select"
-            value={filter.type}
-            onChange={(e) =>
-              onFilterChange({
-                ...filter,
-                type: (e.target as HTMLSelectElement).value as FilterState["type"],
-              })
-            }
-          >
-            <option value="all">All types</option>
-            <option value="prod">Prod only</option>
-            <option value="dev">Dev only</option>
-          </select>
-          <label class="filter-toggle">
-            <input
-              type="checkbox"
-              checked={compact}
-              onChange={(e) => onCompactChange((e.target as HTMLInputElement).checked)}
-            />
-            Compact
-          </label>
+          )}
+          {data && (
+            <span class="meta">
+              <b>{rootLabel(data.root)}</b> · {data.workspaces.length} packages
+              {pm ? ` · ${pm}` : ""} · scanned in {data.scannedMs}ms
+            </span>
+          )}
         </div>
-      )}
-    </header>
+
+        <nav class="tabs">
+          {TABS.map((t) => {
+            const count = data && t.count ? t.count(data) : undefined
+            return (
+              <button
+                class={`tab ${tab === t.id ? "active" : ""}`}
+                key={t.id}
+                onClick={() => onTabChange(t.id)}
+              >
+                {t.label}
+                {typeof count === "number" && count > 0 && (
+                  <span class={`count ${t.warn ? "warn" : ""}`}>{count}</span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
+      </header>
+    </div>
   )
 }

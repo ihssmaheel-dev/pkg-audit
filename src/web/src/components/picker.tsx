@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
-import { IconChevronRight, IconFolder, IconFolderOpen, IconPackage, IconRefreshCw, IconStar } from "./icons"
+import { IconChevronRight, IconFolder, IconFolderOpen, IconRefreshCw, IconStar } from "./icons"
 
 interface RecentsResponse {
   recents: string[]
@@ -55,7 +55,7 @@ export function Picker({ onScan }: PickerProps) {
     <main class="picker-view">
       <div class="picker-card">
         <div class="picker-brand">
-          <IconPackage size={28} />
+          <span class="dot" />
           <h1>pkg-audit</h1>
         </div>
         <p class="picker-subtitle">Scan a JS/TS monorepo and see dependency drift instantly.</p>
@@ -75,11 +75,11 @@ export function Picker({ onScan }: PickerProps) {
             onInput={(e) => setPath((e.target as HTMLInputElement).value)}
           />
           <button type="submit" class="btn btn-primary" disabled={loading || !path.trim()}>
-            <IconRefreshCw size={14} />
+            <IconRefreshCw size={13} />
             Scan
           </button>
           <button type="button" class="btn" onClick={() => void browse()} disabled={loading}>
-            <IconFolderOpen size={14} />
+            <IconFolderOpen size={13} />
             Browse…
           </button>
         </form>
@@ -89,12 +89,12 @@ export function Picker({ onScan }: PickerProps) {
         {recents.favorites.length > 0 && (
           <div class="picker-section">
             <h2>
-              <IconStar size={14} />
+              <IconStar size={12} />
               Favorites
             </h2>
             {recents.favorites.map((dir) => (
               <button class="picker-recent" key={dir} onClick={() => void scanDir(dir)}>
-                <IconFolder size={14} />
+                <IconFolder size={13} />
                 <span>{dir}</span>
                 <IconChevronRight size={12} />
               </button>
@@ -107,7 +107,7 @@ export function Picker({ onScan }: PickerProps) {
             <h2>Recent</h2>
             {recentsList.map((dir) => (
               <button class="picker-recent" key={dir} onClick={() => void scanDir(dir)}>
-                <IconFolder size={14} />
+                <IconFolder size={13} />
                 <span>{dir}</span>
                 <IconChevronRight size={12} />
               </button>
