@@ -63,15 +63,15 @@ export function Shell(props: ShellProps) {
         </div>
 
         {/* Hairline vertical divider */}
-        <div class="w-px h-5 bg-[#3d3a39]" />
+        <div class="w-px h-5 bg-[#3d3a39] shrink-0" />
 
         {/* Directory Bar */}
-        <div class="flex items-center gap-2.5 flex-1 min-w-0 max-w-[500px]">
+        <div class="flex items-center gap-2.5 min-w-0 max-w-[640px] flex-1">
           {dirEditing ? (
-            <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class="flex items-center gap-2 w-full min-w-[260px]">
               <input
                 type="text"
-                class="flex-1 h-[32px] px-3 bg-[#1a1a1a] border border-[#00d992] rounded-[6px] font-mono text-[12px] text-[#f2f2f2] outline-none min-w-0"
+                class="flex-1 min-w-0 h-[32px] px-3 bg-[#1a1a1a] border border-[#00d992] rounded-[6px] font-mono text-[12px] text-[#f2f2f2] outline-none"
                 value={dirValue}
                 onInput={(e) => setDirValue((e.target as HTMLInputElement).value)}
                 autoFocus
@@ -93,7 +93,7 @@ export function Shell(props: ShellProps) {
                 placeholder="~/code/my-monorepo"
               />
               <button
-                class="shrink-0 h-[32px] px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
+                class="shrink-0 h-[32px] px-4 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
                 onMouseDown={() => {
                   submitRef.current = true
                 }}
@@ -103,26 +103,33 @@ export function Shell(props: ShellProps) {
               </button>
             </div>
           ) : (
-            <button
-              class="flex-1 min-w-0 h-[32px] px-3 bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] rounded-[6px] font-mono text-[12px] text-[#bdbdbd] hover:text-[#f2f2f2] text-left overflow-hidden text-ellipsis whitespace-nowrap transition-colors"
-              onClick={() => {
-                setDirValue(dir)
-                setDirEditing(true)
-              }}
-              title="Click to change folder"
-            >
-              {dir || "No folder selected"}
-            </button>
-          )}
-          {data && (
-            <span class="text-[11.5px] text-[#8b949e] whitespace-nowrap shrink-0 font-mono">
-              <span class="text-[#f2f2f2] font-semibold">{rootLabel(data.root)}</span>
-              {" · "}
-              {data.workspaces.length} ws
-              {pm ? ` · ${pm}` : ""}
-              {" · "}
-              {data.scannedMs}ms
-            </span>
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <button
+                class="min-w-[140px] max-w-[340px] h-[32px] px-3 bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] rounded-[6px] font-mono text-[12px] text-[#bdbdbd] hover:text-[#f2f2f2] text-left overflow-hidden text-ellipsis whitespace-nowrap transition-colors shrink"
+                onClick={() => {
+                  setDirValue(dir)
+                  setDirEditing(true)
+                }}
+                title={`Current folder: ${dir || "none"} (Click to edit)`}
+              >
+                {dir || "No folder selected"}
+              </button>
+              {data && (
+                <span class="text-[11.5px] text-[#8b949e] whitespace-nowrap shrink-0 font-mono hidden sm:inline-flex items-center gap-1.5">
+                  <span class="text-[#f2f2f2] font-semibold">{rootLabel(data.root)}</span>
+                  <span>·</span>
+                  <span>{data.workspaces.length} ws</span>
+                  {pm ? (
+                    <>
+                      <span>·</span>
+                      <span>{pm}</span>
+                    </>
+                  ) : null}
+                  <span>·</span>
+                  <span>{data.scannedMs}ms</span>
+                </span>
+              )}
+            </div>
           )}
         </div>
 
