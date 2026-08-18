@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
 import { getToken } from "../hooks/use-scan"
-import { IconChevronRight, IconFolder, IconFolderOpen, IconRefreshCw, IconStar, IconZap } from "./icons"
+import { IconChevronRight, IconFolder, IconFolderOpen, IconLogo, IconRefreshCw, IconStar } from "./icons"
 
 interface RecentsResponse {
   recents: string[]
@@ -58,9 +58,9 @@ export function Picker({ onScan }: PickerProps) {
     <div class="flex items-center justify-center min-h-screen px-6 bg-[#101010]">
       <div class="w-full max-w-[540px] bg-[#101010] border border-[#3d3a39] rounded-[8px] p-8">
         {/* Brand Header */}
-        <div class="flex items-center gap-2.5 mb-2">
-          <div class="flex items-center justify-center w-7 h-7 rounded-[6px] bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992]">
-            <IconZap size={16} />
+        <div class="flex items-center gap-3 mb-2">
+          <div class="flex items-center justify-center w-8 h-8 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] text-[#00d992]">
+            <IconLogo size={20} />
           </div>
           <h1 class="font-mono font-bold text-xl tracking-tight text-[#ffffff]">pkg-audit</h1>
         </div>

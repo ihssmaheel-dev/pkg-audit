@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
 import type { TabId } from "../types"
-import { IconDownload, IconGithub, IconRefreshCw, IconSearch, IconZap } from "./icons"
+import { IconDownload, IconGithub, IconLogo, IconRefreshCw, IconSearch } from "./icons"
 
 interface TabDef {
   id: TabId
@@ -55,9 +55,9 @@ export function Shell(props: ShellProps) {
       {/* Top row */}
       <div class="flex items-center gap-3.5 h-[54px] px-8 max-[640px]:px-4">
         {/* Brand */}
-        <div class="flex items-center gap-2 font-mono font-bold text-[14px] tracking-tight text-[#ffffff] shrink-0">
-          <div class="flex items-center justify-center w-6 h-6 rounded-[6px] bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992]">
-            <IconZap size={14} />
+        <div class="flex items-center gap-2.5 font-mono font-bold text-[14px] tracking-tight text-[#ffffff] shrink-0">
+          <div class="flex items-center justify-center w-7 h-7 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] text-[#00d992]">
+            <IconLogo size={18} />
           </div>
           <span>pkg-audit</span>
         </div>

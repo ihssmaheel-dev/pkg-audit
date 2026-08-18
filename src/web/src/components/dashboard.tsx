@@ -8,10 +8,10 @@ import {
   IconCheckCircle,
   IconFolder,
   IconLayers,
+  IconLogo,
   IconPackage,
   IconRefreshCw,
   IconSearch,
-  IconZap,
 } from "./icons"
 
 Chart.register(...registerables)
@@ -669,8 +669,8 @@ export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardP
       {/* Monorepo Quick Details & Actions Banner */}
       <div class="p-6 bg-[#101010] border border-[#3d3a39] rounded-[8px] flex items-center justify-between flex-wrap gap-4">
         <div class="flex items-center gap-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-[6px] bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992]">
-            <IconZap size={18} />
+          <div class="flex items-center justify-center w-10 h-10 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] text-[#00d992]">
+            <IconLogo size={24} />
           </div>
           <div>
             <div class="text-sm font-semibold text-[#ffffff]">{data.root}</div>

@@ -267,3 +267,44 @@ export const IconGithub: IconComponent = (props) => (
     <path d="M9 18c-4.51 2-5-2-7-2" />
   </Icon>
 )
+
+export const IconLogo: IconComponent = ({ size = 20, className }) => (
+  <svg
+    className={className}
+    width={size}
+    height={size}
+    viewBox="0 0 32 32"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path
+      d="M16 3L28 9.5V22.5L16 29L4 22.5V9.5L16 3Z"
+      stroke="#00d992"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+      strokeOpacity="0.85"
+    />
+    <path
+      d="M16 16L28 9.5M16 16V29M16 16L4 9.5"
+      stroke="#00d992"
+      strokeWidth="1.25"
+      strokeLinejoin="round"
+      strokeOpacity="0.45"
+    />
+    <path
+      d="M16 10L22 13.5V19.5L16 23L10 19.5V13.5L16 10Z"
+      stroke="#00d992"
+      strokeWidth="1"
+      strokeLinejoin="round"
+      strokeOpacity="0.3"
+    />
+    <path
+      d="M18.5 4.5L11 15.5H16.5L13.5 27.5L22.5 14H16.5L18.5 4.5Z"
+      fill="#00d992"
+      stroke="#101010"
+      strokeWidth="1"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
