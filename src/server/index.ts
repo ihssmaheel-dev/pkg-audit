@@ -1,0 +1,257 @@
+import http from "node:http"
+import fs from "node:fs"
+import path from "node:path"
+import crypto from "node:crypto"
+import { fileURLToPath } from "node:url"
+import { scan } from "../scan/index.js"
+import { addRecent, getFavorites, getRecents, toggleFavorite } from "../config/index.js"
+import { pickFolder } from "../pick-folder/index.js"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const DASHBOARD_DIR = path.join(__dirname, "..", "..", "dist", "ui")
+
+interface ServerOptions {
+  port?: number
+}
+
+interface ServerHandle {
+  server: http.Server
+  port: number
+  url: string
+  token: string
+  dir: string | null
+}
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    req.on("data", (c: Buffer) => chunks.push(c))
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
+    req.on("error", reject)
+  })
+}
+
+function json(res: http.ServerResponse, data: unknown, status = 200): void {
+  const body = JSON.stringify(data)
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+  })
+  res.end(body)
+}
+
+function validatePath(dirPath: string): { valid: boolean; path?: string; error?: string } {
+  if (!dirPath || typeof dirPath !== "string") {
+    return { valid: false, error: "No path provided" }
+  }
+  const resolved = path.resolve(dirPath)
+  try {
+    const stat = fs.statSync(resolved)
+    if (!stat.isDirectory()) return { valid: false, error: "Not a directory" }
+    if (resolved === path.parse(resolved).root) {
+      return { valid: false, error: "Refusing to scan a drive root" }
+    }
+    return { valid: true, path: resolved }
+  } catch {
+    return { valid: false, error: "Path does not exist" }
+  }
+}
+
+function serveDashboard(res: http.ServerResponse, token: string): void {
+  const dashboardPath = path.join(DASHBOARD_DIR, "index.html")
+  try {
+    let html = fs.readFileSync(dashboardPath, "utf8")
+    html = html.replace("</head>", `<meta name="pkg-audit-token" content="${token}"></head>`)
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
+    res.end(html)
+  } catch {
+    res.writeHead(500, { "Content-Type": "text/plain" })
+    res.end("Dashboard not built. Run: npm run build")
+  }
+}
+
+function serveStatic(res: http.ServerResponse, filePath: string): boolean {
+  try {
+    const stat = fs.statSync(filePath)
+    if (stat.isFile()) {
+      const ext = path.extname(filePath).toLowerCase()
+      const mimeTypes: Record<string, string> = {
+        ".html": "text/html",
+        ".js": "application/javascript",
+        ".css": "text/css",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+        ".ico": "image/x-icon",
+        ".woff2": "font/woff2",
+        ".woff": "font/woff",
+      }
+      const mime = mimeTypes[ext] ?? "application/octet-stream"
+      res.writeHead(200, { "Content-Type": mime, "Cache-Control": "no-cache" })
+      fs.createReadStream(filePath).pipe(res)
+      return true
+    }
+  } catch {
+    // Not found — falls through.
+  }
+  return false
+}
+
+export async function startServer(dir: string | null, opts: ServerOptions = {}): Promise<ServerHandle> {
+  const token = crypto.randomBytes(16).toString("hex")
+  const port = opts.port ?? 0
+  let resolvedDir: string | null = dir ? path.resolve(dir) : null
+
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost")
+    const hasToken = url.searchParams.get("token") === token
+
+    if (url.pathname.startsWith("/api/")) {
+      if (!hasToken && url.pathname !== "/api/health") {
+        json(res, { error: "Unauthorized" }, 401)
+        return
+      }
+    } else if (req.method === "OPTIONS") {
+      res.writeHead(200, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      })
+      res.end()
+      return
+    }
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(200, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      })
+      res.end()
+      return
+    }
+
+    try {
+      if (url.pathname === "/api/health") {
+        json(res, { ok: true })
+        return
+      }
+
+      if (url.pathname === "/api/scan" && req.method === "GET") {
+        const scanDir = url.searchParams.get("dir") ?? resolvedDir
+        if (!scanDir) {
+          json(res, { error: "No directory selected", code: "NO_DIR" }, 400)
+          return
+        }
+        const validation = validatePath(scanDir)
+        if (!validation.valid) {
+          json(res, { error: validation.error }, 400)
+          return
+        }
+        resolvedDir = validation.path!
+        addRecent(resolvedDir)
+        const result = await scan(resolvedDir, {
+          outdated: url.searchParams.get("outdated") === "true",
+          versions: url.searchParams.get("versions") === "true",
+          changelog: url.searchParams.get("changelog") === "true",
+          concurrency: Number(url.searchParams.get("concurrency")) || 8,
+          changelogLines: Number(url.searchParams.get("changelogLines")) || 6,
+        })
+        json(res, result)
+        return
+      }
+
+      if (url.pathname === "/api/scan" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req)) as {
+          dir?: string
+          outdated?: boolean
+          changelog?: boolean
+          concurrency?: number
+          changelogLines?: number
+        }
+        const scanDir = body.dir ?? resolvedDir
+        if (!scanDir) {
+          json(res, { error: "No directory selected", code: "NO_DIR" }, 400)
+          return
+        }
+        const validation = validatePath(scanDir)
+        if (!validation.valid) {
+          json(res, { error: validation.error }, 400)
+          return
+        }
+        resolvedDir = validation.path!
+        addRecent(resolvedDir)
+        const result = await scan(resolvedDir, {
+          outdated: body.outdated ?? false,
+          changelog: body.changelog ?? false,
+          concurrency: body.concurrency ?? 8,
+          changelogLines: body.changelogLines ?? 6,
+        })
+        json(res, result)
+        return
+      }
+
+      if (url.pathname === "/api/pick-folder" && req.method === "POST") {
+        const folder = await pickFolder()
+        json(res, { path: folder })
+        return
+      }
+
+      if (url.pathname === "/api/recents") {
+        if (req.method === "GET") {
+          json(res, { recents: getRecents(), favorites: getFavorites() })
+          return
+        }
+        if (req.method === "POST") {
+          const body = JSON.parse(await readBody(req)) as { dir?: string }
+          if (body.dir) addRecent(body.dir)
+          json(res, { recents: getRecents(), favorites: getFavorites() })
+          return
+        }
+      }
+
+      if (url.pathname === "/api/recents/pin" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req)) as { dir?: string }
+        if (!body.dir) {
+          json(res, { error: "No dir provided" }, 400)
+          return
+        }
+        json(res, { favorites: toggleFavorite(body.dir) })
+        return
+      }
+
+      if (url.pathname === "/api/export.html" && req.method === "GET") {
+        if (!resolvedDir) {
+          json(res, { error: "No scan result available" }, 400)
+          return
+        }
+        const result = await scan(resolvedDir, {})
+        const { generateStandaloneHtml } = await import("../html/index.js")
+        const html = generateStandaloneHtml(result)
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
+        res.end(html)
+        return
+      }
+
+      if (url.pathname.startsWith("/assets/")) {
+        const assetPath = path.join(DASHBOARD_DIR, url.pathname)
+        if (serveStatic(res, assetPath)) return
+      }
+
+      serveDashboard(res, token)
+    } catch (err) {
+      json(res, { error: err instanceof Error ? err.message : String(err) }, 500)
+    }
+  })
+
+  return new Promise((resolve) => {
+    server.listen(port, "127.0.0.1", () => {
+      const address = server.address()
+      const actualPort = typeof address === "object" && address !== null ? address.port : port
+      const url = `http://127.0.0.1:${actualPort}/?token=${token}`
+      resolve({ server, port: actualPort, url, token, dir: resolvedDir })
+    })
+  })
+}

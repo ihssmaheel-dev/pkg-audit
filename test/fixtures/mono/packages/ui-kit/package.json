@@ -1,0 +1,9 @@
+{
+  "name": "@mono/ui-kit",
+  "version": "0.2.0",
+  "dependencies": {
+    "@mono/helpers": "workspace:*",
+    "react": "19.0.0",
+    "zod": "catalog:"
+  }
+}

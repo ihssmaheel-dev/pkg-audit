@@ -1,0 +1,6 @@
+dist
+node_modules
+coverage
+package-lock.json
+pkg-audit-base.mjs
+test/fixtures/mono/bad-json/package.json

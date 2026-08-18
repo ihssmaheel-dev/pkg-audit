@@ -1,0 +1,12 @@
+{
+  "name": "@mono/web",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "19.0.0",
+    "typescript": "^5.6.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.eslintcache
+*.log
+.DS_Store
+Thumbs.db
+pkg-audit-report.htmltest/.tmp/
