@@ -57,6 +57,7 @@ function byStatus(records: NonNullable<ScanResult["outdated"]>["all"], status: s
 
 interface DashboardProps {
   data: ScanResult
+  loading?: boolean
   onOutdated: () => void
   onTabChange: (tab: TabId) => void
 }
@@ -426,7 +427,7 @@ function DashCard({
   )
 }
 
-export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
+export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardProps) {
   const statuses = useMemo(() => buildStatuses(data), [data])
 
   const aligned = useMemo(() => statuses.filter((d) => d.status === "aligned").length, [statuses])
@@ -496,11 +497,12 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
             </span>
           </div>
           <button
-            class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
+            class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] disabled:opacity-50 text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
             onClick={onOutdated}
+            disabled={loading}
           >
-            <IconRefreshCw size={12} />
-            <span>Sync Registry</span>
+            <IconRefreshCw size={12} className={loading ? "spinner" : ""} />
+            <span>{loading ? "Scanning dependencies…" : "Sync Registry"}</span>
           </button>
         </div>
       </div>
@@ -628,11 +630,12 @@ export function Dashboard({ data, onOutdated, onTabChange }: DashboardProps) {
             <div class="flex flex-col items-center justify-center gap-3 h-36 text-[#8b949e] text-sm text-center">
               <span class="text-xs">Query npm to view semver drift against registry releases.</span>
               <button
-                class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
+                class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] disabled:opacity-50 text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
                 onClick={onOutdated}
+                disabled={loading}
               >
-                <IconRefreshCw size={12} />
-                <span>Check outdated</span>
+                <IconRefreshCw size={12} className={loading ? "spinner" : ""} />
+                <span>{loading ? "Scanning dependencies…" : "Check outdated"}</span>
               </button>
             </div>
           )}

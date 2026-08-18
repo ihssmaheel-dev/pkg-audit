@@ -47,10 +47,11 @@ function dotColor(status: OutdatedRecord["status"]): string {
 
 interface OutdatedProps {
   data: ScanResult
+  loading?: boolean
   onOutdated: () => void
 }
 
-export function Outdated({ data, onOutdated }: OutdatedProps) {
+export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
   const [filter, setFilter] = useState<Filter>("all")
   const [showUpToDate, setShowUpToDate] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -65,11 +66,12 @@ export function Outdated({ data, onOutdated }: OutdatedProps) {
           Query the npm registry and GitHub release logs to detect version drift across all dependencies.
         </p>
         <button
-          class="flex items-center gap-1.5 h-8 px-4 bg-[#00d992] hover:bg-[#2fd6a1] text-[#101010] rounded-[6px] text-xs font-semibold mt-2 transition-colors"
+          class="flex items-center gap-1.5 h-8 px-4 bg-[#00d992] hover:bg-[#2fd6a1] disabled:opacity-50 text-[#101010] rounded-[6px] text-xs font-semibold mt-2 transition-colors"
           onClick={onOutdated}
+          disabled={loading}
         >
-          <IconRefreshCw size={13} />
-          <span>Check outdated</span>
+          <IconRefreshCw size={13} className={loading ? "spinner" : ""} />
+          <span>{loading ? "Scanning dependencies…" : "Check outdated"}</span>
         </button>
       </div>
     )
@@ -102,6 +104,14 @@ export function Outdated({ data, onOutdated }: OutdatedProps) {
           </div>
           <h1 class="text-2xl font-normal tracking-[-0.6px] text-[#ffffff]">Outdated Packages</h1>
         </div>
+        <button
+          class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] disabled:opacity-50 text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
+          onClick={onOutdated}
+          disabled={loading}
+        >
+          <IconRefreshCw size={12} className={loading ? "spinner" : ""} />
+          <span>{loading ? "Scanning dependencies…" : "Sync Registry"}</span>
+        </button>
       </div>
 
       {outdated.networkErrors.length > 0 && (

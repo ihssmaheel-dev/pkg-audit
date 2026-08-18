@@ -151,7 +151,7 @@ export function App() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
       <main class="w-full px-8 py-8 max-[640px]:px-4">
-        {loading && (
+        {loading && !data && (
           <div class="flex flex-col items-center justify-center gap-3 py-24 text-[#8b949e] text-sm">
             <div class="w-5 h-5 rounded-full border-2 border-[#3d3a39] border-t-[#00d992] spinner" />
             <p class="font-mono text-xs text-[#8b949e]">Scanning dependencies…</p>
@@ -166,6 +166,7 @@ export function App() {
         {data && tab === "dashboard" && (
           <Dashboard
             data={data}
+            loading={loading}
             onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
             onTabChange={setTab}
           />
@@ -181,6 +182,7 @@ export function App() {
         {data && tab === "outdated" && (
           <Outdated
             data={data}
+            loading={loading}
             onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
           />
         )}
