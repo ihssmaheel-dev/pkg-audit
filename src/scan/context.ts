@@ -4,25 +4,88 @@ export interface ContextOptions {
   format?: "markdown" | "json" | "xml"
   target?: "generic" | "cursor" | "claude"
   projectName?: string
+  maxVersionPolicyEntries?: number
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+}
+
+function escapeMdTable(s: string): string {
+  return s.replace(/\|/g, "\\|")
+}
+
+function cleanSemver(v: string): string {
+  return v.replace(/^[\^~>=<\s]+/, "").trim()
+}
+
+function parseSemver(v: string): [number, number, number] {
+  const clean = cleanSemver(v).split("-")[0] ?? ""
+  const parts = clean.split(".").map((n) => Number.parseInt(n, 10) || 0)
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0]
+}
+
+function compareSemver(a: string, b: string): number {
+  const [majA, minA, patA] = parseSemver(a)
+  const [majB, minB, patB] = parseSemver(b)
+  if (majA !== majB) return majA - majB
+  if (minA !== minB) return minA - minB
+  return patA - patB
 }
 
 function classifyWorkspaceRole(ws: Workspace): "app" | "library" | "config" | "root" {
   if (ws.isRoot) return "root"
-  const p = ws.relPath.toLowerCase()
+  const p = ws.relPath.toLowerCase().replace(/\\/g, "/")
   const n = (ws.name || "").toLowerCase()
+
+  // 1. Config / tooling check (checked first so config packages with web/api in name aren't misclassified)
+  if (
+    p.startsWith("config/") ||
+    p.startsWith("tooling/") ||
+    p.startsWith("tools/") ||
+    n.includes("config") ||
+    n.includes("tsconfig") ||
+    n.includes("eslint") ||
+    n.includes("prettier") ||
+    n.includes("stylelint")
+  ) {
+    return "config"
+  }
+
+  // 2. Apps check (strict directory paths or unambiguous segment/suffix match)
   if (
     p.startsWith("apps/") ||
     p.startsWith("app/") ||
-    n.includes("app") ||
-    n.includes("web") ||
-    n.includes("api") ||
-    n.includes("server")
+    p.startsWith("services/") ||
+    p.startsWith("service/") ||
+    p.startsWith("frontend/") ||
+    p.startsWith("backend/") ||
+    p.startsWith("web/") ||
+    p.startsWith("api/") ||
+    n.endsWith("-app") ||
+    n.endsWith("-web") ||
+    n.endsWith("-service") ||
+    n.endsWith("/web") ||
+    n.endsWith("/api") ||
+    n.endsWith("/app") ||
+    n.endsWith("/server") ||
+    n === "web" ||
+    n === "api" ||
+    n === "app" ||
+    n === "server" ||
+    n === "client" ||
+    n.startsWith("@app/") ||
+    n.startsWith("@apps/")
   ) {
     return "app"
   }
-  if (p.startsWith("config/") || n.includes("config") || n.includes("tsconfig") || n.includes("eslint")) {
-    return "config"
-  }
+
+  // 3. Shared Library is default for packages/*, libs/*, etc.
   return "library"
 }
 
@@ -38,6 +101,7 @@ export function generateMonorepoContext(data: ScanResult, opts: ContextOptions =
   const format = opts.format ?? "markdown"
   const target = opts.target ?? "generic"
   const projectName = opts.projectName ?? getBasename(data.root)
+  const maxVersionEntries = opts.maxVersionPolicyEntries ?? 30
 
   const rootWs = data.workspaces.find((w) => w.isRoot)
   const pm = rootWs?.packageManager ?? (data.dedupe?.packageManager || "npm")
@@ -46,6 +110,7 @@ export function generateMonorepoContext(data: ScanResult, opts: ContextOptions =
   const wsMap = new Map<string, Workspace>()
   for (const ws of data.workspaces) {
     if (ws.name) wsMap.set(ws.name, ws)
+    if (ws.relPath && ws.relPath !== ".") wsMap.set(ws.relPath, ws)
   }
 
   // Workspaces detail
@@ -76,7 +141,7 @@ export function generateMonorepoContext(data: ScanResult, opts: ContextOptions =
     }
   }
 
-  // If no catalog, calculate from top shared packages
+  // If no catalog, calculate from top shared packages (with deterministic tie-break)
   if (Object.keys(canonicalVersions).length === 0) {
     const sharedMap = new Map<string, Map<string, number>>()
     for (const ws of data.workspaces) {
@@ -89,19 +154,20 @@ export function generateMonorepoContext(data: ScanResult, opts: ContextOptions =
     }
 
     for (const [dep, vMap] of sharedMap.entries()) {
-      let maxCount = 0
-      let topVer = ""
-      for (const [v, count] of vMap.entries()) {
-        if (count > maxCount) {
-          maxCount = count
-          topVer = v
-        }
-      }
-      if (topVer) {
-        canonicalVersions[dep] = topVer
+      // Sort by occurrence count descending, then by highest semver
+      const sortedVers = [...vMap.entries()].sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1]
+        return compareSemver(b[0], a[0])
+      })
+      if (sortedVers.length > 0) {
+        canonicalVersions[dep] = sortedVers[0]![0]
       }
     }
   }
+
+  const allVersionEntries = Object.entries(canonicalVersions)
+  const totalVersionPolicies = allVersionEntries.length
+  const topVersionEntries = allVersionEntries.slice(0, maxVersionEntries)
 
   // JSON format
   if (format === "json") {
@@ -111,6 +177,7 @@ export function generateMonorepoContext(data: ScanResult, opts: ContextOptions =
         packageManager: pm,
         totalWorkspaces: nonRootWs.length,
         workspaces: workspacesInfo,
+        totalVersionPolicies,
         versionPolicies: canonicalVersions,
         circularDependencies: data.graph.cycles,
         boundaryRules: [
@@ -127,15 +194,15 @@ export function generateMonorepoContext(data: ScanResult, opts: ContextOptions =
 
   // XML format
   if (format === "xml") {
-    let xml = `<monorepo_context project="${projectName}" package_manager="${pm}">\n`
+    let xml = `<monorepo_context project="${escapeXml(projectName)}" package_manager="${escapeXml(pm)}">\n`
     xml += `  <workspaces total="${nonRootWs.length}">\n`
     for (const w of workspacesInfo) {
-      xml += `    <workspace name="${w.name}" path="${w.relPath}" role="${w.role}" internal_deps="${w.internalDependencies.join(", ")}" />\n`
+      xml += `    <workspace name="${escapeXml(w.name)}" path="${escapeXml(w.relPath)}" role="${w.role}" internal_deps="${escapeXml(w.internalDependencies.join(", "))}" />\n`
     }
     xml += `  </workspaces>\n`
-    xml += `  <version_policies>\n`
-    for (const [pkg, ver] of Object.entries(canonicalVersions).slice(0, 30)) {
-      xml += `    <dependency name="${pkg}" version="${ver}" />\n`
+    xml += `  <version_policies total="${totalVersionPolicies}" shown="${topVersionEntries.length}"${topVersionEntries.length < totalVersionPolicies ? ' truncated="true"' : ""}>\n`
+    for (const [pkg, ver] of topVersionEntries) {
+      xml += `    <dependency name="${escapeXml(pkg)}" version="${escapeXml(ver)}" />\n`
     }
     xml += `  </version_policies>\n`
     xml += `  <boundary_rules>\n`
@@ -184,9 +251,9 @@ ${data.catalog && data.catalog.existingCatalogCount > 0 ? `- **Central Catalog**
     const roleBadge = w.role === "app" ? "App" : w.role === "config" ? "Config" : "Shared Library"
     const internalList =
       w.internalDependencies.length > 0
-        ? w.internalDependencies.map((d) => `\`${d}\``).join(", ")
+        ? w.internalDependencies.map((d) => `\`${escapeMdTable(d)}\``).join(", ")
         : "*(None)*"
-    md += `| \`${w.name}\` | \`${w.relPath}\` | ${roleBadge} | ${internalList} |\n`
+    md += `| \`${escapeMdTable(w.name)}\` | \`${escapeMdTable(w.relPath)}\` | ${roleBadge} | ${internalList} |\n`
   }
 
   md += `
@@ -205,7 +272,7 @@ ${data.catalog && data.catalog.existingCatalogCount > 0 ? `- **Central Catalog**
   if (data.graph.hasCycles) {
     md += `   - ⚠️ **ACTIVE CYCLES DETECTED**: The monorepo currently contains ${data.graph.cycles.length} circular loop(s):\n`
     for (const c of data.graph.cycles) {
-      md += `     - ${c.path.map((w: string) => `\`${w}\``).join(" ➔ ")}\n`
+      md += `     - ${c.path.map((w: string) => `\`${escapeMdTable(w)}\``).join(" ➔ ")}\n`
     }
     md += `   - **AI Rule**: Do NOT introduce additional links that worsen these cycles!\n`
   } else {
@@ -224,13 +291,16 @@ When adding or upgrading external dependencies, **ALWAYS** reuse the canonical v
 
 `
 
-  const topEntries = Object.entries(canonicalVersions).slice(0, 30)
-  if (topEntries.length > 0) {
+  if (topVersionEntries.length > 0) {
     md += `| Package | Canonical Version Spec |
 | :--- | :--- |
 `
-    for (const [pkg, ver] of topEntries) {
-      md += `| \`${pkg}\` | \`${ver}\` |\n`
+    for (const [pkg, ver] of topVersionEntries) {
+      md += `| \`${escapeMdTable(pkg)}\` | \`${escapeMdTable(ver)}\` |\n`
+    }
+
+    if (totalVersionPolicies > maxVersionEntries) {
+      md += `\n*(Showing top ${maxVersionEntries} of ${totalVersionPolicies} shared dependencies — see JSON format for complete list)*\n`
     }
   } else {
     md += `*(No shared external packages detected)*\n`
