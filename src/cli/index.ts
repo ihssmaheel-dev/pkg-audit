@@ -215,6 +215,85 @@ async function main(): Promise<void> {
     return
   }
 
+  if (merged.licenses || merged.licenseExport) {
+    const { scanMonorepoLicenses, generateNoticeText, generateSpdxJson, generateCsvReport } =
+      await import("../scan/license.js")
+    const licenseResult = result.licenses ?? scanMonorepoLicenses(result.workspaces, dir)
+
+    if (merged.licenseExport) {
+      const fmt = merged.licenseExport
+      let outputText = ""
+      let defaultFileName = ""
+
+      if (fmt === "spdx") {
+        outputText = generateSpdxJson(licenseResult, path.basename(dir))
+        defaultFileName = "spdx-sbom.json"
+      } else if (fmt === "csv") {
+        outputText = generateCsvReport(licenseResult)
+        defaultFileName = "licenses-report.csv"
+      } else {
+        outputText = generateNoticeText(licenseResult, path.basename(dir))
+        defaultFileName = "NOTICE.txt"
+      }
+
+      const outPath = path.resolve(dir, merged.licenseOutput ?? defaultFileName)
+      fs.writeFileSync(outPath, outputText, "utf8")
+      console.log(`\n  ⚖️ Exported legal compliance document (${fmt.toUpperCase()}):`)
+      console.log(`  ✔ Written to ${outPath} (${licenseResult.totalScanned} packages included)\n`)
+      return
+    }
+
+    // Terminal License Compliance Scorecard
+    console.log(`\n  ⚖️ Open-Source License & Legal Risk Scanner — ${dir}\n`)
+    console.log(`  Scanned ${licenseResult.totalScanned} external packages:`)
+    console.log(
+      `  🟢 Permissive: ${licenseResult.permissiveCount} | 🟡 Weak Copyleft: ${licenseResult.weakCopyleftCount} | 🔴 Strong Copyleft: ${licenseResult.strongCopyleftCount} | ⚪ Proprietary/Unknown: ${licenseResult.proprietaryCount + licenseResult.unknownCount}\n`
+    )
+
+    if (licenseResult.prodCopyleftCount > 0) {
+      console.log(
+        `  \x1b[31;1m🚨 WARNING: ${licenseResult.prodCopyleftCount} copyleft license(s) detected in PRODUCTION dependencies!\x1b[0m`
+      )
+      console.log(
+        `  Viral license terms (e.g. GPL, AGPL) in production builds may enforce source code disclosure.\n`
+      )
+    }
+
+    for (const pkg of licenseResult.packages) {
+      let badge = "🟢 PERMISSIVE"
+      let colorPrefix = "\x1b[32m"
+      if (pkg.riskLevel === "strong-copyleft") {
+        badge = "🔴 HIGH RISK (STRONG COPYLEFT)"
+        colorPrefix = "\x1b[31;1m"
+      } else if (pkg.riskLevel === "weak-copyleft") {
+        badge = "🟡 WEAK COPYLEFT"
+        colorPrefix = "\x1b[33m"
+      } else if (pkg.riskLevel === "proprietary") {
+        badge = "⚪ PROPRIETARY"
+        colorPrefix = "\x1b[90m"
+      } else if (pkg.riskLevel === "unknown") {
+        badge = "⚪ UNKNOWN"
+        colorPrefix = "\x1b[90m"
+      }
+
+      const prodTag = pkg.isProd ? " \x1b[31;1m[PROD]\x1b[0m" : " \x1b[90m[dev]\x1b[0m"
+      console.log(`  ${colorPrefix}[${badge}]\x1b[0m ${pkg.name}@${pkg.version}${prodTag}`)
+      console.log(`    SPDX: ${pkg.spdxId} (${pkg.license})`)
+      if (pkg.author) console.log(`    Author: ${pkg.author}`)
+      console.log(`    Workspaces: ${pkg.workspaces.map((w) => `${w.workspace} (${w.type})`).join(", ")}`)
+      console.log("")
+    }
+
+    console.log(
+      `  Run 'npx pkg-audit license export --format=notice|spdx|csv' to export compliance disclosures.\n`
+    )
+
+    if (merged.failOnCopyleft && licenseResult.prodCopyleftCount > 0) {
+      process.exitCode = 1
+    }
+    return
+  }
+
   if (merged.dedupe) {
     const { analyzeLockfile, applyDedupeOverrides, generateOverridesDict } = await import("../scan/dedupe.js")
     const rootWs = result.workspaces.find((w) => w.isRoot)

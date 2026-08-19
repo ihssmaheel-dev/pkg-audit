@@ -17,6 +17,7 @@ import { scanWorkspaceDependencies } from "./unused.js"
 import { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } from "./catalog.js"
 import { checkVulnerabilities, applySecurityFixes } from "./security.js"
 import { analyzeLockfile, applyDedupeOverrides, generateOverridesDict } from "./dedupe.js"
+import { scanMonorepoLicenses, generateNoticeText, generateSpdxJson, generateCsvReport } from "./license.js"
 import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
@@ -201,6 +202,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
 
   const rootWs = workspaces.find((w) => w.isRoot)
   const dedupe = analyzeLockfile(rootDir, rootWs?.packageManager ?? null)
+  const licenses = scanMonorepoLicenses(workspaces, rootDir)
 
   const tempScanData: ScanResult = {
     version: 1,
@@ -214,6 +216,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     outdated,
     security,
     dedupe,
+    licenses,
     errors: stats.errors,
     meta: {
       ignoredDirs: [...scanOpts.ignoreDirs].sort(),
@@ -246,6 +249,10 @@ export {
   analyzeLockfile,
   applyDedupeOverrides,
   generateOverridesDict,
+  scanMonorepoLicenses,
+  generateNoticeText,
+  generateSpdxJson,
+  generateCsvReport,
   isLinkedProtocol,
   parseMajor,
   parseVersionTuple,

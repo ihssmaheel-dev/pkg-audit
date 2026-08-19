@@ -202,6 +202,50 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
         return
       }
 
+      if (url.pathname === "/api/license/export" && req.method === "GET") {
+        const targetDir = url.searchParams.get("dir") ?? resolvedDir
+        if (!targetDir) {
+          json(res, { error: "No directory selected", code: "NO_DIR" }, 400)
+          return
+        }
+        const validation = validatePath(targetDir)
+        if (!validation.valid) {
+          json(res, { error: validation.error }, 400)
+          return
+        }
+        const scanResult = await scan(validation.path!, {})
+        const { scanMonorepoLicenses, generateNoticeText, generateSpdxJson, generateCsvReport } =
+          await import("../scan/license.js")
+        const licenseResult =
+          scanResult.licenses ?? scanMonorepoLicenses(scanResult.workspaces, validation.path!)
+        const fmt = url.searchParams.get("format") ?? "notice"
+        if (fmt === "spdx") {
+          const text = generateSpdxJson(licenseResult, path.basename(validation.path!))
+          res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Content-Disposition": 'attachment; filename="spdx-sbom.json"',
+          })
+          res.end(text)
+          return
+        }
+        if (fmt === "csv") {
+          const text = generateCsvReport(licenseResult)
+          res.writeHead(200, {
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": 'attachment; filename="licenses-report.csv"',
+          })
+          res.end(text)
+          return
+        }
+        const text = generateNoticeText(licenseResult, path.basename(validation.path!))
+        res.writeHead(200, {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="NOTICE.txt"',
+        })
+        res.end(text)
+        return
+      }
+
       if (url.pathname === "/api/recents") {
         if (req.method === "GET") {
           json(res, { recents: getRecents(), favorites: getFavorites() })

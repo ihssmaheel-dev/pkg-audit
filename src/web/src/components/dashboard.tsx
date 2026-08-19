@@ -13,6 +13,7 @@ import {
   IconPackage,
   IconRefreshCw,
   IconRepeat,
+  IconScale,
   IconScissors,
   IconSearch,
   IconShield,
@@ -637,6 +638,35 @@ export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardP
           </div>
           <button class="h-7 px-3 bg-[#8b5cf6] hover:bg-[#a78bfa] text-[#101010] font-semibold text-xs rounded-[6px] transition-colors shrink-0">
             Dedupe Lockfile ➔
+          </button>
+        </div>
+      )}
+
+      {/* License Compliance Copyleft Banner */}
+      {data.licenses && data.licenses.prodCopyleftCount > 0 && (
+        <div
+          class="flex items-center justify-between p-4 bg-[#f43f5e]/10 border border-[#f43f5e]/40 rounded-[8px] cursor-pointer hover:bg-[#f43f5e]/15 transition-colors gap-4"
+          onClick={() => onTabChange("licenses")}
+        >
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[6px] bg-[#f43f5e]/20 text-[#f43f5e] flex items-center justify-center shrink-0">
+              <IconScale size={16} />
+            </div>
+            <div>
+              <div class="text-sm font-bold text-[#ffffff] flex items-center gap-2">
+                <span>{data.licenses.prodCopyleftCount} Copyleft License(s) in Production Dependencies</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-[#f43f5e]/20 text-[#f43f5e] font-mono">
+                  LEGAL RISK
+                </span>
+              </div>
+              <div class="text-xs text-[#bdbdbd] mt-0.5">
+                Viral license terms (GPL/AGPL) detected in production code. Export NOTICE disclosures or audit
+                compliance.
+              </div>
+            </div>
+          </div>
+          <button class="h-7 px-3 bg-[#f43f5e] hover:bg-[#ff5270] text-[#ffffff] font-semibold text-xs rounded-[6px] transition-colors shrink-0">
+            Review Licenses ➔
           </button>
         </div>
       )}

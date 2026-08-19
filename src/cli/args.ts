@@ -46,6 +46,10 @@ export interface CliOptions {
   securityFix: boolean
   dedupe: boolean
   dedupeFix: boolean
+  licenses: boolean
+  licenseExport: "notice" | "spdx" | "csv" | null
+  licenseOutput: string | null
+  failOnCopyleft: boolean
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -110,6 +114,10 @@ export function parseArgs(argv: string[]): CliOptions {
     securityFix: false,
     dedupe: false,
     dedupeFix: false,
+    licenses: false,
+    licenseExport: null,
+    licenseOutput: null,
+    failOnCopyleft: false,
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -136,6 +144,24 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.noOpen = true
     } else if (arg === "--watch") {
       opts.watch = true
+    } else if (arg === "license" || arg === "licenses" || arg === "--license" || arg === "--licenses") {
+      opts.licenses = true
+      const nextArg = argv[i + 1]
+      if (nextArg === "export" || nextArg === "--export") {
+        opts.licenseExport = "notice"
+        i++
+      }
+    } else if (arg.startsWith("--license-export=")) {
+      opts.licenses = true
+      const fmt = arg.split("=")[1]?.toLowerCase()
+      opts.licenseExport = fmt === "spdx" ? "spdx" : fmt === "csv" ? "csv" : "notice"
+    } else if (arg.startsWith("--format=")) {
+      const fmt = arg.split("=")[1]?.toLowerCase()
+      opts.licenseExport = fmt === "spdx" ? "spdx" : fmt === "csv" ? "csv" : "notice"
+    } else if (arg.startsWith("--license-output=") || arg.startsWith("--output=")) {
+      opts.licenseOutput = arg.split("=").slice(1).join("=")
+    } else if (arg === "--fail-on-copyleft" || arg === "--fail-on=copyleft") {
+      opts.failOnCopyleft = true
     } else if (arg === "dedupe" || arg === "--dedupe") {
       opts.dedupe = true
       const nextArg = argv[i + 1]
@@ -256,6 +282,8 @@ export function printHelp(): void {
 
 Usage:
   pkg-audit [dir] [options]
+  pkg-audit license [dir]      # scan open-source licenses and legal copyleft risk
+  pkg-audit license export [dir] # generate NOTICE.txt / SPDX / CSV compliance doc
   pkg-audit dedupe [dir]       # analyze duplicate transitive packages in lockfile
   pkg-audit dedupe fix [dir]   # generate and apply monorepo overrides/resolutions
   pkg-audit audit [dir]        # check security vulnerabilities via Google OSV API
@@ -268,6 +296,10 @@ Usage:
   pkg-audit json [dir]         # machine output
 
 Options:
+  license                Scan all dependency licenses and flag copyleft viral risk
+  --format=<format>      Export format: 'notice' (NOTICE.txt), 'spdx' (SPDX JSON), 'csv'
+  --output=<file>        Write exported license compliance file to path
+  --fail-on-copyleft     Exit with non-zero code if strong copyleft found in prod
   dedupe                 Analyze duplicate transitive packages across lockfile
   dedupe fix             Apply pnpm.overrides, resolutions, or overrides to root package.json
   audit                  Scan dependencies against Google OSV database for CVEs

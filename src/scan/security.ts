@@ -455,6 +455,7 @@ export async function applySecurityFixes(
     outdated: null,
     security: null,
     dedupe: null,
+    licenses: null,
     errors: [],
     meta: {
       ignoredDirs: [],

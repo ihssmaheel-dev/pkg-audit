@@ -85,6 +85,7 @@ describe("fix engine", () => {
         outdated: null,
         security: null,
         dedupe: null,
+        licenses: null,
         errors: [],
         meta: {
           totalDepDeclarations: 2,

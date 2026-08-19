@@ -65,6 +65,7 @@ describe("generatePrComment", () => {
       outdated: null,
       security: null,
       dedupe: null,
+      licenses: null,
       meta: {
         totalDepDeclarations: 1,
         totalUniquePackages: 1,

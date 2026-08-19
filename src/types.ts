@@ -227,6 +227,38 @@ export interface DedupeResult {
   totalInstalledPackages: number
 }
 
+export type LicenseRiskLevel = "permissive" | "weak-copyleft" | "strong-copyleft" | "proprietary" | "unknown"
+
+export interface PackageLicenseInfo {
+  name: string
+  version: string
+  license: string
+  spdxId: string
+  riskLevel: LicenseRiskLevel
+  isCopyleft: boolean
+  isProd: boolean
+  workspaces: Array<{
+    workspace: string
+    type: DepType
+    spec: string
+  }>
+  author?: string
+  repository?: string
+  homepage?: string
+  description?: string
+}
+
+export interface LicenseScanResult {
+  packages: PackageLicenseInfo[]
+  permissiveCount: number
+  weakCopyleftCount: number
+  strongCopyleftCount: number
+  proprietaryCount: number
+  unknownCount: number
+  prodCopyleftCount: number
+  totalScanned: number
+}
+
 export interface ScanResult {
   version: 1
   root: string
@@ -239,6 +271,7 @@ export interface ScanResult {
   outdated: OutdatedResult | null
   security: SecurityResult | null
   dedupe: DedupeResult | null
+  licenses: LicenseScanResult | null
   errors: ScanError[]
   meta: ScanMeta
   catalog?: CatalogPlan | null

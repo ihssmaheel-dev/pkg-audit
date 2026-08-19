@@ -7,6 +7,7 @@ import { Graph } from "./components/graph"
 import { UnusedView } from "./components/unused"
 import { SecurityView } from "./components/security"
 import { DedupeView } from "./components/dedupe"
+import { LicensesView } from "./components/licenses"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
 import { Outdated } from "./components/outdated"
@@ -26,6 +27,7 @@ const TAB_IDS: TabId[] = [
   "unused",
   "security",
   "dedupe",
+  "licenses",
   "outdated",
   "hygiene",
   "workspaces",
@@ -259,6 +261,7 @@ export function App() {
             onFix={embedded ? undefined : handleFix}
           />
         )}
+        {data && tab === "licenses" && <LicensesView data={data} loading={loading} notify={notify} />}
         {data && tab === "outdated" && (
           <Outdated
             data={data}
