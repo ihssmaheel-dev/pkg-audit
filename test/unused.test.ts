@@ -3,6 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
 import {
+  collectSourceFiles,
   extractImportsFromContent,
   extractPackageName,
   extractPackagesFromScripts,
@@ -12,11 +13,49 @@ import {
   isDevToolPackage,
   loadPathAliasMatcher,
   scanWorkspaceDependencies,
+  stripComments,
 } from "../src/scan/unused.js"
 import { declarePhantomDependencies, removeUnusedDependencies } from "../src/scan/fix.js"
 import type { Workspace } from "../src/types.js"
 
 describe("unused & phantom dependency scanner", () => {
+  describe("stripComments", () => {
+    it("strips single-line comments without stripping URLs inside quotes", () => {
+      const code = `
+        // import "dead-pkg";
+        const url = "https://example.com/api"; // comment
+        import live from "live-pkg";
+      `
+      const stripped = stripComments(code)
+      expect(stripped).not.toContain("dead-pkg")
+      expect(stripped).toContain("https://example.com/api")
+      expect(stripped).toContain("live-pkg")
+    })
+
+    it("strips multi-line block comments", () => {
+      const code = `
+        /*
+          import "ghost-multiline";
+          const x = 1;
+        */
+        import active from "active-pkg";
+      `
+      const stripped = stripComments(code)
+      expect(stripped).not.toContain("ghost-multiline")
+      expect(stripped).toContain("active-pkg")
+    })
+
+    it("strips HTML/XML comments", () => {
+      const code = `
+        <!-- <script src="fake-pkg"></script> -->
+        <script>import real from "real-pkg";</script>
+      `
+      const stripped = stripComments(code)
+      expect(stripped).not.toContain("fake-pkg")
+      expect(stripped).toContain("real-pkg")
+    })
+  })
+
   describe("extractPackageName", () => {
     it("filters out relative and local paths", () => {
       expect(extractPackageName("./utils/helper.js")).toBeNull()
@@ -68,8 +107,10 @@ describe("unused & phantom dependency scanner", () => {
   })
 
   describe("extractImportsFromContent", () => {
-    it("extracts static, dynamic, require, type imports, side-effect imports, and re-exports", () => {
+    it("extracts static, dynamic, backticks, type imports, side-effect imports, and ignores comments", () => {
       const code = `
+        // import commented from "commented-pkg";
+        /* import multiline from "multiline-pkg"; */
         import React, { useState } from "react";
         import type { FC } from "react";
         import { debounce } from "lodash/debounce";
@@ -79,7 +120,7 @@ describe("unused & phantom dependency scanner", () => {
         export { Button } from "@scope/ui-kit";
         export * from "date-fns";
 
-        const lazyModule = await import("chalk");
+        const lazyModule = await import(\`chalk\`);
         const fs = require("node:fs");
         const helper = require("./local/helper");
         const axios = require("axios");
@@ -94,6 +135,8 @@ describe("unused & phantom dependency scanner", () => {
       expect(imports).toContain("chalk")
       expect(imports).toContain("axios")
 
+      expect(imports).not.toContain("commented-pkg")
+      expect(imports).not.toContain("multiline-pkg")
       expect(imports).not.toContain("@/components/layout/header")
       expect(imports).not.toContain("node:fs")
       expect(imports).not.toContain("./local/helper")
@@ -202,6 +245,38 @@ describe("unused & phantom dependency scanner", () => {
     })
   })
 
+  describe("collectSourceFiles with symlinks", () => {
+    let tmpDir: string
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pkg-audit-symlink-test-"))
+    })
+
+    afterEach(() => {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true })
+      } catch {
+        // Ignore
+      }
+    })
+
+    it("safely follows symlinked directories", async () => {
+      const realDir = path.join(tmpDir, "real-src")
+      fs.mkdirSync(realDir, { recursive: true })
+      fs.writeFileSync(path.join(realDir, "real.ts"), "export const a = 1;", "utf8")
+
+      const linkDir = path.join(tmpDir, "linked-src")
+      try {
+        fs.symlinkSync(realDir, linkDir, "junction")
+      } catch {
+        // Fallback for Windows without admin privileges
+      }
+
+      const files = await collectSourceFiles(tmpDir, new Set())
+      expect(files.some((f) => f.endsWith("real.ts"))).toBe(true)
+    })
+  })
+
   describe("scanWorkspaceDependencies with nested workspaces", () => {
     let tmpDir: string
 
@@ -217,7 +292,7 @@ describe("unused & phantom dependency scanner", () => {
       }
     })
 
-    it("isolates child workspaces and recognizes dev tool scripts and config references", async () => {
+    it("isolates child workspaces, calculates suggestedVersion from frequency, and skips peer deps", async () => {
       // Root manifest with scripts
       const rootPkg = {
         name: "monorepo-root",
@@ -249,9 +324,13 @@ describe("unused & phantom dependency scanner", () => {
           "@nestjs/event-emitter": "^3.1.0",
           "@aws-sdk/client-s3": "^3.1111.0",
           jsonwebtoken: "^9.0.0",
+          zod: "^3.22.4",
         },
         devDependencies: {
           "@types/jsonwebtoken": "^9.0.0",
+        },
+        peerDependencies: {
+          "@nestjs/core": "^11.2.1",
         },
       }
       fs.writeFileSync(path.join(apiDir, "package.json"), JSON.stringify(apiPkg, null, 2), "utf8")
@@ -312,14 +391,16 @@ describe("unused & phantom dependency scanner", () => {
           private: true,
           packageManager: null,
           enginesNode: null,
-          depCount: 5,
+          depCount: 6,
           devCount: 1,
           deps: {
             "@nestjs/common": { version: "^11.2.1", type: "prod" },
             "@nestjs/event-emitter": { version: "^3.1.0", type: "prod" },
             "@aws-sdk/client-s3": { version: "^3.1111.0", type: "prod" },
             jsonwebtoken: { version: "^9.0.0", type: "prod" },
+            zod: { version: "^3.22.4", type: "prod" },
             "@types/jsonwebtoken": { version: "^9.0.0", type: "dev" },
+            "@nestjs/core": { version: "^11.2.1", type: "peer" },
           },
         },
         {
@@ -345,18 +426,19 @@ describe("unused & phantom dependency scanner", () => {
       const rootUnused = scanRes.unused.filter((u) => u.workspace === ".")
       expect(rootUnused).toHaveLength(0)
 
-      // 2. @mono/api: @types/jsonwebtoken is recognized as used because jsonwebtoken is used!
-      const apiUnused = scanRes.unused.filter((u) => u.workspace === "apps/api")
-      expect(apiUnused).toHaveLength(0)
+      // 2. @mono/api: @nestjs/core is a peer dependency -> skipped from unused report!
+      const peerUnused = scanRes.unused.find((u) => u.name === "@nestjs/core")
+      expect(peerUnused).toBeUndefined()
 
-      // 3. @mono/web imports @/components/header (alias - ignored) and zod (phantom)
+      // 3. @mono/web imports zod (phantom) -> suggestedVersion is "^3.22.4" from @mono/api!
       const webPhantoms = scanRes.phantoms.filter((p) => p.workspace === "apps/web")
       expect(webPhantoms).toHaveLength(1)
       expect(webPhantoms[0]?.name).toBe("zod")
+      expect(webPhantoms[0]?.suggestedVersion).toBe("^3.22.4")
 
       // 4. Test declare phantom remediation
       const declareRes = await declarePhantomDependencies(tmpDir, [
-        { workspace: "apps/web", pkg: "zod", version: "^3.22.0", type: "prod" },
+        { workspace: "apps/web", pkg: "zod", version: "^3.22.4", type: "prod" },
       ])
       expect(declareRes.ok).toBe(true)
 
