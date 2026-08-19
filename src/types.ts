@@ -203,6 +203,30 @@ export interface SecurityResult {
   scannedPackageCount: number
 }
 
+export interface DedupeVersionInstance {
+  version: string
+  dependents: string[]
+}
+
+export interface DedupePackage {
+  name: string
+  versions: DedupeVersionInstance[]
+  suggestedVersion: string
+  duplicateCount: number
+  highestVersion: string
+  mostFrequentVersion: string
+}
+
+export interface DedupeResult {
+  packageManager: "pnpm" | "npm" | "yarn" | "bun" | "unknown"
+  lockfilePath: string | null
+  lockfileType: "pnpm-lock.yaml" | "package-lock.json" | "yarn.lock" | "bun.lock" | null
+  duplicates: DedupePackage[]
+  totalDuplicates: number
+  totalWastedVersions: number
+  totalInstalledPackages: number
+}
+
 export interface ScanResult {
   version: 1
   root: string
@@ -214,6 +238,7 @@ export interface ScanResult {
   unused: UnusedScanResult
   outdated: OutdatedResult | null
   security: SecurityResult | null
+  dedupe: DedupeResult | null
   errors: ScanError[]
   meta: ScanMeta
   catalog?: CatalogPlan | null

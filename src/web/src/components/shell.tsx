@@ -33,6 +33,12 @@ const TABS: TabDef[] = [
     warn: true,
     count: (d) => (d.security?.criticalCount ?? 0) + (d.security?.highCount ?? 0),
   },
+  {
+    id: "dedupe",
+    label: "Dedupe",
+    warn: true,
+    count: (d) => d.dedupe?.totalDuplicates ?? 0,
+  },
   { id: "outdated", label: "Outdated", count: (d) => d.outdated?.outdated.length ?? 0 },
   { id: "hygiene", label: "Hygiene", count: (d) => d.hygieneIssues.length },
   { id: "workspaces", label: "Workspaces", count: (d) => d.workspaces.length },

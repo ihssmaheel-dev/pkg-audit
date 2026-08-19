@@ -44,6 +44,8 @@ export interface CliOptions {
   catalogAll: boolean
   security: boolean
   securityFix: boolean
+  dedupe: boolean
+  dedupeFix: boolean
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -106,6 +108,8 @@ export function parseArgs(argv: string[]): CliOptions {
     catalogAll: false,
     security: false,
     securityFix: false,
+    dedupe: false,
+    dedupeFix: false,
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -132,6 +136,16 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.noOpen = true
     } else if (arg === "--watch") {
       opts.watch = true
+    } else if (arg === "dedupe" || arg === "--dedupe") {
+      opts.dedupe = true
+      const nextArg = argv[i + 1]
+      if (nextArg === "fix" || nextArg === "--fix") {
+        opts.dedupeFix = true
+        i++
+      }
+    } else if (arg === "dedupe:fix" || arg === "--dedupe-fix") {
+      opts.dedupe = true
+      opts.dedupeFix = true
     } else if (arg === "audit" || arg === "--audit" || arg === "--security") {
       opts.security = true
       const nextArg = argv[i + 1]
@@ -242,6 +256,8 @@ export function printHelp(): void {
 
 Usage:
   pkg-audit [dir] [options]
+  pkg-audit dedupe [dir]       # analyze duplicate transitive packages in lockfile
+  pkg-audit dedupe fix [dir]   # generate and apply monorepo overrides/resolutions
   pkg-audit audit [dir]        # check security vulnerabilities via Google OSV API
   pkg-audit audit fix [dir]    # automatically upgrade vulnerable packages to safe patches
   pkg-audit catalog init [dir] # convert shared dependencies to pnpm catalog:
@@ -252,6 +268,8 @@ Usage:
   pkg-audit json [dir]         # machine output
 
 Options:
+  dedupe                 Analyze duplicate transitive packages across lockfile
+  dedupe fix             Apply pnpm.overrides, resolutions, or overrides to root package.json
   audit                  Scan dependencies against Google OSV database for CVEs
   audit fix              Upgrade all vulnerable dependencies to safe patched versions
   catalog init           Migrate monorepo to centralized pnpm-workspace.yaml catalog:

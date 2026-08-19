@@ -6,6 +6,7 @@ import { Conflicts } from "./components/conflicts"
 import { Graph } from "./components/graph"
 import { UnusedView } from "./components/unused"
 import { SecurityView } from "./components/security"
+import { DedupeView } from "./components/dedupe"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
 import { Outdated } from "./components/outdated"
@@ -24,6 +25,7 @@ const TAB_IDS: TabId[] = [
   "graph",
   "unused",
   "security",
+  "dedupe",
   "outdated",
   "hygiene",
   "workspaces",
@@ -109,12 +111,20 @@ export function App() {
       payload:
         | Array<{ name: string; targetVersion: string; workspaces?: string[] }>
         | {
-            action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate" | "security-fix"
+            action?:
+              | "align"
+              | "remove-unused"
+              | "declare-phantom"
+              | "catalog-migrate"
+              | "security-fix"
+              | "dedupe-apply"
             fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
             unused?: Array<{ workspace: string; pkg: string; type?: string }>
             phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
             catalogStrategy?: "highest" | "most-frequent"
             catalogAll?: boolean
+            overrides?: Record<string, string>
+            dedupeStrategy?: "highest" | "most-frequent"
           }
     ) => {
       const res = await applyFix(payload, data?.root)
@@ -238,6 +248,14 @@ export function App() {
             loading={loading}
             notify={notify}
             onScanSecurity={() => void handleScan(data.root, { security: true })}
+            onFix={embedded ? undefined : handleFix}
+          />
+        )}
+        {data && tab === "dedupe" && (
+          <DedupeView
+            data={data}
+            loading={loading}
+            notify={notify}
             onFix={embedded ? undefined : handleFix}
           />
         )}

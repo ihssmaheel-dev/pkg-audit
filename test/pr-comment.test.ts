@@ -64,6 +64,7 @@ describe("generatePrComment", () => {
       unused: { phantoms: [], unused: [], scannedFilesCount: 0 },
       outdated: null,
       security: null,
+      dedupe: null,
       meta: {
         totalDepDeclarations: 1,
         totalUniquePackages: 1,

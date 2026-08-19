@@ -13,6 +13,7 @@ import {
   IconPackage,
   IconRefreshCw,
   IconRepeat,
+  IconScissors,
   IconSearch,
   IconShield,
 } from "./icons"
@@ -605,6 +606,37 @@ export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardP
           </div>
           <button class="h-7 px-3 bg-[#f43f5e] hover:bg-[#fb7185] text-[#101010] font-semibold text-xs rounded-[6px] transition-colors shrink-0">
             Fix in Security Tab ➔
+          </button>
+        </div>
+      )}
+
+      {/* Lockfile Deduplication Banner */}
+      {data.dedupe && data.dedupe.duplicates.length > 0 && (
+        <div
+          class="flex items-center justify-between p-4 bg-[#8b5cf6]/10 border border-[#8b5cf6]/40 rounded-[8px] cursor-pointer hover:bg-[#8b5cf6]/15 transition-colors gap-4"
+          onClick={() => onTabChange("dedupe")}
+        >
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[6px] bg-[#8b5cf6]/20 text-[#8b5cf6] flex items-center justify-center shrink-0">
+              <IconScissors size={16} />
+            </div>
+            <div>
+              <div class="text-sm font-bold text-[#ffffff] flex items-center gap-2">
+                <span>
+                  {data.dedupe.duplicates.length} Duplicate Transitive Packages in {data.dedupe.lockfileType}
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-[#8b5cf6]/20 text-[#a78bfa] font-mono">
+                  BLOAT SAVINGS
+                </span>
+              </div>
+              <div class="text-xs text-[#bdbdbd] mt-0.5">
+                {data.dedupe.totalWastedVersions} redundant versions installed across monorepo workspaces.
+                Collapse down with 1-click overrides.
+              </div>
+            </div>
+          </div>
+          <button class="h-7 px-3 bg-[#8b5cf6] hover:bg-[#a78bfa] text-[#101010] font-semibold text-xs rounded-[6px] transition-colors shrink-0">
+            Dedupe Lockfile ➔
           </button>
         </div>
       )}

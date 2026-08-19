@@ -16,6 +16,7 @@ import { buildWorkspaceGraph } from "./graph.js"
 import { scanWorkspaceDependencies } from "./unused.js"
 import { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } from "./catalog.js"
 import { checkVulnerabilities, applySecurityFixes } from "./security.js"
+import { analyzeLockfile, applyDedupeOverrides, generateOverridesDict } from "./dedupe.js"
 import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
@@ -198,6 +199,9 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     })
   }
 
+  const rootWs = workspaces.find((w) => w.isRoot)
+  const dedupe = analyzeLockfile(rootDir, rootWs?.packageManager ?? null)
+
   const tempScanData: ScanResult = {
     version: 1,
     root: rootDir,
@@ -209,6 +213,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     unused,
     outdated,
     security,
+    dedupe,
     errors: stats.errors,
     meta: {
       ignoredDirs: [...scanOpts.ignoreDirs].sort(),
@@ -238,6 +243,9 @@ export {
   readPnpmWorkspaceYaml,
   checkVulnerabilities,
   applySecurityFixes,
+  analyzeLockfile,
+  applyDedupeOverrides,
+  generateOverridesDict,
   isLinkedProtocol,
   parseMajor,
   parseVersionTuple,

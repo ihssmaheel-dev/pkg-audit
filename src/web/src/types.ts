@@ -5,6 +5,7 @@ export type TabId =
   | "graph"
   | "unused"
   | "security"
+  | "dedupe"
   | "outdated"
   | "hygiene"
   | "workspaces"

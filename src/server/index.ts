@@ -228,12 +228,20 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
       if (url.pathname === "/api/fix" && req.method === "POST") {
         const body = JSON.parse(await readBody(req)) as {
           dir?: string
-          action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate" | "security-fix"
+          action?:
+            | "align"
+            | "remove-unused"
+            | "declare-phantom"
+            | "catalog-migrate"
+            | "security-fix"
+            | "dedupe-apply"
           fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
           unused?: Array<{ workspace: string; pkg: string; type?: string }>
           phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
           catalogStrategy?: "highest" | "most-frequent"
           catalogAll?: boolean
+          overrides?: Record<string, string>
+          dedupeStrategy?: "highest" | "most-frequent"
         }
         const targetDir = body.dir ?? resolvedDir
         if (!targetDir) {
@@ -307,6 +315,29 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
             modifiedFiles: catalogRes.modifiedFiles,
             catalogCount: catalogRes.catalogCount,
             errors: catalogRes.errors,
+            result: updatedScan,
+          })
+          return
+        } else if (body.action === "dedupe-apply") {
+          const { applyDedupeOverrides, analyzeLockfile, generateOverridesDict } =
+            await import("../scan/dedupe.js")
+          const currentScan = await scan(targetDir, {})
+          const rootWs = currentScan.workspaces.find((w) => w.isRoot)
+          const dedupeResult =
+            currentScan.dedupe ?? analyzeLockfile(targetDir, rootWs?.packageManager ?? null)
+          if (!dedupeResult || dedupeResult.duplicates.length === 0) {
+            json(res, { error: "No lockfile duplicates found to dedupe" }, 400)
+            return
+          }
+          const overrides =
+            body.overrides ?? generateOverridesDict(dedupeResult.duplicates, body.dedupeStrategy ?? "highest")
+          fixResult = applyDedupeOverrides(targetDir, overrides, dedupeResult.packageManager)
+          const updatedScan = await scan(targetDir, {})
+          json(res, {
+            ok: fixResult.ok,
+            changes: fixResult.changes,
+            modifiedFiles: fixResult.modifiedFiles,
+            errors: fixResult.errors,
             result: updatedScan,
           })
           return

@@ -232,6 +232,7 @@ catalog:
         unused: { phantoms: [], unused: [], scannedFilesCount: 3 },
         outdated: null,
         security: null,
+        dedupe: null,
         errors: [],
         meta: {
           ignoredDirs: [],

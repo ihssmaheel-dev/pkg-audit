@@ -215,6 +215,108 @@ async function main(): Promise<void> {
     return
   }
 
+  if (merged.dedupe) {
+    const { analyzeLockfile, applyDedupeOverrides, generateOverridesDict } = await import("../scan/dedupe.js")
+    const rootWs = result.workspaces.find((w) => w.isRoot)
+    const dedupeResult = result.dedupe ?? analyzeLockfile(dir, rootWs?.packageManager ?? null)
+
+    if (!dedupeResult || !dedupeResult.lockfilePath) {
+      console.log(`\n  🪓 Lockfile Deduplication — ${dir}\n`)
+      console.log(
+        "  No supported lockfile (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock) found in directory.\n"
+      )
+      return
+    }
+
+    const { duplicates, packageManager, lockfileType } = dedupeResult
+
+    if (merged.dedupeFix) {
+      if (duplicates.length === 0) {
+        console.log(
+          `\n  ✔ Lockfile (${lockfileType}) is 100% clean — zero duplicate transitive versions found!\n`
+        )
+        return
+      }
+
+      const overrides = generateOverridesDict(duplicates, merged.fixStrategy ?? "highest")
+
+      if (merged.dryRun) {
+        console.log(`\n  🪓 pkg-audit dedupe fix (dry run) — ${lockfileType} (${packageManager})\n`)
+        console.log(
+          `  Proposed overrides to collapse ${duplicates.length} duplicate packages (${dedupeResult.totalWastedVersions} wasted versions):\n`
+        )
+        for (const [pkg, targetVer] of Object.entries(overrides)) {
+          const dup = duplicates.find((d) => d.name === pkg)!
+          const vers = dup.versions.map((v) => v.version).join(", ")
+          console.log(`    • ${pkg}: [${vers}] ➔ ${targetVer}`)
+        }
+        console.log(`\n  Overrides block for root package.json:`)
+        if (packageManager === "pnpm") {
+          console.log(JSON.stringify({ pnpm: { overrides } }, null, 2))
+        } else if (packageManager === "yarn") {
+          console.log(JSON.stringify({ resolutions: overrides }, null, 2))
+        } else {
+          console.log(JSON.stringify({ overrides }, null, 2))
+        }
+        console.log("\n  Run without --dry-run to apply to root package.json.\n")
+        return
+      }
+
+      const fixRes = applyDedupeOverrides(dir, overrides, packageManager)
+      console.log(`\n  🪓 pkg-audit dedupe fix — ${lockfileType} (${packageManager})\n`)
+      if (!fixRes.ok) {
+        console.error(`  Failed to apply overrides: ${fixRes.errors.map((e) => e.error).join(", ")}\n`)
+        process.exitCode = 1
+        return
+      }
+
+      console.log(
+        `  ✔ Successfully added ${Object.keys(overrides).length} overrides into root package.json!\n`
+      )
+      console.log(`  Next steps:`)
+      console.log(
+        `    Run '${packageManager} install' to update ${lockfileType} and remove duplicate packages.\n`
+      )
+      return
+    }
+
+    // Print Dedupe Report
+    console.log(
+      `\n  🪓 Lockfile Duplication Report — ${path.basename(dedupeResult.lockfilePath)} (${packageManager})\n`
+    )
+    if (duplicates.length === 0) {
+      console.log(
+        `  ✔ Zero duplicate packages found across ${dedupeResult.totalInstalledPackages} installed packages. Your lockfile is 100% deduplicated!\n`
+      )
+      return
+    }
+
+    console.log(
+      `  Found ${duplicates.length} duplicate packages with ${dedupeResult.totalWastedVersions} wasted version instances:`
+    )
+    console.log(`  Total unique packages in lockfile: ${dedupeResult.totalInstalledPackages}\n`)
+
+    for (const dup of duplicates) {
+      console.log(`  • \x1b[1m${dup.name}\x1b[0m (${dup.duplicateCount} versions installed)`)
+      for (const verInst of dup.versions) {
+        const isTarget = verInst.version === dup.suggestedVersion
+        const prefix = isTarget ? "    ➔ \x1b[32m" : "      "
+        const suffix = isTarget ? " (recommended unified target)\x1b[0m" : ""
+        const depsStr =
+          verInst.dependents.length > 0
+            ? ` [used by: ${verInst.dependents.slice(0, 3).join(", ")}${verInst.dependents.length > 3 ? "..." : ""}]`
+            : ""
+        console.log(`${prefix}${verInst.version}${depsStr}${suffix}`)
+      }
+      console.log("")
+    }
+
+    console.log(
+      `  Run 'npx pkg-audit dedupe fix' to write ${packageManager === "pnpm" ? "pnpm.overrides" : packageManager === "yarn" ? "resolutions" : "overrides"} to root package.json.\n`
+    )
+    return
+  }
+
   if (merged.catalog) {
     const { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } =
       await import("../scan/catalog.js")

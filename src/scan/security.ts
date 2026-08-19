@@ -454,6 +454,7 @@ export async function applySecurityFixes(
     unused: { phantoms: [], unused: [], scannedFilesCount: 0 },
     outdated: null,
     security: null,
+    dedupe: null,
     errors: [],
     meta: {
       ignoredDirs: [],
