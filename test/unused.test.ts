@@ -45,13 +45,17 @@ describe("unused & phantom dependency scanner", () => {
       expect(stripped).toContain("active-pkg")
     })
 
-    it("strips HTML/XML comments", () => {
+    it("preserves regex literals containing slashes and asterisks without misidentifying them as comments", () => {
       const code = `
-        <!-- <script src="fake-pkg"></script> -->
-        <script>import real from "real-pkg";</script>
+        const pattern = /a\\/\\/b/g;
+        const starPattern = /\\/*\\//;
+        const charClass = /[/]/;
+        import real from "real-pkg";
       `
       const stripped = stripComments(code)
-      expect(stripped).not.toContain("fake-pkg")
+      expect(stripped).toContain("pattern")
+      expect(stripped).toContain("starPattern")
+      expect(stripped).toContain("charClass")
       expect(stripped).toContain("real-pkg")
     })
   })

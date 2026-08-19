@@ -114,7 +114,34 @@ export function stripComments(code: string): string {
   let inMultiLineComment = false
   let inHtmlComment = false
   let inString: "'" | '"' | "`" | null = null
+  let inRegex = false
+  let inRegexCharClass = false
   let isEscaped = false
+  let lastNonWsChar = ""
+
+  // Characters after which a '/' introduces a regular expression literal rather than division
+  const REGEX_PRECEDING_CHARS = new Set([
+    "(",
+    "[",
+    "{",
+    ";",
+    ",",
+    ":",
+    "=",
+    "!",
+    "?",
+    "&",
+    "|",
+    "^",
+    "~",
+    "+",
+    "-",
+    "*",
+    "%",
+    "<",
+    ">",
+    "/",
+  ])
 
   for (let i = 0; i < code.length; i++) {
     const char = code[i]!
@@ -152,11 +179,31 @@ export function stripComments(code: string): string {
         isEscaped = true
       } else if (char === inString) {
         inString = null
+        lastNonWsChar = char
       }
       continue
     }
 
-    // Not in comment and not in string
+    if (inRegex) {
+      result += char
+      if (isEscaped) {
+        isEscaped = false
+      } else if (char === "\\") {
+        isEscaped = true
+      } else if (char === "[" && !inRegexCharClass) {
+        inRegexCharClass = true
+      } else if (char === "]" && inRegexCharClass) {
+        inRegexCharClass = false
+      } else if (char === "/" && !inRegexCharClass) {
+        inRegex = false
+        lastNonWsChar = "/"
+      } else if (char === "\n" || char === "\r") {
+        inRegex = false // regex literals cannot span lines in JS
+      }
+      continue
+    }
+
+    // Check for comment starts
     if (char === "/" && next === "/") {
       inSingleLineComment = true
       i++ // skip next '/'
@@ -167,6 +214,18 @@ export function stripComments(code: string): string {
       inMultiLineComment = true
       i++ // skip next '*'
       continue
+    }
+
+    // Check for regex literal start vs division operator
+    if (char === "/") {
+      const canStartRegex = lastNonWsChar === "" || REGEX_PRECEDING_CHARS.has(lastNonWsChar)
+      if (canStartRegex) {
+        inRegex = true
+        inRegexCharClass = false
+        isEscaped = false
+        result += char
+        continue
+      }
     }
 
     if (char === "<" && next === "!" && code[i + 2] === "-" && code[i + 3] === "-") {
@@ -182,6 +241,9 @@ export function stripComments(code: string): string {
     }
 
     result += char
+    if (!/\s/.test(char)) {
+      lastNonWsChar = char
+    }
   }
 
   return result
