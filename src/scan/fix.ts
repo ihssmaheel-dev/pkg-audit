@@ -263,3 +263,225 @@ export async function applyFixes(
     errors,
   }
 }
+
+export interface RemoveUnusedItem {
+  workspace: string
+  pkg: string
+  type?: string
+}
+
+export async function removeUnusedDependencies(
+  rootDir: string,
+  items: RemoveUnusedItem[],
+  scanData?: ScanResult
+): Promise<FixResult> {
+  const modifiedSet = new Set<string>()
+  const changes: FixChange[] = []
+  const errors: Array<{ path: string; error: string }> = []
+
+  // Group items by workspace
+  const workspaceMap = new Map<string, RemoveUnusedItem[]>()
+  for (const item of items) {
+    if (!workspaceMap.has(item.workspace)) {
+      workspaceMap.set(item.workspace, [])
+    }
+    workspaceMap.get(item.workspace)!.push(item)
+  }
+
+  const DEP_SECTIONS = [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+  ] as const
+
+  for (const [wsTarget, wsItems] of workspaceMap.entries()) {
+    let pkgJsonPath = path.resolve(rootDir, wsTarget, "package.json")
+
+    // Find actual path via scanData if available
+    if (scanData) {
+      const match = scanData.workspaces.find((w) => w.relPath === wsTarget || w.name === wsTarget)
+      if (match) {
+        pkgJsonPath = path.resolve(rootDir, match.relPath, "package.json")
+      }
+    }
+
+    if (!fs.existsSync(pkgJsonPath)) {
+      errors.push({ path: pkgJsonPath, error: "Manifest not found" })
+      continue
+    }
+
+    let raw: string
+    try {
+      raw = fs.readFileSync(pkgJsonPath, "utf8")
+    } catch (err) {
+      errors.push({ path: pkgJsonPath, error: String(err) })
+      continue
+    }
+
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>
+    } catch (err) {
+      errors.push({ path: pkgJsonPath, error: `Invalid JSON: ${String(err)}` })
+      continue
+    }
+
+    let changed = false
+    const indent = detectIndent(raw)
+    const hasTrailingNewline = raw.endsWith("\n")
+    const eol = raw.includes("\r\n") ? "\r\n" : "\n"
+
+    for (const item of wsItems) {
+      for (const section of DEP_SECTIONS) {
+        const deps = parsed[section] as Record<string, string> | undefined
+        if (deps && typeof deps === "object" && item.pkg in deps) {
+          const prevVersion = deps[item.pkg] ?? ""
+          delete deps[item.pkg]
+          changed = true
+          changes.push({
+            workspace: wsTarget,
+            filePath: pkgJsonPath,
+            pkg: item.pkg,
+            from: prevVersion,
+            to: "(removed)",
+            depType: section,
+          })
+        }
+      }
+    }
+
+    if (changed) {
+      try {
+        let updatedJson = JSON.stringify(parsed, null, indent)
+        if (eol === "\r\n") updatedJson = updatedJson.replace(/\n/g, "\r\n")
+        if (hasTrailingNewline) updatedJson += eol
+        fs.writeFileSync(pkgJsonPath, updatedJson, "utf8")
+        modifiedSet.add(pkgJsonPath)
+      } catch (err) {
+        errors.push({ path: pkgJsonPath, error: `Failed to write: ${String(err)}` })
+      }
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    modifiedFiles: Array.from(modifiedSet),
+    changes,
+    errors,
+  }
+}
+
+export interface DeclarePhantomItem {
+  workspace: string
+  pkg: string
+  version: string
+  type?: "prod" | "dev"
+}
+
+export async function declarePhantomDependencies(
+  rootDir: string,
+  items: DeclarePhantomItem[],
+  scanData?: ScanResult
+): Promise<FixResult> {
+  const modifiedSet = new Set<string>()
+  const changes: FixChange[] = []
+  const errors: Array<{ path: string; error: string }> = []
+
+  // Group items by workspace
+  const workspaceMap = new Map<string, DeclarePhantomItem[]>()
+  for (const item of items) {
+    if (!workspaceMap.has(item.workspace)) {
+      workspaceMap.set(item.workspace, [])
+    }
+    workspaceMap.get(item.workspace)!.push(item)
+  }
+
+  for (const [wsTarget, wsItems] of workspaceMap.entries()) {
+    let pkgJsonPath = path.resolve(rootDir, wsTarget, "package.json")
+
+    // Find actual path via scanData if available
+    if (scanData) {
+      const match = scanData.workspaces.find((w) => w.relPath === wsTarget || w.name === wsTarget)
+      if (match) {
+        pkgJsonPath = path.resolve(rootDir, match.relPath, "package.json")
+      }
+    }
+
+    if (!fs.existsSync(pkgJsonPath)) {
+      errors.push({ path: pkgJsonPath, error: "Manifest not found" })
+      continue
+    }
+
+    let raw: string
+    try {
+      raw = fs.readFileSync(pkgJsonPath, "utf8")
+    } catch (err) {
+      errors.push({ path: pkgJsonPath, error: String(err) })
+      continue
+    }
+
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>
+    } catch (err) {
+      errors.push({ path: pkgJsonPath, error: `Invalid JSON: ${String(err)}` })
+      continue
+    }
+
+    let changed = false
+    const indent = detectIndent(raw)
+    const hasTrailingNewline = raw.endsWith("\n")
+    const eol = raw.includes("\r\n") ? "\r\n" : "\n"
+
+    for (const item of wsItems) {
+      const section = item.type === "dev" ? "devDependencies" : "dependencies"
+      if (!parsed[section] || typeof parsed[section] !== "object") {
+        parsed[section] = {}
+      }
+
+      const deps = parsed[section] as Record<string, string>
+      const prevVersion = deps[item.pkg] || "(none)"
+
+      if (deps[item.pkg] !== item.version) {
+        deps[item.pkg] = item.version
+
+        // Sort keys alphabetically
+        const sortedDeps: Record<string, string> = {}
+        for (const k of Object.keys(deps).sort()) {
+          sortedDeps[k] = deps[k]!
+        }
+        parsed[section] = sortedDeps
+
+        changed = true
+        changes.push({
+          workspace: wsTarget,
+          filePath: pkgJsonPath,
+          pkg: item.pkg,
+          from: prevVersion,
+          to: item.version,
+          depType: section,
+        })
+      }
+    }
+
+    if (changed) {
+      try {
+        let updatedJson = JSON.stringify(parsed, null, indent)
+        if (eol === "\r\n") updatedJson = updatedJson.replace(/\n/g, "\r\n")
+        if (hasTrailingNewline) updatedJson += eol
+        fs.writeFileSync(pkgJsonPath, updatedJson, "utf8")
+        modifiedSet.add(pkgJsonPath)
+      } catch (err) {
+        errors.push({ path: pkgJsonPath, error: `Failed to write: ${String(err)}` })
+      }
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    modifiedFiles: Array.from(modifiedSet),
+    changes,
+    errors,
+  }
+}

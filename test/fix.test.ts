@@ -81,6 +81,7 @@ describe("fix engine", () => {
         ],
         hygieneIssues: [],
         graph: { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 0 },
+        unused: { phantoms: [], unused: [], scannedFilesCount: 0 },
         outdated: null,
         errors: [],
         meta: {

@@ -57,7 +57,14 @@ export function useScan() {
 
   const applyFix = useCallback(
     async (
-      fixes: Array<{ name: string; targetVersion: string; workspaces?: string[] }>,
+      payload:
+        | Array<{ name: string; targetVersion: string; workspaces?: string[] }>
+        | {
+            action?: "align" | "remove-unused" | "declare-phantom"
+            fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
+            unused?: Array<{ workspace: string; pkg: string; type?: string }>
+            phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
+          },
       dir?: string
     ): Promise<{ ok: boolean; count: number; result: ScanResult | null }> => {
       setLoading(true)
@@ -65,10 +72,14 @@ export function useScan() {
       try {
         const token = getToken()
         const url = `/api/fix${token ? `?token=${token}` : ""}`
+        const bodyPayload = Array.isArray(payload)
+          ? { dir, fixes: payload, action: "align" }
+          : { dir, ...payload }
+
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dir, fixes }),
+          body: JSON.stringify(bodyPayload),
         })
         const body = (await res.json().catch(() => ({}))) as {
           ok?: boolean

@@ -34,6 +34,10 @@ export interface CliOptions {
   dryRun: boolean
   fixPkg: string | null
   fixTargetVersion: string | null
+  unused: boolean
+  phantom: boolean
+  removeUnused: boolean
+  declarePhantoms: boolean
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -86,6 +90,10 @@ export function parseArgs(argv: string[]): CliOptions {
     dryRun: false,
     fixPkg: null,
     fixTargetVersion: null,
+    unused: false,
+    phantom: false,
+    removeUnused: false,
+    declarePhantoms: false,
   }
 
   for (const arg of argv) {
@@ -113,6 +121,14 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.watch = true
     } else if (arg === "--fix" || arg === "fix") {
       opts.fix = true
+    } else if (arg === "--unused" || arg === "unused") {
+      opts.unused = true
+    } else if (arg === "--phantom" || arg === "phantom") {
+      opts.phantom = true
+    } else if (arg === "--remove-unused") {
+      opts.removeUnused = true
+    } else if (arg === "--declare-phantoms") {
+      opts.declarePhantoms = true
     } else if (arg === "--dry-run") {
       opts.dryRun = true
     } else if (arg.startsWith("--strategy=")) {
@@ -194,6 +210,9 @@ Options:
   --dry-run              Preview changes without modifying package.json files
   --pkg=<name>           Limit fix to a single package name
   --target-version=<ver> Specify custom target version to align to (used with --pkg)
+  --unused               Scan source files and show unused & phantom dependencies
+  --remove-unused        Automatically remove unused dependencies from package.json
+  --declare-phantoms     Automatically declare phantom dependencies in package.json
   --json[=file]          Emit JSON (stdout, or to file if given)
   --html[=file]          Write standalone HTML report (default: pkg-audit-report.html)
   --pr-comment[=file]    Generate GitHub PR comment markdown (to stdout or file)

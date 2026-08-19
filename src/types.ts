@@ -123,6 +123,28 @@ export interface WorkspaceGraph {
   maxDepth: number
 }
 
+export interface PhantomDependency {
+  name: string
+  workspace: string
+  files: string[]
+  suggestedVersion: string | null
+  hoistedFrom: string | null
+}
+
+export interface UnusedDependency {
+  name: string
+  workspace: string
+  version: string
+  type: DepType
+  isDevTool: boolean
+}
+
+export interface UnusedScanResult {
+  phantoms: PhantomDependency[]
+  unused: UnusedDependency[]
+  scannedFilesCount: number
+}
+
 export interface ScanResult {
   version: 1
   root: string
@@ -131,6 +153,7 @@ export interface ScanResult {
   conflicts: Conflict[]
   hygieneIssues: HygieneIssue[]
   graph: WorkspaceGraph
+  unused: UnusedScanResult
   outdated: OutdatedResult | null
   errors: ScanError[]
   meta: ScanMeta

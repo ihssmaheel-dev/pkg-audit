@@ -282,6 +282,50 @@ function renderFullMatrix(workspaces: Workspace[], c: Colorizer, out: string[]):
   }
 }
 
+function renderUnusedAndPhantoms(
+  unusedResult: ScanResult["unused"],
+  c: Colorizer,
+  out: string[],
+  alwaysShow: boolean
+): void {
+  if (!unusedResult) return
+  const { phantoms, unused } = unusedResult
+
+  if (phantoms.length > 0) {
+    out.push(c.bold(c.red(`Phantom (Undeclared) dependencies (${phantoms.length}):`)))
+    out.push(
+      c.dim(`  Imported in source code but missing from the workspace package.json (broken in CI/Docker):`)
+    )
+    for (const p of phantoms) {
+      const hoistTag = p.hoistedFrom ? c.dim(` [hoisted from ${p.hoistedFrom}]`) : ""
+      out.push(`  ${c.red("!")} ${c.cyan(p.workspace)} ➔ ${c.bold(p.name)}${hoistTag}`)
+      for (const f of p.files.slice(0, 3)) {
+        out.push(`      ${c.dim(f)}`)
+      }
+      if (p.files.length > 3) {
+        out.push(`      ${c.dim(`... and ${p.files.length - 3} more files`)}`)
+      }
+    }
+    out.push("")
+  }
+
+  if (alwaysShow || unused.length > 0) {
+    const prodUnused = unused.filter((u) => u.type === "prod")
+    if (prodUnused.length > 0 || alwaysShow) {
+      out.push(c.bold(c.yellow(`Unused dependencies (${unused.length}):`)))
+      out.push(c.dim(`  Declared in package.json but never imported in any source file:`))
+      for (const u of unused) {
+        const typeTag = u.type === "prod" ? c.yellow(`(${u.type})`) : c.dim(`(${u.type})`)
+        const devToolTag = u.isDevTool ? c.dim(" [dev tool]") : ""
+        out.push(
+          `  ${c.yellow("!")} ${c.cyan(u.workspace)} ➔ ${c.bold(u.name)} ${c.dim(`@ ${u.version}`)} ${typeTag}${devToolTag}`
+        )
+      }
+      out.push("")
+    }
+  }
+}
+
 export function renderTerminalReport(result: ScanResult, opts: CliOptions): string {
   const c = makeColorizer(opts.color)
   const out: string[] = []
@@ -312,6 +356,9 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
   renderConflicts(result.conflicts, c, out)
   if (result.graph) {
     renderCycles(result.graph.cycles, c, out)
+  }
+  if (result.unused) {
+    renderUnusedAndPhantoms(result.unused, c, out, opts.unused || opts.phantom)
   }
   renderHygiene(result.hygieneIssues, c, out)
 
@@ -346,6 +393,19 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
   }
   if (result.graph && result.graph.hasCycles) {
     out.push(`  ${c.red(`${result.graph.cycles.length} circular dependency cycle(s) detected`)}`)
+  }
+  if (result.unused) {
+    if (result.unused.phantoms.length > 0) {
+      out.push(
+        `  ${c.red(`${result.unused.phantoms.length} phantom (undeclared) dependenc${result.unused.phantoms.length === 1 ? "y" : "ies"}`)}`
+      )
+    }
+    if (result.unused.unused.length > 0) {
+      const prodUnused = result.unused.unused.filter((u) => u.type === "prod").length
+      out.push(
+        `  ${c.yellow(`${result.unused.unused.length} unused dependenc${result.unused.unused.length === 1 ? "y" : "ies"} (${prodUnused} prod)`)}`
+      )
+    }
   }
   out.push(
     `  ${result.hygieneIssues.length ? result.hygieneIssues.length + " hygiene issue" + (result.hygieneIssues.length === 1 ? "" : "s") : c.green("0 hygiene issues")}`

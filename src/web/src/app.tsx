@@ -4,6 +4,7 @@ import { Dashboard } from "./components/dashboard"
 import { Matrix } from "./components/matrix"
 import { Conflicts } from "./components/conflicts"
 import { Graph } from "./components/graph"
+import { UnusedView } from "./components/unused"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
 import { Outdated } from "./components/outdated"
@@ -15,7 +16,16 @@ import { useScan, getToken } from "./hooks/use-scan"
 import type { ScanResult } from "../../types"
 import type { DrawerState, ScanUiOptions, TabId } from "./types"
 
-const TAB_IDS: TabId[] = ["dashboard", "matrix", "conflicts", "graph", "outdated", "hygiene", "workspaces"]
+const TAB_IDS: TabId[] = [
+  "dashboard",
+  "matrix",
+  "conflicts",
+  "graph",
+  "unused",
+  "outdated",
+  "hygiene",
+  "workspaces",
+]
 
 function conflictsAsMarkdown(data: ScanResult): string {
   if (!data.conflicts.length) return ""
@@ -93,8 +103,17 @@ export function App() {
   )
 
   const handleFix = useCallback(
-    async (fixes: Array<{ name: string; targetVersion: string; workspaces?: string[] }>) => {
-      const res = await applyFix(fixes, data?.root)
+    async (
+      payload:
+        | Array<{ name: string; targetVersion: string; workspaces?: string[] }>
+        | {
+            action?: "align" | "remove-unused" | "declare-phantom"
+            fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
+            unused?: Array<{ workspace: string; pkg: string; type?: string }>
+            phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
+          }
+    ) => {
+      const res = await applyFix(payload, data?.root)
       if (res.ok) {
         notify(`Applied fix across manifests`)
       }
@@ -198,6 +217,9 @@ export function App() {
             notify={notify}
             onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
           />
+        )}
+        {data && tab === "unused" && (
+          <UnusedView data={data} notify={notify} onFix={embedded ? undefined : handleFix} />
         )}
         {data && tab === "outdated" && (
           <Outdated

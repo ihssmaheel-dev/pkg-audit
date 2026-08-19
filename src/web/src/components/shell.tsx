@@ -20,6 +20,13 @@ const TABS: TabDef[] = [
     warn: true,
     count: (d) => d.graph?.cycles.length ?? 0,
   },
+  {
+    id: "unused",
+    label: "Unused & Phantom",
+    warn: true,
+    count: (d) =>
+      (d.unused?.phantoms.length ?? 0) + (d.unused?.unused.filter((u) => u.type === "prod").length ?? 0),
+  },
   { id: "outdated", label: "Outdated", count: (d) => d.outdated?.outdated.length ?? 0 },
   { id: "hygiene", label: "Hygiene", count: (d) => d.hygieneIssues.length },
   { id: "workspaces", label: "Workspaces", count: (d) => d.workspaces.length },

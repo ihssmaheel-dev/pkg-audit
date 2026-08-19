@@ -178,6 +178,75 @@ async function main(): Promise<void> {
     return
   }
 
+  if (merged.removeUnused) {
+    const { removeUnusedDependencies } = await import("../scan/fix.js")
+    if (!result.unused || result.unused.unused.length === 0) {
+      console.log("\n  ✔ No unused dependencies found across monorepo workspaces.\n")
+      return
+    }
+
+    const unusedItems = result.unused.unused.map((u) => ({
+      workspace: u.workspace,
+      pkg: u.name,
+      type: u.type,
+    }))
+
+    if (merged.dryRun) {
+      console.log(`\n  ⚡ pkg-audit remove-unused (dry run)\n`)
+      for (const item of unusedItems) {
+        console.log(`    • Remove '${item.pkg}' from ${item.workspace}`)
+      }
+      console.log(`\n  Run without --dry-run to apply changes.\n`)
+      return
+    }
+
+    const fixResult = await removeUnusedDependencies(dir, unusedItems, result)
+    console.log(`\n  ⚡ pkg-audit remove-unused\n`)
+    console.log(
+      `  ✔ Removed ${fixResult.changes.length} unused package(s) across ${fixResult.modifiedFiles.length} workspace manifest(s):\n`
+    )
+    for (const ch of fixResult.changes) {
+      console.log(`    • ${ch.pkg} (${ch.workspace})`)
+    }
+    console.log(`\n  ${fixResult.modifiedFiles.length} package.json file(s) updated successfully.\n`)
+    return
+  }
+
+  if (merged.declarePhantoms) {
+    const { declarePhantomDependencies } = await import("../scan/fix.js")
+    if (!result.unused || result.unused.phantoms.length === 0) {
+      console.log("\n  ✔ No phantom dependencies found across monorepo workspaces.\n")
+      return
+    }
+
+    const phantomItems = result.unused.phantoms.map((p) => ({
+      workspace: p.workspace,
+      pkg: p.name,
+      version: p.suggestedVersion || "^latest",
+      type: "prod" as const,
+    }))
+
+    if (merged.dryRun) {
+      console.log(`\n  ⚡ pkg-audit declare-phantoms (dry run)\n`)
+      for (const item of phantomItems) {
+        console.log(`    • Declare '${item.pkg}@${item.version}' in ${item.workspace}`)
+      }
+      console.log(`\n  Run without --dry-run to apply changes.\n`)
+      return
+    }
+
+    const fixResult = await declarePhantomDependencies(dir, phantomItems, result)
+    console.log(`\n  ⚡ pkg-audit declare-phantoms\n`)
+    console.log(
+      `  ✔ Declared ${fixResult.changes.length} phantom package(s) across ${fixResult.modifiedFiles.length} workspace manifest(s):\n`
+    )
+    for (const ch of fixResult.changes) {
+      console.log(`    • ${ch.pkg}@${ch.to} (${ch.workspace})`)
+    }
+    console.log(`\n  ${fixResult.modifiedFiles.length} package.json file(s) updated successfully.\n`)
+    return
+  }
+
   if (merged.json) {
     const json = JSON.stringify(result, null, 2)
     if (merged.jsonFile) {

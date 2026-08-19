@@ -311,6 +311,24 @@ export const IconMaximize: IconComponent = (props) => (
   </Icon>
 )
 
+export const IconTrash: IconComponent = (props) => (
+  <Icon {...props}>
+    <path d="M3 6h18" />
+    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    <line x1="10" x2="10" y1="11" y2="17" />
+    <line x1="14" x2="14" y1="11" y2="17" />
+  </Icon>
+)
+
+export const IconGhost: IconComponent = (props) => (
+  <Icon {...props}>
+    <path d="M9 10h.01" />
+    <path d="M15 10h.01" />
+    <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" />
+  </Icon>
+)
+
 export const IconLogo: IconComponent = ({ size = 20, className }) => (
   <svg
     className={className}

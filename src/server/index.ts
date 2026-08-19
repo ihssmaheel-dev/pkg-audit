@@ -225,20 +225,54 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
       if (url.pathname === "/api/fix" && req.method === "POST") {
         const body = JSON.parse(await readBody(req)) as {
           dir?: string
-          fixes: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
+          action?: "align" | "remove-unused" | "declare-phantom"
+          fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
+          unused?: Array<{ workspace: string; pkg: string; type?: string }>
+          phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
         }
         const targetDir = body.dir ?? resolvedDir
         if (!targetDir) {
           json(res, { error: "No directory selected", code: "NO_DIR" }, 400)
           return
         }
-        if (!body.fixes || !Array.isArray(body.fixes) || body.fixes.length === 0) {
-          json(res, { error: "No fixes provided" }, 400)
-          return
+
+        const { applyFixes, removeUnusedDependencies, declarePhantomDependencies } =
+          await import("../scan/fix.js")
+
+        let fixResult: {
+          ok: boolean
+          modifiedFiles: string[]
+          changes: Array<{
+            workspace: string
+            filePath: string
+            pkg: string
+            from: string
+            to: string
+            depType: string
+          }>
+          errors: Array<{ path: string; error: string }>
         }
 
-        const { applyFixes } = await import("../scan/fix.js")
-        const fixResult = await applyFixes(targetDir, body.fixes)
+        if (body.action === "remove-unused") {
+          if (!body.unused || !Array.isArray(body.unused) || body.unused.length === 0) {
+            json(res, { error: "No unused dependencies provided" }, 400)
+            return
+          }
+          fixResult = await removeUnusedDependencies(targetDir, body.unused)
+        } else if (body.action === "declare-phantom") {
+          if (!body.phantoms || !Array.isArray(body.phantoms) || body.phantoms.length === 0) {
+            json(res, { error: "No phantom dependencies provided" }, 400)
+            return
+          }
+          fixResult = await declarePhantomDependencies(targetDir, body.phantoms)
+        } else {
+          if (!body.fixes || !Array.isArray(body.fixes) || body.fixes.length === 0) {
+            json(res, { error: "No fixes provided" }, 400)
+            return
+          }
+          fixResult = await applyFixes(targetDir, body.fixes)
+        }
+
         const updatedScan = await scan(targetDir, {})
         json(res, {
           ok: fixResult.ok,
