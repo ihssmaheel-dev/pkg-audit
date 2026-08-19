@@ -239,8 +239,8 @@ export function Conflicts({ data, notify, onFix, onCatalogMigrate }: ConflictsPr
         ))}
       </div>
 
-      {/* Conflict cards list */}
-      <div class="flex flex-col gap-3.5">
+      {/* Conflict cards 2-in-a-row grid */}
+      <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
         {conflicts.map((conflict) => {
           const highest = getHighestVersion(conflict)
           const isFixingThis = fixingPkg === conflict.name
@@ -248,42 +248,112 @@ export function Conflicts({ data, notify, onFix, onCatalogMigrate }: ConflictsPr
           return (
             <div
               key={conflict.name}
-              class={`bg-[#101010] border rounded-[8px] overflow-hidden ${
+              class={`bg-[#121212] border rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm ${
                 conflict.severity === "major"
-                  ? "border-l-2 border-l-[#f43f5e] border-[#3d3a39]"
-                  : "border-l-2 border-l-[#f59e0b] border-[#3d3a39]"
+                  ? "border-l-4 border-l-[#f43f5e] border-[#2e2a28]"
+                  : "border-l-4 border-l-[#f59e0b] border-[#2e2a28]"
               }`}
             >
-              {/* Card Header */}
-              <div class="flex items-center gap-3 px-5 py-3.5 bg-[#1a1a1a]/30 flex-wrap">
-                <div
-                  class={`flex items-center justify-center w-6 h-6 rounded-[6px] shrink-0 ${
-                    conflict.severity === "major"
-                      ? "bg-[#f43f5e]/10 text-[#f43f5e] border border-[#f43f5e]/25"
-                      : "bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/25"
-                  }`}
-                >
-                  {conflict.severity === "major" ? (
-                    <IconXCircle size={13} />
-                  ) : (
-                    <IconAlertTriangle size={13} />
-                  )}
+              <div>
+                {/* Card Header */}
+                <div class="flex items-center justify-between gap-3 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <div
+                      class={`flex items-center justify-center w-6 h-6 rounded-[5px] shrink-0 ${
+                        conflict.severity === "major"
+                          ? "bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30"
+                          : "bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30"
+                      }`}
+                    >
+                      {conflict.severity === "major" ? (
+                        <IconXCircle size={13} />
+                      ) : (
+                        <IconAlertTriangle size={13} />
+                      )}
+                    </div>
+                    <div class="min-w-0">
+                      <span class="font-mono font-bold text-sm text-[#ffffff] truncate block">
+                        {conflict.name}
+                      </span>
+                      <span class="text-[10.5px] text-[#8b949e] font-mono">
+                        {conflict.severity === "major" ? "Major semver mismatch" : "Range semver mismatch"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <button
+                      class="flex items-center justify-center w-7 h-7 rounded-[5px] border border-[#303030] bg-[#141414] hover:bg-[#202020] text-[#8b949e] hover:text-[#f2f2f2] transition-colors"
+                      title="Copy as markdown"
+                      onClick={() =>
+                        void copy(conflictsAsMarkdown([conflict]), "Copied conflict as markdown")
+                      }
+                    >
+                      <IconCopy size={12} />
+                    </button>
+                  </div>
                 </div>
-                <div class="min-w-0">
-                  <span class="font-mono font-bold text-[13.5px] text-[#ffffff] block">{conflict.name}</span>
-                  <span class="text-[11px] text-[#8b949e]">
-                    {conflict.severity === "major"
-                      ? "Major version differs across manifests"
-                      : "Range differs across manifests"}
+
+                {/* Versions Occurrences List */}
+                <div class="divide-y divide-[#262626] bg-[#121212]">
+                  {conflict.versions.map((v) => (
+                    <div key={v.version} class="p-3 space-y-2">
+                      <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2">
+                          <code class="font-mono text-[12px] font-bold text-[#00d992] bg-[#00d992]/10 px-1.5 py-0.5 rounded border border-[#00d992]/25">
+                            {v.version}
+                          </code>
+                          <span class="text-[11px] text-[#8b949e]">
+                            ({v.occurrences.length} workspace{v.occurrences.length > 1 ? "s" : ""})
+                          </span>
+                        </div>
+                        {onFix && (
+                          <button
+                            class="h-5 px-2 bg-[#1a1a1a] hover:bg-[#252525] border border-[#3d3a39] hover:border-[#8b949e] text-[#bdbdbd] hover:text-[#ffffff] rounded text-[10px] font-mono transition-colors disabled:opacity-50"
+                            onClick={() =>
+                              void handleApplyFix(
+                                [{ name: conflict.name, targetVersion: v.version }],
+                                `Aligned ${conflict.name} to ${v.version}`
+                              )
+                            }
+                            disabled={fixingPkg !== null}
+                            title={`Set all workspaces to ${v.version}`}
+                          >
+                            Set all
+                          </button>
+                        )}
+                      </div>
+
+                      <div class="flex flex-wrap gap-1.5">
+                        {v.occurrences.map((occ) => (
+                          <div
+                            key={`${occ.workspace}-${v.version}`}
+                            class="flex items-center gap-1.5 px-2 py-1 bg-[#181818] border border-[#2c2a29] rounded-[4px] text-[11px]"
+                          >
+                            <span class="font-medium text-[#bdbdbd]">{occ.workspace}</span>
+                            <span
+                              class={`text-[9px] px-1 py-0.2 rounded font-semibold uppercase ${
+                                TYPE_COLORS[occ.type] ?? "text-[#8b949e]"
+                              }`}
+                            >
+                              {occ.type}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Bottom Quick Align Footer */}
+              {onFix && highest && (
+                <div class="p-3 bg-[#151515] border-t border-[#262626] flex items-center justify-between">
+                  <span class="text-[11px] text-[#8b949e] font-mono">
+                    Highest: <span class="text-[#f2f2f2] font-semibold">{highest}</span>
                   </span>
-                </div>
-
-                <div class="flex-1" />
-
-                {/* Quick Fix Button */}
-                {onFix && highest && (
                   <button
-                    class="flex items-center gap-1.5 h-7 px-3 bg-[#00d992]/10 hover:bg-[#00d992]/20 border border-[#00d992]/40 text-[#00d992] rounded-[6px] text-xs font-semibold transition-colors disabled:opacity-50"
+                    class="flex items-center gap-1.5 h-6 px-2.5 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded-[5px] text-xs font-semibold transition-colors disabled:opacity-50"
                     onClick={() =>
                       void handleApplyFix(
                         [{ name: conflict.name, targetVersion: highest }],
@@ -295,67 +365,8 @@ export function Conflicts({ data, notify, onFix, onCatalogMigrate }: ConflictsPr
                     <IconZap size={11} className={isFixingThis ? "spinner" : ""} />
                     <span>Align to {highest}</span>
                   </button>
-                )}
-
-                <button
-                  class="flex items-center justify-center w-7 h-7 rounded-[6px] border border-transparent hover:bg-[#1a1a1a] hover:border-[#3d3a39] text-[#8b949e] hover:text-[#f2f2f2] transition-colors"
-                  title="Copy as markdown"
-                  onClick={() => void copy(conflictsAsMarkdown([conflict]), "Copied conflict as markdown")}
-                >
-                  <IconCopy size={13} />
-                </button>
-              </div>
-
-              {/* Versions Occurrences Table */}
-              <div class="border-t border-[#3d3a39]">
-                {conflict.versions.map((v) => (
-                  <div key={v.version} class="border-b border-[#3d3a39]/30 last:border-0">
-                    <div class="flex items-center justify-between px-5 py-2 bg-[#101010] border-b border-[#3d3a39]/20 text-xs">
-                      <div class="flex items-center gap-2">
-                        <span class="text-[#8b949e]">Version</span>
-                        <code class="font-mono text-[12px] font-bold text-[#f2f2f2]">{v.version}</code>
-                        <span class="text-[11px] text-[#8b949e]">
-                          ({v.occurrences.length} workspace{v.occurrences.length > 1 ? "s" : ""})
-                        </span>
-                      </div>
-                      {onFix && (
-                        <button
-                          class="h-5 px-2 bg-[#1a1a1a] hover:bg-[#252525] border border-[#3d3a39] hover:border-[#8b949e] text-[#bdbdbd] hover:text-[#ffffff] rounded-[4px] text-[10.5px] font-mono transition-colors disabled:opacity-50"
-                          onClick={() =>
-                            void handleApplyFix(
-                              [{ name: conflict.name, targetVersion: v.version }],
-                              `Aligned ${conflict.name} to ${v.version}`
-                            )
-                          }
-                          disabled={fixingPkg !== null}
-                          title={`Set all workspaces to ${v.version}`}
-                        >
-                          Set all to this
-                        </button>
-                      )}
-                    </div>
-                    {v.occurrences.map((occ) => (
-                      <div
-                        key={`${occ.workspace}-${v.version}`}
-                        class="grid gap-3 px-5 py-2 text-xs hover:bg-[#1a1a1a]/40 transition-colors items-center"
-                        style="grid-template-columns: minmax(0, 1fr) 140px 70px"
-                      >
-                        <span class="font-medium text-[#bdbdbd] overflow-hidden text-ellipsis whitespace-nowrap pl-2">
-                          {occ.workspace}
-                        </span>
-                        <span class="font-mono text-[#8b949e]">{v.version}</span>
-                        <span
-                          class={`inline-flex items-center justify-center h-5 px-2 rounded-full text-[10px] font-semibold uppercase tracking-wider w-fit ${
-                            TYPE_COLORS[occ.type] ?? "bg-[#1a1a1a] text-[#8b949e] border border-[#3d3a39]"
-                          }`}
-                        >
-                          {occ.type}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           )
         })}

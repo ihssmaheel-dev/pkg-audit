@@ -36,20 +36,36 @@ export function Hygiene({ data }: HygieneProps) {
         <h1 class="text-2xl font-normal tracking-[-0.6px] text-[#ffffff]">Manifest Hygiene Issues</h1>
       </div>
 
-      <div class="flex flex-col gap-3">
+      {/* Hygiene issues 2-in-a-row grid */}
+      <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
         {issues.map((issue, i) => (
           <div
             key={`${issue.kind}-${i}`}
-            class="flex items-start gap-4 p-5 bg-[#101010] border border-[#3d3a39] rounded-[8px] hover:border-[#8b949e] transition-colors"
+            class="bg-[#121212] border border-[#2e2a28] border-l-4 border-l-[#f59e0b] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm"
           >
-            <div class="flex items-center justify-center w-8 h-8 rounded-[6px] bg-[#f59e0b]/10 border border-[#f59e0b]/25 text-[#f59e0b] shrink-0 mt-0.5">
-              <IconAlertTriangle size={15} />
-            </div>
             <div>
-              <div class="text-[13.5px] font-semibold text-[#ffffff] mb-1">
-                {KIND_LABELS[issue.kind] ?? issue.kind}
+              {/* Card Header */}
+              <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="flex items-center justify-center w-6 h-6 rounded-[5px] bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 shrink-0">
+                    <IconAlertTriangle size={13} />
+                  </div>
+                  <span class="text-sm font-bold text-[#ffffff] truncate">
+                    {KIND_LABELS[issue.kind] ?? issue.kind}
+                  </span>
+                </div>
+
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 shrink-0">
+                  {issue.kind}
+                </span>
               </div>
-              <div class="text-xs text-[#bdbdbd] leading-relaxed font-mono">{issue.message}</div>
+
+              {/* Card Body */}
+              <div class="p-4">
+                <div class="text-xs text-[#bdbdbd] leading-relaxed font-mono bg-[#161616] p-3 rounded-[6px] border border-[#262626]">
+                  {issue.message}
+                </div>
+              </div>
             </div>
           </div>
         ))}

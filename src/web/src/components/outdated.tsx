@@ -165,40 +165,60 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
         </div>
       </div>
 
-      {/* Outdated list */}
-      <div class="flex flex-col gap-2.5">
+      {/* Outdated cards 2-in-a-row grid */}
+      <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
         {items.map((item) => (
           <div
             key={item.name}
-            class="bg-[#101010] border border-[#3d3a39] rounded-[8px] overflow-hidden hover:border-[#8b949e] transition-colors"
+            class="bg-[#121212] border border-[#2e2a28] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm"
           >
-            <div
-              class="flex items-center gap-3.5 px-5 py-3 cursor-pointer hover:bg-[#1a1a1a]/50 transition-colors"
-              onClick={() => setExpanded(expanded === item.name ? null : item.name)}
-            >
-              <span class={`w-2 h-2 rounded-full shrink-0 ${dotColor(item.status)}`} />
-              <span class="font-mono text-[13px] font-semibold text-[#ffffff] flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                {item.name}
-              </span>
-              <span class="font-mono text-xs text-[#8b949e]">{item.current ?? "—"}</span>
-              <span class="text-[#3d3a39] text-xs">→</span>
-              <span class="font-mono text-xs text-[#f2f2f2] font-medium">{item.latest ?? "—"}</span>
-              <span
-                class={`inline-flex items-center justify-center h-5 px-2.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusStyle(
-                  item.status
-                )}`}
+            <div>
+              {/* Card Header */}
+              <div
+                class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626] cursor-pointer hover:bg-[#202020] transition-colors"
+                onClick={() => setExpanded(expanded === item.name ? null : item.name)}
               >
-                {item.status}
-              </span>
-              <IconChevronRight
-                size={13}
-                className={`text-[#8b949e] transition-transform shrink-0 ${
-                  expanded === item.name ? "rotate-90" : ""
-                }`}
-              />
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class={`w-2 h-2 rounded-full shrink-0 ${dotColor(item.status)}`} />
+                  <span class="font-mono text-sm font-bold text-[#ffffff] truncate">{item.name}</span>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <span
+                    class={`inline-flex items-center justify-center h-5 px-2 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusStyle(
+                      item.status
+                    )}`}
+                  >
+                    {item.status}
+                  </span>
+                  <IconChevronRight
+                    size={13}
+                    className={`text-[#8b949e] transition-transform ${
+                      expanded === item.name ? "rotate-90" : ""
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Card Semver Drift Row */}
+              <div class="p-4 space-y-3">
+                <div class="flex items-center justify-between p-2.5 bg-[#161616] border border-[#262626] rounded-[6px] text-xs font-mono">
+                  <div>
+                    <span class="text-[#8b949e] text-[10.5px] uppercase block">Current</span>
+                    <span class="text-[#f43f5e] font-semibold">{item.current ?? "—"}</span>
+                  </div>
+                  <span class="text-[#8b949e] font-bold">➔</span>
+                  <div class="text-right">
+                    <span class="text-[#8b949e] text-[10.5px] uppercase block">Latest</span>
+                    <span class="text-[#00d992] font-bold">{item.latest ?? "—"}</span>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Expandable Changelog Preview */}
             {expanded === item.name && (
-              <div class="border-t border-[#3d3a39] bg-[#1a1a1a]/40 px-5 py-4">
+              <div class="border-t border-[#262626] bg-[#161616] p-4 text-xs">
                 <ChangelogBlock changelog={item.changelog} />
               </div>
             )}

@@ -327,7 +327,7 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
           No vulnerabilities match the current filter.
         </div>
       ) : (
-        <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
           {filteredVulns.map((vuln) => {
             const sevInfo = SEVERITY_COLORS[vuln.severity]
             const isFixing = fixingPkg === vuln.id
@@ -335,7 +335,7 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
             return (
               <div
                 key={vuln.id}
-                class={`bg-[#121212] border rounded-[8px] overflow-hidden transition-colors ${
+                class={`bg-[#121212] border rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm ${
                   vuln.severity === "CRITICAL"
                     ? "border-l-4 border-l-[#f43f5e] border-[#2e2a28]"
                     : vuln.severity === "HIGH"
@@ -343,9 +343,9 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
                       : "border-l-4 border-l-[#f59e0b] border-[#2e2a28]"
                 }`}
               >
-                <div class="p-4 flex items-start justify-between gap-4 flex-wrap">
-                  <div class="space-y-2 min-w-0 flex-1">
-                    {/* Badge header */}
+                <div>
+                  {/* Card Header */}
+                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626] flex-wrap">
                     <div class="flex items-center gap-2 flex-wrap">
                       <span
                         class={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider font-mono border ${sevInfo.bg} ${sevInfo.text} ${sevInfo.border}`}
@@ -359,67 +359,69 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
                       >
                         {vuln.id}
                       </button>
-                      {vuln.aliases.length > 0 && (
-                        <span class="text-[11px] text-[#8b949e] font-mono">
-                          ({vuln.aliases.slice(0, 2).join(", ")})
-                        </span>
-                      )}
                     </div>
 
-                    {/* Package & Summary */}
-                    <div class="flex items-baseline gap-2 flex-wrap">
+                    <button
+                      class="inline-flex items-center gap-1 text-[11px] text-[#8b949e] hover:text-[#00d992] transition-colors"
+                      onClick={() => setSelectedVuln(vuln)}
+                    >
+                      <IconFileText size={12} />
+                      <span>Advisory ↗</span>
+                    </button>
+                  </div>
+
+                  {/* Card Body */}
+                  <div class="p-4 space-y-3">
+                    {/* Package & Versions */}
+                    <div class="flex items-baseline justify-between gap-2 flex-wrap">
                       <span class="text-sm font-bold font-mono text-[#ffffff]">{vuln.pkg}</span>
-                      <span class="text-xs font-mono text-[#f43f5e] bg-[#f43f5e]/10 border border-[#f43f5e]/25 px-1.5 py-0.5 rounded">
-                        current: {vuln.version}
-                      </span>
-                      {vuln.suggestedVersion && (
-                        <span class="text-xs font-mono text-[#00d992] bg-[#00d992]/10 border border-[#00d992]/25 px-1.5 py-0.5 rounded font-semibold">
-                          safe patch: {vuln.suggestedVersion}
+                      <div class="flex items-center gap-1.5 font-mono text-xs">
+                        <span class="text-[#f43f5e] bg-[#f43f5e]/10 border border-[#f43f5e]/25 px-1.5 py-0.5 rounded">
+                          {vuln.version}
                         </span>
-                      )}
+                        {vuln.suggestedVersion && (
+                          <span class="text-[#00d992] bg-[#00d992]/10 border border-[#00d992]/25 px-1.5 py-0.5 rounded font-semibold">
+                            ➔ {vuln.suggestedVersion}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <div class="text-xs text-[#d1d5db]">{vuln.summary}</div>
+                    <div class="text-xs text-[#bdbdbd] line-clamp-2 leading-relaxed">
+                      {vuln.summary || "Security vulnerability detected in dependency manifest."}
+                    </div>
 
                     {/* Affected Workspaces */}
-                    <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
-                      <span class="text-[11px] text-[#8b949e]">Affected workspaces:</span>
+                    <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span class="text-[10.5px] text-[#8b949e]">Workspaces:</span>
                       {vuln.workspaces.map((w) => (
                         <span
                           key={w.workspace}
-                          class="text-[11px] font-mono px-2 py-0.5 bg-[#1a1a1a] border border-[#302c2a] rounded text-[#8b949e]"
+                          class="text-[10px] font-mono px-1.5 py-0.5 bg-[#181818] border border-[#2c2a29] rounded text-[#8b949e]"
                         >
                           {w.workspace} <span class="text-[#bdbdbd]">({w.type})</span>
                         </span>
                       ))}
                     </div>
-
-                    {/* Open Full Advisory Modal Link */}
-                    <div class="pt-1">
-                      <button
-                        class="inline-flex items-center gap-1.5 text-xs text-[#00d992] hover:text-[#2fd6a1] hover:underline font-medium"
-                        onClick={() => setSelectedVuln(vuln)}
-                      >
-                        <IconFileText size={13} />
-                        <span>View Full Advisory Details (Markdown) ↗</span>
-                      </button>
-                    </div>
                   </div>
-
-                  {/* Fix Action Button */}
-                  {onFix && vuln.suggestedVersion && (
-                    <div class="shrink-0 pt-1">
-                      <button
-                        class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] disabled:opacity-50 text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
-                        onClick={() => void handleFixSingle(vuln)}
-                        disabled={isFixing}
-                      >
-                        <IconWrench size={12} className={isFixing ? "spinner" : ""} />
-                        <span>Upgrade to {vuln.suggestedVersion}</span>
-                      </button>
-                    </div>
-                  )}
                 </div>
+
+                {/* Card Action Footer */}
+                {onFix && vuln.suggestedVersion && (
+                  <div class="p-3 bg-[#151515] border-t border-[#262626] flex items-center justify-between">
+                    <span class="text-[11px] text-[#8b949e] font-mono">
+                      Safe target: <span class="text-[#00d992] font-bold">{vuln.suggestedVersion}</span>
+                    </span>
+                    <button
+                      class="flex items-center gap-1.5 h-6 px-2.5 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded-[5px] text-xs font-semibold transition-colors disabled:opacity-50"
+                      onClick={() => void handleFixSingle(vuln)}
+                      disabled={isFixing}
+                    >
+                      <IconWrench size={11} className={isFixing ? "spinner" : ""} />
+                      <span>Upgrade to {vuln.suggestedVersion}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })}

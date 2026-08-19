@@ -288,7 +288,7 @@ export function DedupeView({ data, loading, notify, onFix }: DedupeViewProps) {
           No duplicate packages match your search filter.
         </div>
       ) : (
-        <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
           {filteredDuplicates.map((pkg) => {
             const targetVersion = strategy === "highest" ? pkg.highestVersion : pkg.mostFrequentVersion
             const isApplying = applyingPkg === pkg.name
@@ -296,65 +296,73 @@ export function DedupeView({ data, loading, notify, onFix }: DedupeViewProps) {
             return (
               <div
                 key={pkg.name}
-                class="bg-[#121212] border border-[#2e2a28] rounded-[8px] p-4 flex items-start justify-between gap-4 flex-wrap hover:border-[#3d3a39] transition-colors"
+                class="bg-[#121212] border border-[#2e2a28] border-l-4 border-l-[#8b5cf6] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm"
               >
-                <div class="space-y-2 min-w-0 flex-1">
-                  <div class="flex items-center gap-2.5 flex-wrap">
-                    <span class="text-sm font-bold font-mono text-[#ffffff]">{pkg.name}</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30">
-                      {pkg.duplicateCount} versions installed
-                    </span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#00d992]/15 text-[#00d992] border border-[#00d992]/30">
-                      unified target: {targetVersion}
-                    </span>
+                <div>
+                  {/* Card Header */}
+                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-sm font-bold font-mono text-[#ffffff] truncate">{pkg.name}</span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#8b5cf6]/15 text-[#a78bfa] border border-[#8b5cf6]/30 shrink-0">
+                        {pkg.duplicateCount} versions
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Versions Table */}
-                  <div class="space-y-1 pt-1">
-                    {pkg.versions.map((verInst) => {
-                      const isTarget = verInst.version === targetVersion
-                      return (
-                        <div
-                          key={verInst.version}
-                          class={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-[5px] border ${
-                            isTarget
-                              ? "bg-[#00d992]/10 border-[#00d992]/30 text-[#ffffff]"
-                              : "bg-[#161616] border-[#252525] text-[#8b949e]"
-                          }`}
-                        >
-                          <div class="flex items-center gap-2">
-                            <span
-                              class={`font-mono font-bold ${isTarget ? "text-[#00d992]" : "text-[#d1d5db]"}`}
-                            >
-                              {verInst.version}
-                            </span>
-                            {isTarget && (
-                              <span class="text-[10px] uppercase font-mono tracking-wider font-semibold text-[#00d992]">
-                                (Target)
+                  {/* Card Body with Versions List */}
+                  <div class="p-4 space-y-2">
+                    <div class="text-[10.5px] text-[#8b949e] font-mono uppercase tracking-wider">
+                      Transitive Installations:
+                    </div>
+                    <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {pkg.versions.map((verInst) => {
+                        const isTarget = verInst.version === targetVersion
+                        return (
+                          <div
+                            key={verInst.version}
+                            class={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-[5px] border ${
+                              isTarget
+                                ? "bg-[#00d992]/10 border-[#00d992]/30 text-[#ffffff]"
+                                : "bg-[#161616] border-[#252525] text-[#8b949e]"
+                            }`}
+                          >
+                            <div class="flex items-center gap-2">
+                              <span
+                                class={`font-mono font-bold ${isTarget ? "text-[#00d992]" : "text-[#d1d5db]"}`}
+                              >
+                                {verInst.version}
                               </span>
+                              {isTarget && (
+                                <span class="text-[10px] uppercase font-mono tracking-wider font-semibold text-[#00d992]">
+                                  (Target)
+                                </span>
+                              )}
+                            </div>
+
+                            {verInst.dependents.length > 0 && (
+                              <div class="text-[10.5px] text-[#6e7681] truncate max-w-[150px] font-mono">
+                                via {verInst.dependents.join(", ")}
+                              </div>
                             )}
                           </div>
-
-                          {verInst.dependents.length > 0 && (
-                            <div class="text-[11px] text-[#6e7681] truncate max-w-md font-mono">
-                              via: {verInst.dependents.join(", ")}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
 
-                {/* 1-Click Single Override Button */}
+                {/* 1-Click Single Override Footer */}
                 {onFix && (
-                  <div class="shrink-0 pt-1">
+                  <div class="p-3 bg-[#151515] border-t border-[#262626] flex items-center justify-between">
+                    <span class="text-[11px] text-[#8b949e] font-mono">
+                      Collapse to: <span class="text-[#00d992] font-bold">{targetVersion}</span>
+                    </span>
                     <button
-                      class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992] hover:bg-[#2fd6a1] disabled:opacity-50 text-[#101010] rounded-[6px] text-xs font-semibold transition-colors"
+                      class="flex items-center gap-1.5 h-6 px-2.5 bg-[#8b5cf6]/20 hover:bg-[#8b5cf6]/30 border border-[#8b5cf6]/40 text-[#a78bfa] rounded-[5px] text-xs font-semibold transition-colors disabled:opacity-50"
                       onClick={() => void handleApplySingle(pkg)}
                       disabled={isApplying}
                     >
-                      <IconWrench size={12} className={isApplying ? "spinner" : ""} />
+                      <IconWrench size={11} className={isApplying ? "spinner" : ""} />
                       <span>Override to {targetVersion}</span>
                     </button>
                   </div>

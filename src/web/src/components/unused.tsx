@@ -353,7 +353,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                 </span>
               </div>
 
-              <div class="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+              <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
                 {filteredPhantoms.map((p) => {
                   const fixKey = `phantom:${p.workspace}:${p.name}`
                   const isFixing = fixing === fixKey
@@ -366,37 +366,31 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                   return (
                     <div
                       key={fixKey}
-                      class="bg-[#121212] border border-[#f43f5e]/40 rounded-[8px] p-4 flex flex-col justify-between space-y-3 relative group hover:border-[#f43f5e] transition-colors"
+                      class="bg-[#121212] border border-[#2e2a28] border-l-4 border-l-[#f43f5e] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm"
                     >
                       <div>
-                        <div class="flex items-start justify-between gap-2 mb-1.5">
-                          <div class="min-w-0">
-                            <span class="font-mono font-bold text-sm text-[#ffffff] flex items-center gap-1.5">
-                              <span>{p.name}</span>
-                              <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30">
-                                UNDECLARED
-                              </span>
-                              {isRootScript && (
-                                <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[#00d992]/15 text-[#00d992] border border-[#00d992]/30">
-                                  SCRIPT / TOOLING
-                                </span>
-                              )}
+                        {/* Card Header */}
+                        <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="font-mono font-bold text-sm text-[#ffffff] truncate">{p.name}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30 shrink-0">
+                              UNDECLARED
                             </span>
-                            <div class="font-mono text-xs text-[#8b949e] flex items-center gap-1 mt-0.5">
-                              <IconFolder size={11} className="text-[#605c5a]" />
-                              <span>{normalizePath(p.workspace)}</span>
-                            </div>
+                            {isRootScript && (
+                              <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[#00d992]/15 text-[#00d992] border border-[#00d992]/30 shrink-0">
+                                SCRIPT
+                              </span>
+                            )}
                           </div>
 
-                          {p.hoistedFrom && (
-                            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1c1c1c] border border-[#3d3a39] text-[#8b949e] shrink-0">
-                              hoisted from {p.hoistedFrom}
-                            </span>
-                          )}
+                          <div class="font-mono text-xs text-[#8b949e] flex items-center gap-1 shrink-0">
+                            <IconFolder size={11} className="text-[#605c5a]" />
+                            <span>{normalizePath(p.workspace)}</span>
+                          </div>
                         </div>
 
-                        {/* List of imported files */}
-                        <div class="mt-2.5 space-y-1">
+                        {/* Card Body */}
+                        <div class="p-4 space-y-2.5">
                           <div class="text-[10px] uppercase font-bold text-[#8b949e]">
                             Imported in ({p.files.length} file{p.files.length > 1 ? "s" : ""}):
                           </div>
@@ -412,9 +406,9 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                       </div>
 
                       {/* Bottom Action Footer */}
-                      <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-[#2e2a28]">
+                      <div class="p-3 bg-[#151515] border-t border-[#262626] flex items-center justify-between gap-2">
                         <div class="flex items-center gap-1.5">
-                          <span class="text-[11px] text-[#8b949e]">Version:</span>
+                          <span class="text-[11px] text-[#8b949e] font-mono">Ver:</span>
                           <input
                             type="text"
                             value={targetVer}
@@ -424,7 +418,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                                 [`${p.workspace}:${p.name}`]: (e.target as HTMLInputElement).value,
                               })
                             }
-                            class="w-24 h-6 px-2 bg-[#1a1a1a] border border-[#3d3a39] rounded text-xs font-mono text-[#ffffff] focus:outline-none focus:border-[#00d992]"
+                            class="w-20 h-6 px-2 bg-[#1a1a1a] border border-[#3d3a39] rounded text-xs font-mono text-[#ffffff] focus:outline-none focus:border-[#00d992]"
                           />
                         </div>
 
@@ -432,15 +426,15 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                           <button
                             disabled={fixing !== null}
                             onClick={() => handleDeclarePhantom(p)}
-                            class="h-6 px-2.5 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50"
+                            class="h-6 px-2.5 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50"
                           >
-                            <IconPlus size={12} />
+                            <IconPlus size={11} />
                             <span>
                               {isFixing
                                 ? "Declaring..."
                                 : isRootScript
-                                  ? "Declare in root devDeps"
-                                  : "Declare in package.json"}
+                                  ? "Declare root"
+                                  : "Declare in manifest"}
                             </span>
                           </button>
                         )}
@@ -471,7 +465,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                 </span>
               </div>
 
-              <div class="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+              <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
                 {filteredUnused.map((u) => {
                   const fixKey = `unused:${u.workspace}:${u.name}`
                   const isFixing = fixing === fixKey
@@ -480,47 +474,55 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                   return (
                     <div
                       key={fixKey}
-                      class={`bg-[#121212] border rounded-[8px] p-3.5 flex items-center justify-between gap-3 transition-colors ${
-                        isProd
-                          ? "border-[#f59e0b]/40 hover:border-[#f59e0b]"
-                          : "border-[#3d3a39] hover:border-[#8b949e]"
+                      class={`bg-[#121212] border border-[#2e2a28] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm ${
+                        isProd ? "border-l-4 border-l-[#f59e0b]" : "border-l-4 border-l-[#8b949e]"
                       }`}
                     >
-                      <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                          <span class="font-mono font-bold text-sm text-[#ffffff] truncate">{u.name}</span>
-                          <span class="font-mono text-xs text-[#8b949e]">{u.version}</span>
-                          <span
-                            class={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
-                              isProd
-                                ? "bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30"
-                                : "bg-[#1c1c1c] text-[#8b949e] border border-[#3d3a39]"
-                            }`}
-                          >
-                            {u.type}
-                          </span>
-                          {u.isDevTool && (
-                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono text-[#8b949e] bg-[#1c1c1c] border border-[#3d3a39]">
-                              dev tool
+                      <div>
+                        {/* Card Header */}
+                        <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="font-mono font-bold text-sm text-[#ffffff] truncate">{u.name}</span>
+                            <span class="font-mono text-xs text-[#8b949e]">{u.version}</span>
+                            <span
+                              class={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
+                                isProd
+                                  ? "bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30"
+                                  : "bg-[#1c1c1c] text-[#8b949e] border border-[#3d3a39]"
+                              }`}
+                            >
+                              {u.type}
                             </span>
-                          )}
+                          </div>
+
+                          <div class="font-mono text-xs text-[#8b949e] flex items-center gap-1 shrink-0">
+                            <IconFolder size={11} className="text-[#605c5a]" />
+                            <span>{normalizePath(u.workspace)}</span>
+                          </div>
                         </div>
 
-                        <div class="font-mono text-xs text-[#8b949e] flex items-center gap-1 mt-1">
-                          <IconFolder size={11} className="text-[#605c5a]" />
-                          <span>{normalizePath(u.workspace)}</span>
+                        {/* Card Body */}
+                        <div class="p-4 space-y-1">
+                          <div class="text-xs text-[#bdbdbd]">
+                            {isProd
+                              ? "Declared in production dependencies but not detected in imports."
+                              : "Declared in devDependencies or configuration scripts."}
+                          </div>
                         </div>
                       </div>
 
+                      {/* Card Action Footer */}
                       {onFix && (
-                        <button
-                          disabled={fixing !== null}
-                          onClick={() => handleRemoveUnused(u)}
-                          class="h-6 px-2.5 bg-[#f43f5e]/15 hover:bg-[#f43f5e]/25 border border-[#f43f5e]/40 text-[#f43f5e] rounded text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50 shrink-0"
-                        >
-                          <IconTrash size={12} />
-                          <span>{isFixing ? "Removing..." : "Remove"}</span>
-                        </button>
+                        <div class="p-3 bg-[#151515] border-t border-[#262626] flex items-center justify-end">
+                          <button
+                            disabled={fixing !== null}
+                            onClick={() => handleRemoveUnused(u)}
+                            class="h-6 px-2.5 bg-[#f43f5e]/15 hover:bg-[#f43f5e]/25 border border-[#f43f5e]/40 text-[#f43f5e] rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50 shrink-0"
+                          >
+                            <IconTrash size={11} />
+                            <span>{isFixing ? "Removing..." : "Remove from package.json"}</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   )

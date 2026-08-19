@@ -288,24 +288,29 @@ export function LicensesView({ data, notify }: LicensesViewProps) {
           No packages match the selected license and scope filters.
         </div>
       ) : (
-        <div class="space-y-2.5">
+        <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
           {filteredPackages.map((pkg) => {
             const isStrong = pkg.riskLevel === "strong-copyleft"
             const isWeak = pkg.riskLevel === "weak-copyleft"
 
+            let borderClass = "border-l-4 border-l-[#00d992]"
             let badgeClass = "bg-[#00d992]/15 text-[#00d992] border-[#00d992]/30"
             let badgeText = "Permissive"
 
             if (isStrong) {
+              borderClass = "border-l-4 border-l-[#f43f5e]"
               badgeClass = "bg-[#f43f5e]/15 text-[#f43f5e] border-[#f43f5e]/30 font-bold"
               badgeText = "Strong Copyleft"
             } else if (isWeak) {
+              borderClass = "border-l-4 border-l-[#f59e0b]"
               badgeClass = "bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30"
               badgeText = "Weak Copyleft"
             } else if (pkg.riskLevel === "proprietary") {
+              borderClass = "border-l-4 border-l-[#8b949e]"
               badgeClass = "bg-[#8b949e]/15 text-[#8b949e] border-[#8b949e]/30"
               badgeText = "Proprietary"
             } else if (pkg.riskLevel === "unknown") {
+              borderClass = "border-l-4 border-l-[#8b949e]"
               badgeClass = "bg-[#8b949e]/15 text-[#8b949e] border-[#8b949e]/30"
               badgeText = "Unknown"
             }
@@ -313,71 +318,83 @@ export function LicensesView({ data, notify }: LicensesViewProps) {
             return (
               <div
                 key={pkg.name}
-                class={`bg-[#121212] border rounded-[8px] p-4 flex items-start justify-between gap-4 flex-wrap hover:border-[#3d3a39] transition-colors ${
-                  isStrong && pkg.isProd ? "border-[#f43f5e]/40 bg-[#f43f5e]/5" : "border-[#2e2a28]"
+                class={`bg-[#121212] border border-[#2e2a28] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm ${borderClass} ${
+                  isStrong && pkg.isProd ? "bg-[#f43f5e]/5" : ""
                 }`}
               >
-                <div class="space-y-1.5 min-w-0 flex-1">
-                  <div class="flex items-center gap-2.5 flex-wrap">
-                    <span class="text-sm font-bold font-mono text-[#ffffff]">{pkg.name}</span>
-                    <span class="text-xs font-mono text-[#8b949e]">v{pkg.version}</span>
-                    <span class={`px-2 py-0.5 rounded text-[10px] font-mono border ${badgeClass}`}>
-                      {pkg.spdxId} ({badgeText})
-                    </span>
-                    {pkg.isProd ? (
-                      <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30">
-                        PROD
+                <div>
+                  {/* Card Header */}
+                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-sm font-bold font-mono text-[#ffffff] truncate">{pkg.name}</span>
+                      <span class="text-xs font-mono text-[#8b949e]">v{pkg.version}</span>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 shrink-0">
+                      <span class={`px-2 py-0.5 rounded text-[10px] font-mono border ${badgeClass}`}>
+                        {pkg.spdxId} ({badgeText})
                       </span>
-                    ) : (
-                      <span class="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8b949e] bg-[#202020] border border-[#303030]">
-                        dev
-                      </span>
-                    )}
+                      {pkg.isProd ? (
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30">
+                          PROD
+                        </span>
+                      ) : (
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8b949e] bg-[#202020] border border-[#303030]">
+                          dev
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {pkg.description && <p class="text-xs text-[#8b949e] line-clamp-1">{pkg.description}</p>}
-
-                  {/* Metadata Row */}
-                  <div class="flex items-center gap-4 text-xs text-[#6e7681] flex-wrap pt-0.5">
-                    {pkg.author && (
-                      <div>
-                        <span class="text-[#8b949e]">Author:</span> {pkg.author}
-                      </div>
+                  {/* Card Body */}
+                  <div class="p-4 space-y-2.5">
+                    {pkg.description && (
+                      <p class="text-xs text-[#bdbdbd] line-clamp-2 leading-relaxed">{pkg.description}</p>
                     )}
-                    <div>
-                      <span class="text-[#8b949e]">Used in:</span>{" "}
-                      <span class="font-mono text-[#d1d5db]">
-                        {pkg.workspaces.map((w) => w.workspace).join(", ")}
-                      </span>
+
+                    <div class="space-y-1 text-xs text-[#8b949e]">
+                      {pkg.author && (
+                        <div class="truncate">
+                          <span class="text-[#6e7681]">Author:</span> {pkg.author}
+                        </div>
+                      )}
+                      <div>
+                        <span class="text-[#6e7681]">Workspaces:</span>{" "}
+                        <span class="font-mono text-[#d1d5db]">
+                          {pkg.workspaces.map((w) => w.workspace).join(", ")}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* External links */}
-                <div class="flex items-center gap-2 shrink-0 pt-0.5">
-                  {pkg.repository && (
-                    <a
-                      href={pkg.repository}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="flex items-center gap-1 text-xs text-[#8b949e] hover:text-[#ffffff] px-2 py-1 bg-[#181818] border border-[#303030] rounded-[5px] transition-colors"
-                    >
-                      <IconExternalLink size={11} />
-                      <span>Repo</span>
-                    </a>
-                  )}
-                  {pkg.homepage && (
-                    <a
-                      href={pkg.homepage}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="flex items-center gap-1 text-xs text-[#8b949e] hover:text-[#ffffff] px-2 py-1 bg-[#181818] border border-[#303030] rounded-[5px] transition-colors"
-                    >
-                      <IconExternalLink size={11} />
-                      <span>Docs</span>
-                    </a>
-                  )}
-                </div>
+                {/* External links footer */}
+                {(pkg.repository || pkg.homepage) && (
+                  <div class="p-3 bg-[#151515] border-t border-[#262626] flex items-center justify-end gap-2">
+                    {pkg.repository && (
+                      <a
+                        href={pkg.repository}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex items-center gap-1 text-xs text-[#8b949e] hover:text-[#ffffff] px-2 py-1 bg-[#1a1a1a] border border-[#303030] rounded-[5px] transition-colors"
+                      >
+                        <IconExternalLink size={11} />
+                        <span>Repository ↗</span>
+                      </a>
+                    )}
+                    {pkg.homepage && (
+                      <a
+                        href={pkg.homepage}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex items-center gap-1 text-xs text-[#8b949e] hover:text-[#ffffff] px-2 py-1 bg-[#1a1a1a] border border-[#303030] rounded-[5px] transition-colors"
+                      >
+                        <IconExternalLink size={11} />
+                        <span>Homepage ↗</span>
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
