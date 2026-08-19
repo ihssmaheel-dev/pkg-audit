@@ -17,6 +17,9 @@ const IGNORED_DIR_NAMES = new Set([
   ".cache",
   ".output",
   ".system_generated",
+  ".husky",
+  ".vscode",
+  ".idea",
 ])
 
 const SOURCE_EXTENSIONS = new Set([
@@ -48,6 +51,7 @@ const NODE_BUILTINS = new Set([
   "domain",
   "events",
   "fs",
+  "fs/promises",
   "http",
   "http2",
   "https",
@@ -56,6 +60,8 @@ const NODE_BUILTINS = new Set([
   "net",
   "os",
   "path",
+  "path/posix",
+  "path/win32",
   "perf_hooks",
   "process",
   "punycode",
@@ -63,14 +69,18 @@ const NODE_BUILTINS = new Set([
   "readline",
   "repl",
   "stream",
+  "stream/promises",
+  "stream/web",
   "string_decoder",
   "test",
   "timers",
+  "timers/promises",
   "tls",
   "trace_events",
   "tty",
   "url",
   "util",
+  "util/types",
   "v8",
   "vm",
   "wasi",
@@ -112,18 +122,75 @@ const DEV_TOOL_PATTERNS = [
   /^@swc\//,
   /^changesets/,
   /^@changesets\//,
+  /^@commitlint\//,
+  /^commitlint/,
+  /^dependency-cruiser/,
+  /^type-fest$/,
+  /^pino-pretty$/,
+  /^reflect-metadata$/,
 ]
 
 export function isDevToolPackage(name: string, type: DepType): boolean {
-  if (type !== "dev") return false
+  if (type === "dev") return true
+  // Even in prod dependencies, some tools/types/polyfills are known non-import or framework runtime plugins
   return DEV_TOOL_PATTERNS.some((pattern) => pattern.test(name))
 }
 
 /**
- * Parses raw import/require specifier into root package name.
- * Returns null if the specifier is a relative/local path or a Node/runtime builtin.
+ * Loads tsconfig / jsconfig compilerOptions.paths to detect custom path aliases.
  */
-export function extractPackageName(specifier: string): string | null {
+export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier: string) => boolean {
+  const aliasPrefixes: string[] = []
+
+  const checkFile = (filePath: string) => {
+    if (!fs.existsSync(filePath)) return
+    try {
+      const raw = fs.readFileSync(filePath, "utf8")
+      // Strip comments for JSON parsing
+      const cleanJson = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "")
+      const parsed = JSON.parse(cleanJson) as {
+        compilerOptions?: { paths?: Record<string, string[]> }
+      }
+      const paths = parsed.compilerOptions?.paths
+      if (paths && typeof paths === "object") {
+        for (const aliasKey of Object.keys(paths)) {
+          const prefix = aliasKey.replace(/\*.*$/, "")
+          if (prefix) aliasPrefixes.push(prefix)
+        }
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }
+
+  checkFile(path.join(wsDir, "tsconfig.json"))
+  checkFile(path.join(wsDir, "jsconfig.json"))
+  if (wsDir !== rootDir) {
+    checkFile(path.join(rootDir, "tsconfig.json"))
+    checkFile(path.join(rootDir, "jsconfig.json"))
+  }
+
+  return (specifier: string): boolean => {
+    // Universal path alias conventions
+    if (
+      specifier.startsWith("@/") ||
+      specifier.startsWith("~/") ||
+      specifier.startsWith("#/") ||
+      specifier.startsWith("$/") ||
+      specifier.startsWith("@@/")
+    ) {
+      return true
+    }
+
+    return aliasPrefixes.some((prefix) => specifier.startsWith(prefix))
+  }
+}
+
+/**
+ * Parses raw import/require specifier into root package name.
+ * Returns null if the specifier is a relative/local path, an alias, or a Node/runtime builtin.
+ */
+export function extractPackageName(specifier: string, isAlias?: (spec: string) => boolean): string | null {
   const trimmed = specifier.trim()
   if (!trimmed) return null
 
@@ -132,12 +199,18 @@ export function extractPackageName(specifier: string): string | null {
     trimmed.startsWith(".") ||
     trimmed.startsWith("/") ||
     trimmed.startsWith("~") ||
-    trimmed.startsWith("#")
+    trimmed.startsWith("#") ||
+    trimmed.startsWith("$")
   ) {
     return null
   }
 
-  // Ignore node:* and bun:* protocols
+  // Check custom tsconfig path aliases
+  if (isAlias && isAlias(trimmed)) {
+    return null
+  }
+
+  // Ignore node:*, bun:*, deno:* protocols
   if (trimmed.startsWith("node:") || trimmed.startsWith("bun:") || trimmed.startsWith("deno:")) {
     return null
   }
@@ -149,11 +222,12 @@ export function extractPackageName(specifier: string): string | null {
 
   // Scoped package: @scope/pkg or @scope/pkg/subpath
   if (trimmed.startsWith("@")) {
+    if (trimmed.startsWith("@/")) return null // Path alias
     const parts = trimmed.split("/")
     if (parts.length >= 2) {
       return `${parts[0]}/${parts[1]}`
     }
-    return trimmed
+    return null
   }
 
   // Non-scoped package: pkg or pkg/subpath
@@ -165,14 +239,14 @@ export function extractPackageName(specifier: string): string | null {
   return trimmed
 }
 
-// Regex patterns to capture import/require/export specifiers
+// Regex patterns to capture import/require/export/plugin specifiers across ES/CJS/CSS/Frameworks
 const IMPORT_EXPORT_REGEX =
-  /(?:import\s+(?:type\s+)?(?:[\s\w*$,{}]+from\s+)?|export\s+(?:[\s\w*$,{}]+from\s+)?|import\s*\(\s*|require\s*\(\s*|require\.resolve\s*\(\s*)["']([^"']+)["']/g
+  /(?:import\s+(?:type\s+)?(?:[\s\w*$,{}]+from\s+)?|export\s+(?:[\s\w*$,{}]+from\s+)?|import\s*\(\s*|require\s*\(\s*|require\.resolve\s*\(\s*|import\s+["']|@import\s+["'])["']([^"']+)["']/g
 
 /**
  * Extracts all external package names imported in a source file content.
  */
-export function extractImportsFromContent(content: string): Set<string> {
+export function extractImportsFromContent(content: string, isAlias?: (spec: string) => boolean): Set<string> {
   const packages = new Set<string>()
   let match: RegExpExecArray | null
 
@@ -182,7 +256,7 @@ export function extractImportsFromContent(content: string): Set<string> {
   while ((match = IMPORT_EXPORT_REGEX.exec(content)) !== null) {
     const specifier = match[1]
     if (!specifier) continue
-    const pkg = extractPackageName(specifier)
+    const pkg = extractPackageName(specifier, isAlias)
     if (pkg) {
       packages.add(pkg)
     }
@@ -192,11 +266,12 @@ export function extractImportsFromContent(content: string): Set<string> {
 }
 
 /**
- * Recursively collects all source files within a directory, respecting ignore lists.
+ * Recursively collects all source files within a workspace directory,
+ * explicitly skipping child workspace directories to prevent cross-workspace contamination.
  */
 export async function collectSourceFiles(
   dir: string,
-  baseDir: string = dir,
+  childWorkspaceDirs: Set<string>,
   results: string[] = []
 ): Promise<string[]> {
   let entries: fs.Dirent[]
@@ -207,14 +282,25 @@ export async function collectSourceFiles(
   }
 
   for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+
     if (entry.isDirectory()) {
-      if (!IGNORED_DIR_NAMES.has(entry.name) && !entry.name.startsWith(".")) {
-        await collectSourceFiles(path.join(dir, entry.name), baseDir, results)
+      // Skip ignored directories (node_modules, dist, etc.)
+      if (IGNORED_DIR_NAMES.has(entry.name) || entry.name.startsWith(".")) {
+        continue
       }
+
+      // CRITICAL: Skip any subdirectory that is another registered workspace in the monorepo
+      const normalizedPath = path.resolve(fullPath).toLowerCase()
+      if (childWorkspaceDirs.has(normalizedPath)) {
+        continue
+      }
+
+      await collectSourceFiles(fullPath, childWorkspaceDirs, results)
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase()
       if (SOURCE_EXTENSIONS.has(ext)) {
-        results.push(path.join(dir, entry.name))
+        results.push(fullPath)
       }
     }
   }
@@ -233,6 +319,18 @@ export async function scanWorkspaceDependencies(
   const unused: UnusedDependency[] = []
   let totalFilesScanned = 0
 
+  // Index all workspace absolute directory paths for strict boundary isolation
+  const allWorkspaceDirPaths = new Map<string, string>()
+  const monorepoPackageNames = new Set<string>()
+
+  for (const ws of workspaces) {
+    const wsDir = ws.absPath ? path.dirname(ws.absPath) : path.resolve(rootDir, ws.relPath)
+    allWorkspaceDirPaths.set(ws.relPath, path.resolve(wsDir).toLowerCase())
+    if (ws.name) {
+      monorepoPackageNames.add(ws.name)
+    }
+  }
+
   // Index all declared dependencies across the monorepo for hoisting lookups
   const globalDepVersions = new Map<string, { version: string; workspace: string }[]>()
   for (const ws of workspaces) {
@@ -249,7 +347,17 @@ export async function scanWorkspaceDependencies(
 
   for (const ws of workspaces) {
     const wsDir = ws.absPath ? path.dirname(ws.absPath) : path.resolve(rootDir, ws.relPath)
-    const sourceFiles = await collectSourceFiles(wsDir)
+
+    // Build the set of OTHER workspace directories that this workspace must NOT traverse into
+    const childWorkspaceDirs = new Set<string>()
+    for (const [otherRelPath, otherAbsDir] of allWorkspaceDirPaths.entries()) {
+      if (otherRelPath !== ws.relPath) {
+        childWorkspaceDirs.add(otherAbsDir)
+      }
+    }
+
+    const isAlias = loadPathAliasMatcher(wsDir, rootDir)
+    const sourceFiles = await collectSourceFiles(wsDir, childWorkspaceDirs)
     totalFilesScanned += sourceFiles.length
 
     // Map: importedPackage -> Set of relative file paths where imported
@@ -263,7 +371,7 @@ export async function scanWorkspaceDependencies(
         continue
       }
 
-      const fileImports = extractImportsFromContent(content)
+      const fileImports = extractImportsFromContent(content, isAlias)
       const relFilePath = path.relative(rootDir, filePath).replace(/\\/g, "/")
 
       for (const pkg of fileImports) {
@@ -276,25 +384,32 @@ export async function scanWorkspaceDependencies(
 
     // 1. Detect Phantom (Undeclared) Dependencies
     for (const [importedPkg, fileSet] of importedInFiles.entries()) {
-      // Valid if declared in workspace
+      // Valid if declared in this workspace's manifest
       if (ws.deps[importedPkg]) continue
 
-      // Valid if self-reference (workspace imports its own name)
+      // Valid if self-reference (workspace imports its own package name)
       if (ws.name && ws.name === importedPkg) continue
 
-      // Valid if it's an internal workspace protocol or package from monorepo (when imported via relative or internal alias)
-      // Check if it's hoisted from root or sibling
+      // If it's a monorepo workspace package that is imported but missing in deps:
+      const isInternalMonorepoPkg = monorepoPackageNames.has(importedPkg)
+
+      // Look up hoisting source
       const globalMatches = globalDepVersions.get(importedPkg) ?? []
       let suggestedVersion: string | null = null
       let hoistedFrom: string | null = null
 
-      const rootMatch = globalMatches.find((m) => m.workspace === ".")
-      if (rootMatch) {
-        suggestedVersion = rootMatch.version
-        hoistedFrom = "Root workspace"
-      } else if (globalMatches.length > 0) {
-        suggestedVersion = globalMatches[0]!.version
-        hoistedFrom = globalMatches[0]!.workspace
+      if (isInternalMonorepoPkg) {
+        suggestedVersion = "workspace:*"
+        hoistedFrom = "Monorepo workspace"
+      } else {
+        const rootMatch = globalMatches.find((m) => m.workspace === ".")
+        if (rootMatch) {
+          suggestedVersion = rootMatch.version
+          hoistedFrom = "Root workspace"
+        } else if (globalMatches.length > 0) {
+          suggestedVersion = globalMatches[0]!.version
+          hoistedFrom = globalMatches[0]!.workspace
+        }
       }
 
       phantoms.push({
@@ -308,7 +423,7 @@ export async function scanWorkspaceDependencies(
 
     // 2. Detect Unused Dependencies
     for (const [depName, depRecord] of Object.entries(ws.deps)) {
-      // If it was imported anywhere in source files, it is used
+      // If it was imported anywhere in this workspace's source files, it is used
       if (importedInFiles.has(depName)) continue
 
       const isDevTool = isDevToolPackage(depName, depRecord.type)

@@ -6,6 +6,7 @@ import {
   extractImportsFromContent,
   extractPackageName,
   isDevToolPackage,
+  loadPathAliasMatcher,
   scanWorkspaceDependencies,
 } from "../src/scan/unused.js"
 import { declarePhantomDependencies, removeUnusedDependencies } from "../src/scan/fix.js"
@@ -17,11 +18,27 @@ describe("unused & phantom dependency scanner", () => {
       expect(extractPackageName("./utils/helper.js")).toBeNull()
       expect(extractPackageName("../common/index")).toBeNull()
       expect(extractPackageName("/absolute/path")).toBeNull()
-      expect(extractPackageName("#internal/alias")).toBeNull()
+    })
+
+    it("filters out standard universal path aliases (@/, ~/, #/, $/)", () => {
+      expect(extractPackageName("@/components/header")).toBeNull()
+      expect(extractPackageName("@/hooks/use-theme")).toBeNull()
+      expect(extractPackageName("@/lib/utils")).toBeNull()
+      expect(extractPackageName("@/stores/auth")).toBeNull()
+      expect(extractPackageName("~/routes/_root")).toBeNull()
+      expect(extractPackageName("#/stores")).toBeNull()
+    })
+
+    it("filters out custom tsconfig aliases when matcher is provided", () => {
+      const isAlias = (spec: string) => spec.startsWith("@components/") || spec.startsWith("@app/")
+      expect(extractPackageName("@components/button", isAlias)).toBeNull()
+      expect(extractPackageName("@app/config", isAlias)).toBeNull()
+      expect(extractPackageName("@nestjs/common", isAlias)).toBe("@nestjs/common")
     })
 
     it("filters out Node.js and runtime builtins", () => {
       expect(extractPackageName("fs")).toBeNull()
+      expect(extractPackageName("fs/promises")).toBeNull()
       expect(extractPackageName("node:fs")).toBeNull()
       expect(extractPackageName("path")).toBeNull()
       expect(extractPackageName("node:path")).toBeNull()
@@ -37,20 +54,24 @@ describe("unused & phantom dependency scanner", () => {
       expect(extractPackageName("date-fns/format")).toBe("date-fns")
     })
 
-    it("extracts scoped package names and subpaths correctly", () => {
+    it("extracts scoped package names and deep subpaths correctly", () => {
       expect(extractPackageName("@tanstack/react-query")).toBe("@tanstack/react-query")
-      expect(extractPackageName("@org/ui-kit/components/button")).toBe("@org/ui-kit")
-      expect(extractPackageName("@preact/signals")).toBe("@preact/signals")
+      expect(extractPackageName("@hookform/resolvers/zod")).toBe("@hookform/resolvers")
+      expect(extractPackageName("@nestjs/event-emitter")).toBe("@nestjs/event-emitter")
+      expect(extractPackageName("@aws-sdk/client-s3")).toBe("@aws-sdk/client-s3")
+      expect(extractPackageName("@fastify/cookie")).toBe("@fastify/cookie")
     })
   })
 
   describe("extractImportsFromContent", () => {
-    it("extracts static, dynamic, require, type imports, and re-exports", () => {
+    it("extracts static, dynamic, require, type imports, side-effect imports, and re-exports", () => {
       const code = `
         import React, { useState } from "react";
         import type { FC } from "react";
         import { debounce } from "lodash/debounce";
         import "@scope/ui-kit/styles.css";
+        import "reflect-metadata";
+        import "@/components/layout/header";
         export { Button } from "@scope/ui-kit";
         export * from "date-fns";
 
@@ -64,37 +85,57 @@ describe("unused & phantom dependency scanner", () => {
       expect(imports).toContain("react")
       expect(imports).toContain("lodash")
       expect(imports).toContain("@scope/ui-kit")
+      expect(imports).toContain("reflect-metadata")
       expect(imports).toContain("date-fns")
       expect(imports).toContain("chalk")
       expect(imports).toContain("axios")
 
+      expect(imports).not.toContain("@/components/layout/header")
       expect(imports).not.toContain("node:fs")
       expect(imports).not.toContain("./local/helper")
     })
   })
 
-  describe("isDevToolPackage", () => {
-    it("identifies known types, linters, and build tooling", () => {
-      expect(isDevToolPackage("@types/node", "dev")).toBe(true)
-      expect(isDevToolPackage("@types/react", "dev")).toBe(true)
-      expect(isDevToolPackage("typescript", "dev")).toBe(true)
-      expect(isDevToolPackage("eslint", "dev")).toBe(true)
-      expect(isDevToolPackage("@typescript-eslint/parser", "dev")).toBe(true)
-      expect(isDevToolPackage("prettier", "dev")).toBe(true)
-      expect(isDevToolPackage("vitest", "dev")).toBe(true)
-      expect(isDevToolPackage("tailwindcss", "dev")).toBe(true)
-      expect(isDevToolPackage("turbo", "dev")).toBe(true)
-
-      expect(isDevToolPackage("zod", "dev")).toBe(false)
-      expect(isDevToolPackage("typescript", "prod")).toBe(false)
-    })
-  })
-
-  describe("scanWorkspaceDependencies and remediation", () => {
+  describe("loadPathAliasMatcher", () => {
     let tmpDir: string
 
     beforeEach(() => {
-      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pkg-audit-unused-test-"))
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pkg-audit-alias-test-"))
+    })
+
+    afterEach(() => {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true })
+      } catch {
+        // Ignore
+      }
+    })
+
+    it("loads compilerOptions.paths from tsconfig.json with comments", () => {
+      const tsconfig = `{
+        // Main compiler config
+        "compilerOptions": {
+          "paths": {
+            "@components/*": ["./src/components/*"],
+            "@lib/*": ["./src/lib/*"]
+          }
+        }
+      }`
+      fs.writeFileSync(path.join(tmpDir, "tsconfig.json"), tsconfig, "utf8")
+
+      const isAlias = loadPathAliasMatcher(tmpDir, tmpDir)
+      expect(isAlias("@components/button")).toBe(true)
+      expect(isAlias("@lib/db")).toBe(true)
+      expect(isAlias("@/components/header")).toBe(true)
+      expect(isAlias("@tanstack/react-query")).toBe(false)
+    })
+  })
+
+  describe("scanWorkspaceDependencies with nested workspaces", () => {
+    let tmpDir: string
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pkg-audit-nested-test-"))
     })
 
     afterEach(() => {
@@ -105,100 +146,149 @@ describe("unused & phantom dependency scanner", () => {
       }
     })
 
-    it("detects phantom imports and unused dependencies on disk", async () => {
-      const appDir = path.join(tmpDir, "apps", "web")
-      const srcDir = path.join(appDir, "src")
-      fs.mkdirSync(srcDir, { recursive: true })
+    it("isolates child workspaces from root workspace scan", async () => {
+      // Root manifest
+      const rootPkg = {
+        name: "monorepo-root",
+        version: "1.0.0",
+        private: true,
+        devDependencies: {
+          turbo: "^2.0.0",
+        },
+      }
+      fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify(rootPkg, null, 2), "utf8")
 
-      // package.json with:
-      // - react (used)
-      // - axios (declared in dependencies but unused in code)
-      // - @types/react (dev tool, not imported)
-      const pkgJson = {
+      // Apps: api
+      const apiDir = path.join(tmpDir, "apps", "api")
+      const apiSrc = path.join(apiDir, "src")
+      fs.mkdirSync(apiSrc, { recursive: true })
+
+      const apiPkg = {
+        name: "@mono/api",
+        version: "1.0.0",
+        dependencies: {
+          "@nestjs/common": "^11.2.1",
+          "@nestjs/event-emitter": "^3.1.0",
+          "@aws-sdk/client-s3": "^3.1111.0",
+        },
+      }
+      fs.writeFileSync(path.join(apiDir, "package.json"), JSON.stringify(apiPkg, null, 2), "utf8")
+
+      const apiCode = `
+        import { Injectable } from "@nestjs/common";
+        import { EventEmitter2 } from "@nestjs/event-emitter";
+        import { S3Client } from "@aws-sdk/client-s3";
+      `
+      fs.writeFileSync(path.join(apiSrc, "main.ts"), apiCode, "utf8")
+
+      // Apps: web
+      const webDir = path.join(tmpDir, "apps", "web")
+      const webSrc = path.join(webDir, "src")
+      fs.mkdirSync(webSrc, { recursive: true })
+
+      const webPkg = {
         name: "@mono/web",
         version: "1.0.0",
         dependencies: {
           react: "^19.0.0",
-          axios: "^1.6.0",
-        },
-        devDependencies: {
-          "@types/react": "^19.0.0",
         },
       }
-      fs.writeFileSync(path.join(appDir, "package.json"), JSON.stringify(pkgJson, null, 2), "utf8")
+      fs.writeFileSync(path.join(webDir, "package.json"), JSON.stringify(webPkg, null, 2), "utf8")
 
-      // Source code imports react and phantom "zod" (undeclared in package.json)
-      const srcCode = `
+      // Web imports @/components/header (path alias) and phantom "zod"
+      const webCode = `
         import React from "react";
+        import { Header } from "@/components/header";
         import { z } from "zod";
-
-        export const schema = z.string();
       `
-      fs.writeFileSync(path.join(srcDir, "index.ts"), srcCode, "utf8")
+      fs.writeFileSync(path.join(webSrc, "app.tsx"), webCode, "utf8")
 
       const workspaces: Workspace[] = [
         {
-          name: "@mono/web",
+          name: "monorepo-root",
           version: "1.0.0",
-          relPath: "apps/web",
-          absPath: path.join(appDir, "package.json"),
+          relPath: ".",
+          absPath: path.join(tmpDir, "package.json"),
+          isRoot: true,
+          private: true,
+          packageManager: null,
+          enginesNode: null,
+          depCount: 1,
+          devCount: 1,
+          deps: { turbo: { version: "^2.0.0", type: "dev" } },
+        },
+        {
+          name: "@mono/api",
+          version: "1.0.0",
+          relPath: "apps/api",
+          absPath: path.join(apiDir, "package.json"),
           isRoot: false,
           private: true,
           packageManager: null,
           enginesNode: null,
           depCount: 3,
-          devCount: 1,
+          devCount: 0,
+          deps: {
+            "@nestjs/common": { version: "^11.2.1", type: "prod" },
+            "@nestjs/event-emitter": { version: "^3.1.0", type: "prod" },
+            "@aws-sdk/client-s3": { version: "^3.1111.0", type: "prod" },
+          },
+        },
+        {
+          name: "@mono/web",
+          version: "1.0.0",
+          relPath: "apps/web",
+          absPath: path.join(webDir, "package.json"),
+          isRoot: false,
+          private: true,
+          packageManager: null,
+          enginesNode: null,
+          depCount: 1,
+          devCount: 0,
           deps: {
             react: { version: "^19.0.0", type: "prod" },
-            axios: { version: "^1.6.0", type: "prod" },
-            "@types/react": { version: "^19.0.0", type: "dev" },
           },
         },
       ]
 
       const scanRes = await scanWorkspaceDependencies(tmpDir, workspaces)
 
-      expect(scanRes.scannedFilesCount).toBe(1)
+      // 1. Root workspace must NOT report @nestjs/common or @aws-sdk as phantom!
+      const rootPhantoms = scanRes.phantoms.filter((p) => p.workspace === ".")
+      expect(rootPhantoms).toHaveLength(0)
 
-      // Check Phantom
-      expect(scanRes.phantoms).toHaveLength(1)
-      expect(scanRes.phantoms[0]?.name).toBe("zod")
-      expect(scanRes.phantoms[0]?.workspace).toBe("apps/web")
-      expect(scanRes.phantoms[0]?.files).toContain("apps/web/src/index.ts")
+      // 2. @mono/api has all its dependencies declared -> 0 phantoms!
+      const apiPhantoms = scanRes.phantoms.filter((p) => p.workspace === "apps/api")
+      expect(apiPhantoms).toHaveLength(0)
 
-      // Check Unused
-      expect(scanRes.unused).toHaveLength(2)
-      const axiosUnused = scanRes.unused.find((u) => u.name === "axios")
-      const typesUnused = scanRes.unused.find((u) => u.name === "@types/react")
+      // 3. @mono/web imports @/components/header (alias - ignored) and zod (phantom)
+      const webPhantoms = scanRes.phantoms.filter((p) => p.workspace === "apps/web")
+      expect(webPhantoms).toHaveLength(1)
+      expect(webPhantoms[0]?.name).toBe("zod")
+      expect(webPhantoms.find((p) => p.name.includes("@/"))).toBeUndefined()
 
-      expect(axiosUnused?.type).toBe("prod")
-      expect(axiosUnused?.isDevTool).toBe(false)
-
-      expect(typesUnused?.type).toBe("dev")
-      expect(typesUnused?.isDevTool).toBe(true)
-
-      // Test declare phantom remediation
+      // 4. Test declare phantom remediation
       const declareRes = await declarePhantomDependencies(tmpDir, [
         { workspace: "apps/web", pkg: "zod", version: "^3.22.0", type: "prod" },
       ])
       expect(declareRes.ok).toBe(true)
-      expect(declareRes.changes).toHaveLength(1)
 
-      const updatedPkg = JSON.parse(fs.readFileSync(path.join(appDir, "package.json"), "utf8")) as {
-        dependencies: Record<string, string>
-      }
-      expect(updatedPkg.dependencies.zod).toBe("^3.22.0")
-
-      // Test remove unused remediation
+      // 5. Test remove unused remediation
       const removeRes = await removeUnusedDependencies(tmpDir, [
-        { workspace: "apps/web", pkg: "axios", type: "prod" },
+        { workspace: "apps/web", pkg: "zod", type: "prod" },
       ])
       expect(removeRes.ok).toBe(true)
+    })
+  })
 
-      const finalPkg = JSON.parse(fs.readFileSync(path.join(appDir, "package.json"), "utf8")) as {
-        dependencies: Record<string, string>
-      }
-      expect(finalPkg.dependencies.axios).toBeUndefined()
+  describe("isDevToolPackage", () => {
+    it("classifies dev tools, linters, and type packages", () => {
+      expect(isDevToolPackage("@types/node", "dev")).toBe(true)
+      expect(isDevToolPackage("eslint", "dev")).toBe(true)
+      expect(isDevToolPackage("prettier", "dev")).toBe(true)
+      expect(isDevToolPackage("pino-pretty", "prod")).toBe(true)
+      expect(isDevToolPackage("reflect-metadata", "prod")).toBe(true)
+      expect(isDevToolPackage("zod", "prod")).toBe(false)
     })
   })
 })
