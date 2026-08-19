@@ -170,12 +170,12 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
         {items.map((item) => (
           <div
             key={item.name}
-            class="bg-[#121212] border border-[#2e2a28] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm"
+            class="bg-[#101010] border border-[#2b2726] hover:border-[#4d4845] rounded-[8px] overflow-hidden flex flex-col justify-between transition-all duration-150 shadow-sm"
           >
             <div>
               {/* Card Header */}
               <div
-                class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626] cursor-pointer hover:bg-[#202020] transition-colors"
+                class="flex items-center justify-between gap-2 px-4 py-3 bg-[#151515] border-b border-[#242120] cursor-pointer hover:bg-[#1a1a1a] transition-colors"
                 onClick={() => setExpanded(expanded === item.name ? null : item.name)}
               >
                 <div class="flex items-center gap-2 min-w-0">

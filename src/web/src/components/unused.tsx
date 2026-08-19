@@ -366,11 +366,11 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                   return (
                     <div
                       key={fixKey}
-                      class="bg-[#121212] border border-[#2e2a28] border-l-4 border-l-[#f43f5e] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm"
+                      class="bg-[#101010] border border-[#2b2726] hover:border-[#4d4845] rounded-[8px] overflow-hidden flex flex-col justify-between transition-all duration-150 shadow-sm"
                     >
                       <div>
                         {/* Card Header */}
-                        <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                        <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#151515] border-b border-[#242120]">
                           <div class="flex items-center gap-2 min-w-0">
                             <span class="font-mono font-bold text-sm text-[#ffffff] truncate">{p.name}</span>
                             <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30 shrink-0">
@@ -474,13 +474,11 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                   return (
                     <div
                       key={fixKey}
-                      class={`bg-[#121212] border border-[#2e2a28] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm ${
-                        isProd ? "border-l-4 border-l-[#f59e0b]" : "border-l-4 border-l-[#8b949e]"
-                      }`}
+                      class="bg-[#101010] border border-[#2b2726] hover:border-[#4d4845] rounded-[8px] overflow-hidden flex flex-col justify-between transition-all duration-150 shadow-sm"
                     >
                       <div>
                         {/* Card Header */}
-                        <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                        <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#151515] border-b border-[#242120]">
                           <div class="flex items-center gap-2 min-w-0">
                             <span class="font-mono font-bold text-sm text-[#ffffff] truncate">{u.name}</span>
                             <span class="font-mono text-xs text-[#8b949e]">{u.version}</span>

@@ -296,11 +296,11 @@ export function DedupeView({ data, loading, notify, onFix }: DedupeViewProps) {
             return (
               <div
                 key={pkg.name}
-                class="bg-[#121212] border border-[#2e2a28] border-l-4 border-l-[#8b5cf6] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm"
+                class="bg-[#101010] border border-[#2b2726] hover:border-[#4d4845] rounded-[8px] overflow-hidden flex flex-col justify-between transition-all duration-150 shadow-sm"
               >
                 <div>
                   {/* Card Header */}
-                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#151515] border-b border-[#242120]">
                     <div class="flex items-center gap-2 min-w-0">
                       <span class="text-sm font-bold font-mono text-[#ffffff] truncate">{pkg.name}</span>
                       <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-[#8b5cf6]/15 text-[#a78bfa] border border-[#8b5cf6]/30 shrink-0">

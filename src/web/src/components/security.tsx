@@ -335,17 +335,11 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
             return (
               <div
                 key={vuln.id}
-                class={`bg-[#121212] border rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm ${
-                  vuln.severity === "CRITICAL"
-                    ? "border-l-4 border-l-[#f43f5e] border-[#2e2a28]"
-                    : vuln.severity === "HIGH"
-                      ? "border-l-4 border-l-[#f97316] border-[#2e2a28]"
-                      : "border-l-4 border-l-[#f59e0b] border-[#2e2a28]"
-                }`}
+                class="bg-[#101010] border border-[#2b2726] hover:border-[#4d4845] rounded-[8px] overflow-hidden flex flex-col justify-between transition-all duration-150 shadow-sm"
               >
                 <div>
                   {/* Card Header */}
-                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626] flex-wrap">
+                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#151515] border-b border-[#242120] flex-wrap">
                     <div class="flex items-center gap-2 flex-wrap">
                       <span
                         class={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider font-mono border ${sevInfo.bg} ${sevInfo.text} ${sevInfo.border}`}

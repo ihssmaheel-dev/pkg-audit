@@ -293,24 +293,19 @@ export function LicensesView({ data, notify }: LicensesViewProps) {
             const isStrong = pkg.riskLevel === "strong-copyleft"
             const isWeak = pkg.riskLevel === "weak-copyleft"
 
-            let borderClass = "border-l-4 border-l-[#00d992]"
             let badgeClass = "bg-[#00d992]/15 text-[#00d992] border-[#00d992]/30"
             let badgeText = "Permissive"
 
             if (isStrong) {
-              borderClass = "border-l-4 border-l-[#f43f5e]"
               badgeClass = "bg-[#f43f5e]/15 text-[#f43f5e] border-[#f43f5e]/30 font-bold"
               badgeText = "Strong Copyleft"
             } else if (isWeak) {
-              borderClass = "border-l-4 border-l-[#f59e0b]"
               badgeClass = "bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30"
               badgeText = "Weak Copyleft"
             } else if (pkg.riskLevel === "proprietary") {
-              borderClass = "border-l-4 border-l-[#8b949e]"
               badgeClass = "bg-[#8b949e]/15 text-[#8b949e] border-[#8b949e]/30"
               badgeText = "Proprietary"
             } else if (pkg.riskLevel === "unknown") {
-              borderClass = "border-l-4 border-l-[#8b949e]"
               badgeClass = "bg-[#8b949e]/15 text-[#8b949e] border-[#8b949e]/30"
               badgeText = "Unknown"
             }
@@ -318,13 +313,11 @@ export function LicensesView({ data, notify }: LicensesViewProps) {
             return (
               <div
                 key={pkg.name}
-                class={`bg-[#121212] border border-[#2e2a28] rounded-[8px] overflow-hidden flex flex-col justify-between hover:border-[#4d4947] transition-all shadow-sm ${borderClass} ${
-                  isStrong && pkg.isProd ? "bg-[#f43f5e]/5" : ""
-                }`}
+                class="bg-[#101010] border border-[#2b2726] hover:border-[#4d4845] rounded-[8px] overflow-hidden flex flex-col justify-between transition-all duration-150 shadow-sm"
               >
                 <div>
                   {/* Card Header */}
-                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#181818] border-b border-[#262626]">
+                  <div class="flex items-center justify-between gap-2 px-4 py-3 bg-[#151515] border-b border-[#242120]">
                     <div class="flex items-center gap-2 min-w-0">
                       <span class="text-sm font-bold font-mono text-[#ffffff] truncate">{pkg.name}</span>
                       <span class="text-xs font-mono text-[#8b949e]">v{pkg.version}</span>
