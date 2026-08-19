@@ -1,12 +1,14 @@
-import { useMemo, useRef, useState } from "preact/hooks"
+import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 import type { ScanResult, WorkspaceGraphNode } from "../../../types"
 import {
   IconAlertTriangle,
   IconCheckCircle,
   IconCopy,
+  IconExternalLink,
   IconMaximize,
   IconRepeat,
   IconSearch,
+  IconX,
   IconZoomIn,
   IconZoomOut,
 } from "./icons"
@@ -22,34 +24,62 @@ interface LayoutNode extends WorkspaceGraphNode {
   y: number
   width: number
   height: number
+  category: "app" | "package" | "root" | "other"
 }
 
-const CARD_WIDTH = 230
-const CARD_HEIGHT = 76
-const COL_SPACING = 340
-const ROW_SPACING = 100
+const CARD_WIDTH = 240
+const CARD_HEIGHT = 86
+const COL_SPACING = 360
+const ROW_SPACING = 110
 const PADDING = 60
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/")
+}
+
+function getCategory(relPath: string, isRoot: boolean): "app" | "package" | "root" | "other" {
+  if (isRoot) return "root"
+  const norm = normalizePath(relPath).toLowerCase()
+  if (norm.startsWith("apps/") || norm.includes("/apps/")) return "app"
+  if (norm.startsWith("packages/") || norm.includes("/packages/")) return "package"
+  return "other"
+}
 
 export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [pan, setPan] = useState({ x: 40, y: 40 })
   const [isPanning, setIsPanning] = useState(false)
   const [startPan, setStartPan] = useState({ x: 0, y: 0 })
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [selectedCycleIdx, setSelectedCycleIdx] = useState<number | null>(null)
+  const [filterMode, setFilterMode] = useState<"all" | "connected">("all")
 
   const graph = data.graph ?? { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 0 }
 
-  // Compute layered layout positions
+  // Filter nodes based on connected toggle or search
+  const visibleNodes = useMemo(() => {
+    return graph.nodes.filter((node) => {
+      if (filterMode === "connected") {
+        const hasLinks = node.deps.length > 0 || node.dependedBy.length > 0
+        if (!hasLinks) return false
+      }
+      return true
+    })
+  }, [graph.nodes, filterMode])
+
+  // Compute multi-column balanced topological layout
   const layout = useMemo(() => {
-    const nodes = graph.nodes
+    // Separate connected nodes from standalone nodes for clean organization
+    const connectedNodes = visibleNodes.filter((n) => n.deps.length > 0 || n.dependedBy.length > 0)
+    const standaloneNodes = visibleNodes.filter((n) => n.deps.length === 0 && n.dependedBy.length === 0)
+
     const layers = new Map<number, WorkspaceGraphNode[]>()
 
-    // Group nodes by depth
-    for (const node of nodes) {
+    // Group connected nodes by depth
+    for (const node of connectedNodes) {
       const d = node.depth ?? 0
       if (!layers.has(d)) layers.set(d, [])
       layers.get(d)!.push(node)
@@ -58,15 +88,18 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
     const positionedNodes: LayoutNode[] = []
     const nodePositionMap = new Map<string, LayoutNode>()
 
-    const sortedDepths = Array.from(layers.keys()).sort((a, b) => b - a) // Highest depth (apps) on left, lowest (helpers) on right
-    let maxColY = 0
+    const sortedDepths = Array.from(layers.keys()).sort((a, b) => b - a) // Highest depth (apps) on left
+    let maxConnectedX = PADDING
+    let maxConnectedY = PADDING
 
     sortedDepths.forEach((depth, colIdx) => {
       const colNodes = layers.get(depth) ?? []
       colNodes.sort((a, b) => a.relPath.localeCompare(b.relPath))
 
+      const x = PADDING + colIdx * COL_SPACING
+      if (x + CARD_WIDTH > maxConnectedX) maxConnectedX = x + CARD_WIDTH
+
       colNodes.forEach((node, rowIdx) => {
-        const x = PADDING + colIdx * COL_SPACING
         const y = PADDING + rowIdx * ROW_SPACING
         const layoutNode: LayoutNode = {
           ...node,
@@ -74,23 +107,67 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
           y,
           width: CARD_WIDTH,
           height: CARD_HEIGHT,
+          category: getCategory(node.relPath, node.isRoot),
         }
         positionedNodes.push(layoutNode)
         nodePositionMap.set(node.relPath, layoutNode)
-        if (y + CARD_HEIGHT > maxColY) maxColY = y + CARD_HEIGHT
+        if (y + CARD_HEIGHT > maxConnectedY) maxConnectedY = y + CARD_HEIGHT
       })
     })
 
-    const totalWidth = PADDING * 2 + Math.max(1, sortedDepths.length) * COL_SPACING
-    const totalHeight = PADDING * 2 + maxColY
+    // Layout standalone nodes in balanced 2-column or 3-column grid
+    if (standaloneNodes.length > 0) {
+      const startX = connectedNodes.length > 0 ? maxConnectedX + 100 : PADDING
+      const cols = 2
+      const standaloneColSpacing = CARD_WIDTH + 24
+
+      standaloneNodes.forEach((node, idx) => {
+        const col = idx % cols
+        const row = Math.floor(idx / cols)
+        const x = startX + col * standaloneColSpacing
+        const y = PADDING + row * (CARD_HEIGHT + 20)
+
+        const layoutNode: LayoutNode = {
+          ...node,
+          x,
+          y,
+          width: CARD_WIDTH,
+          height: CARD_HEIGHT,
+          category: getCategory(node.relPath, node.isRoot),
+        }
+        positionedNodes.push(layoutNode)
+        nodePositionMap.set(node.relPath, layoutNode)
+        if (x + CARD_WIDTH > maxConnectedX) maxConnectedX = x + CARD_WIDTH
+        if (y + CARD_HEIGHT > maxConnectedY) maxConnectedY = y + CARD_HEIGHT
+      })
+    }
 
     return {
       nodes: positionedNodes,
       nodeMap: nodePositionMap,
-      width: Math.max(900, totalWidth),
-      height: Math.max(600, totalHeight),
+      width: Math.max(1000, maxConnectedX + PADDING),
+      height: Math.max(650, maxConnectedY + PADDING),
+      connectedCount: connectedNodes.length,
+      standaloneCount: standaloneNodes.length,
     }
-  }, [graph])
+  }, [visibleNodes])
+
+  // Fit to screen on initial mount
+  useEffect(() => {
+    if (!containerRef.current || layout.nodes.length === 0) return
+    const containerW = containerRef.current.clientWidth || 900
+    const containerH = containerRef.current.clientHeight || 600
+
+    const scaleX = (containerW - 80) / layout.width
+    const scaleY = (containerH - 80) / layout.height
+    const initialZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.5), 1.1)
+
+    setZoom(Number(initialZoom.toFixed(2)))
+    setPan({
+      x: Math.max(30, (containerW - layout.width * initialZoom) / 2),
+      y: Math.max(30, (containerH - layout.height * initialZoom) / 2),
+    })
+  }, [layout.width, layout.height, layout.nodes.length])
 
   // Active highlighted relationships
   const activeRelPath = selectedNode || hoveredNode
@@ -125,7 +202,6 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
     for (let i = 0; i < cycle.path.length - 1; i++) {
       const uName = cycle.path[i]!
       const vName = cycle.path[i + 1]!
-      // find relPaths
       const uWs = data.workspaces.find((w) => w.name === uName || w.relPath === uName)
       const vWs = data.workspaces.find((w) => w.name === vName || w.relPath === vName)
       if (uWs && vWs) {
@@ -154,16 +230,25 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
 
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault()
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9
-    const newZoom = Math.min(Math.max(0.3, zoom * zoomFactor), 2.5)
-    setZoom(newZoom)
+    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92
+    const newZoom = Math.min(Math.max(0.25, zoom * zoomFactor), 2.5)
+    setZoom(Number(newZoom.toFixed(2)))
   }
 
-  const resetView = () => {
-    setZoom(1)
-    setPan({ x: 0, y: 0 })
-    setSelectedNode(null)
-    setSelectedCycleIdx(null)
+  const fitView = () => {
+    if (!containerRef.current) return
+    const containerW = containerRef.current.clientWidth || 900
+    const containerH = containerRef.current.clientHeight || 600
+
+    const scaleX = (containerW - 80) / layout.width
+    const scaleY = (containerH - 80) / layout.height
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.4), 1.1)
+
+    setZoom(Number(targetZoom.toFixed(2)))
+    setPan({
+      x: Math.max(30, (containerW - layout.width * targetZoom) / 2),
+      y: Math.max(30, (containerH - layout.height * targetZoom) / 2),
+    })
   }
 
   const copyCycleAsText = (path: string[]) => {
@@ -172,9 +257,11 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
     notify(`Copied cycle: ${text}`)
   }
 
+  const selectedNodeObj = selectedNode ? data.workspaces.find((w) => w.relPath === selectedNode) : null
+
   return (
     <div class="space-y-4 w-full select-none">
-      {/* Header */}
+      {/* Top Header */}
       <div class="flex items-center justify-between flex-wrap gap-4">
         <div>
           <div class="text-xs font-semibold uppercase tracking-[2.52px] text-[#00d992] mb-1">
@@ -190,11 +277,11 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
             <span class="font-mono font-bold text-[#ffffff]">{graph.nodes.length}</span>
           </div>
           <div class="flex items-center gap-2 h-8 px-3 bg-[#101010] border border-[#3d3a39] rounded-[6px] text-xs">
-            <span class="text-[#8b949e]">Connections:</span>
+            <span class="text-[#8b949e]">Internal Links:</span>
             <span class="font-mono font-bold text-[#00d992]">{graph.edges.length}</span>
           </div>
           <div class="flex items-center gap-2 h-8 px-3 bg-[#101010] border border-[#3d3a39] rounded-[6px] text-xs">
-            <span class="text-[#8b949e]">Max Depth:</span>
+            <span class="text-[#8b949e]">Hierarchy Depth:</span>
             <span class="font-mono font-bold text-[#f2f2f2]">{graph.maxDepth + 1} layers</span>
           </div>
           <div
@@ -278,24 +365,44 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
         </div>
       )}
 
-      {/* Graph Toolbar & Search */}
+      {/* Graph Toolbar: Search, Focus Toggle, Zoom Controls */}
       <div class="flex items-center justify-between gap-3 bg-[#101010] border border-[#3d3a39] px-4 py-2.5 rounded-[8px] flex-wrap">
         <div class="flex items-center gap-3">
-          <div class="relative w-64">
+          {/* Search Box */}
+          <div class="relative w-60">
             <IconSearch size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8b949e]" />
             <input
               type="text"
-              placeholder="Search workspaces in graph..."
+              placeholder="Filter workspaces..."
               value={search}
               onInput={(e) => setSearch((e.target as HTMLInputElement).value)}
               class="w-full h-7 pl-8 pr-2.5 bg-[#1a1a1a] border border-[#3d3a39] rounded-[6px] text-xs text-[#ffffff] placeholder-[#8b949e] focus:outline-none focus:border-[#00d992]"
             />
           </div>
-          {search && (
-            <button class="text-xs text-[#8b949e] hover:text-[#ffffff]" onClick={() => setSearch("")}>
-              Clear
+
+          {/* Connected vs All Filter Switcher */}
+          <div class="flex items-center bg-[#1a1a1a] p-0.5 border border-[#3d3a39] rounded-[6px]">
+            <button
+              class={`px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors ${
+                filterMode === "all"
+                  ? "bg-[#252525] text-[#ffffff] shadow-sm"
+                  : "text-[#8b949e] hover:text-[#f2f2f2]"
+              }`}
+              onClick={() => setFilterMode("all")}
+            >
+              All ({graph.nodes.length})
             </button>
-          )}
+            <button
+              class={`px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors ${
+                filterMode === "connected"
+                  ? "bg-[#252525] text-[#ffffff] shadow-sm"
+                  : "text-[#8b949e] hover:text-[#f2f2f2]"
+              }`}
+              onClick={() => setFilterMode("connected")}
+            >
+              Connected ({layout.connectedCount})
+            </button>
+          </div>
         </div>
 
         <div class="flex items-center gap-2">
@@ -315,25 +422,28 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
               Clear Selection
             </button>
           )}
+
           <div class="h-4 w-px bg-[#3d3a39]" />
+
+          {/* Zoom Buttons */}
           <button
             class="p-1.5 bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] text-[#8b949e] hover:text-[#ffffff] rounded-[6px] transition-colors"
             title="Zoom In"
-            onClick={() => setZoom((z) => Math.min(2.5, z + 0.15))}
+            onClick={() => setZoom((z) => Math.min(2.5, Number((z + 0.15).toFixed(2))))}
           >
             <IconZoomIn size={14} />
           </button>
           <button
             class="p-1.5 bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] text-[#8b949e] hover:text-[#ffffff] rounded-[6px] transition-colors"
             title="Zoom Out"
-            onClick={() => setZoom((z) => Math.max(0.3, z - 0.15))}
+            onClick={() => setZoom((z) => Math.max(0.25, Number((z - 0.15).toFixed(2))))}
           >
             <IconZoomOut size={14} />
           </button>
           <button
             class="p-1.5 bg-[#1a1a1a] border border-[#3d3a39] hover:border-[#8b949e] text-[#8b949e] hover:text-[#ffffff] rounded-[6px] transition-colors"
-            title="Reset View"
-            onClick={resetView}
+            title="Fit to Screen"
+            onClick={fitView}
           >
             <IconMaximize size={14} />
           </button>
@@ -341,259 +451,388 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
         </div>
       </div>
 
-      {/* Interactive SVG Canvas */}
-      <div
-        ref={containerRef}
-        class="relative w-full h-[620px] bg-[#0c0c0c] border border-[#3d3a39] rounded-[8px] overflow-hidden cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-      >
-        {/* Subtle background grid pattern */}
+      {/* Main Interactive Canvas Area */}
+      <div class="relative w-full h-[640px] bg-[#0c0c0c] border border-[#3d3a39] rounded-[8px] overflow-hidden">
+        {/* Drag/Pan Canvas Viewport */}
         <div
-          class="absolute inset-0 pointer-events-none opacity-20"
-          style={{
-            backgroundImage: `radial-gradient(#3d3a39 1px, transparent 1px)`,
-            backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
-            backgroundPosition: `${pan.x}px ${pan.y}px`,
-          }}
-        />
-
-        <svg
-          class="w-full h-full"
-          style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            transformOrigin: "0 0",
-          }}
+          ref={containerRef}
+          class="w-full h-full cursor-grab active:cursor-grabbing"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onWheel={handleWheel}
         >
-          <defs>
-            {/* Standard Arrow Marker */}
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="8"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3d3a39" />
-            </marker>
+          {/* Subtle Grid Dot Pattern */}
+          <div
+            class="absolute inset-0 pointer-events-none opacity-25"
+            style={{
+              backgroundImage: `radial-gradient(#3d3a39 1px, transparent 1px)`,
+              backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+              backgroundPosition: `${pan.x}px ${pan.y}px`,
+            }}
+          />
 
-            {/* Active Green Arrow Marker */}
-            <marker
-              id="arrow-active"
-              viewBox="0 0 10 10"
-              refX="8"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#00d992" />
-            </marker>
+          <svg
+            class="w-full h-full overflow-visible"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "0 0",
+            }}
+          >
+            <defs>
+              {/* Directed Arrow Markers */}
+              <marker
+                id="arrow-default"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#4b4745" />
+              </marker>
 
-            {/* Circular Red Arrow Marker */}
-            <marker
-              id="arrow-circular"
-              viewBox="0 0 10 10"
-              refX="8"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#f43f5e" />
-            </marker>
-          </defs>
+              <marker
+                id="arrow-green"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#00d992" />
+              </marker>
 
-          {/* Edges / Curved Connectors */}
-          <g>
-            {graph.edges.map((edge) => {
-              const fromNode = layout.nodeMap.get(edge.from)
-              const toNode = layout.nodeMap.get(edge.to)
-              if (!fromNode || !toNode) return null
+              <marker
+                id="arrow-cyan"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38bdf8" />
+              </marker>
 
-              const edgeKey = `${edge.from}->${edge.to}`
-              const isCircular = edge.isCircular
-              const isActive = activeRelations?.activeEdges.has(edgeKey)
-              const isCycleFocus = focusedCycle?.cycleEdges.has(edgeKey)
+              <marker
+                id="arrow-red"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#f43f5e" />
+              </marker>
+            </defs>
 
-              const x1 = fromNode.x + fromNode.width
-              const y1 = fromNode.y + fromNode.height / 2
-              const x2 = toNode.x
-              const y2 = toNode.y + toNode.height / 2
+            {/* Render Connectors / Edges */}
+            <g>
+              {graph.edges.map((edge) => {
+                const fromNode = layout.nodeMap.get(edge.from)
+                const toNode = layout.nodeMap.get(edge.to)
+                if (!fromNode || !toNode) return null
 
-              // Compute Bezier Curve
-              let pathData = ""
-              if (x1 <= x2) {
-                // Forward L-to-R connection
-                const midX = (x1 + x2) / 2
-                pathData = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`
-              } else {
-                // Backward / Loop connection (circular or cross-layer)
-                const curveOffset = 60
-                pathData = `M ${x1} ${y1} C ${x1 + curveOffset} ${y1 - 60}, ${x2 - curveOffset} ${y2 - 60}, ${x2} ${y2}`
-              }
+                const edgeKey = `${edge.from}->${edge.to}`
+                const isCircular = edge.isCircular
+                const isOutgoing = activeRelPath === edge.from
+                const isIncoming = activeRelPath === edge.to
+                const isCycleFocus = focusedCycle?.cycleEdges.has(edgeKey)
 
-              let strokeColor = "#3d3a39"
-              let strokeWidth = 1.5
-              let markerEnd = "url(#arrow)"
-              let opacity = 0.5
+                const x1 = fromNode.x + fromNode.width
+                const y1 = fromNode.y + fromNode.height / 2
+                const x2 = toNode.x
+                const y2 = toNode.y + toNode.height / 2
 
-              if (isCycleFocus) {
-                strokeColor = "#f43f5e"
-                strokeWidth = 2.5
-                markerEnd = "url(#arrow-circular)"
-                opacity = 1
-              } else if (isCircular) {
-                strokeColor = "#f43f5e"
-                strokeWidth = 2
-                markerEnd = "url(#arrow-circular)"
-                opacity = 0.9
-              } else if (isActive) {
-                strokeColor = "#00d992"
-                strokeWidth = 2.2
-                markerEnd = "url(#arrow-active)"
-                opacity = 1
-              } else if (activeRelPath) {
-                opacity = 0.12
-              }
+                // Smooth S-Curve or Loop-Back Curve
+                let pathData = ""
+                if (x1 <= x2) {
+                  const midX = (x1 + x2) / 2
+                  pathData = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`
+                } else {
+                  const curveOffset = 50
+                  pathData = `M ${x1} ${y1} C ${x1 + curveOffset} ${y1 - 50}, ${x2 - curveOffset} ${y2 - 50}, ${x2} ${y2}`
+                }
 
-              return (
-                <path
-                  key={edgeKey}
-                  d={pathData}
-                  fill="none"
-                  stroke={strokeColor}
-                  strokeWidth={strokeWidth}
-                  strokeDasharray={isCircular ? "5,3" : undefined}
-                  markerEnd={markerEnd}
-                  opacity={opacity}
-                  class="transition-opacity duration-200"
-                />
-              )
-            })}
-          </g>
+                let strokeColor = "#3d3a39"
+                let strokeWidth = 1.5
+                let markerEnd = "url(#arrow-default)"
+                let opacity = 0.55
 
-          {/* Nodes (Workspace Cards) */}
-          <g>
-            {layout.nodes.map((node) => {
-              const isSelected = selectedNode === node.relPath
-              const isHovered = hoveredNode === node.relPath
-              const isSearching =
-                search &&
-                (node.name.toLowerCase().includes(search.toLowerCase()) ||
-                  node.relPath.toLowerCase().includes(search.toLowerCase()))
-              const isCycleNode =
-                focusedCycle?.cycleNodeNames.has(node.name) || focusedCycle?.cycleNodeNames.has(node.relPath)
+                if (isCycleFocus) {
+                  strokeColor = "#f43f5e"
+                  strokeWidth = 2.5
+                  markerEnd = "url(#arrow-red)"
+                  opacity = 1
+                } else if (isCircular) {
+                  strokeColor = "#f43f5e"
+                  strokeWidth = 2
+                  markerEnd = "url(#arrow-red)"
+                  opacity = 0.95
+                } else if (isOutgoing) {
+                  strokeColor = "#00d992"
+                  strokeWidth = 2.2
+                  markerEnd = "url(#arrow-green)"
+                  opacity = 1
+                } else if (isIncoming) {
+                  strokeColor = "#38bdf8"
+                  strokeWidth = 2.2
+                  markerEnd = "url(#arrow-cyan)"
+                  opacity = 1
+                } else if (activeRelPath) {
+                  opacity = 0.1
+                }
 
-              let opacity = 1
-              if (activeRelPath) {
-                const isDirect =
-                  activeRelPath === node.relPath ||
-                  activeRelations?.outgoing.has(node.relPath) ||
-                  activeRelations?.incoming.has(node.relPath)
-                opacity = isDirect ? 1 : 0.25
-              } else if (focusedCycle) {
-                opacity = isCycleNode ? 1 : 0.2
-              } else if (search && !isSearching) {
-                opacity = 0.25
-              }
-
-              const isOutgoing = activeRelations?.outgoing.has(node.relPath)
-              const isIncoming = activeRelations?.incoming.has(node.relPath)
-
-              let borderColor = "#3d3a39"
-              if (node.hasCycle) borderColor = "#f43f5e"
-              if (isSelected) borderColor = "#00d992"
-              else if (isOutgoing) borderColor = "#00d992"
-              else if (isIncoming) borderColor = "#38bdf8"
-              else if (isHovered) borderColor = "#8b949e"
-
-              return (
-                <g
-                  key={node.relPath}
-                  transform={`translate(${node.x}, ${node.y})`}
-                  opacity={opacity}
-                  class="cursor-pointer transition-opacity duration-200"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedNode(selectedNode === node.relPath ? null : node.relPath)
-                  }}
-                  onDblClick={(e) => {
-                    e.stopPropagation()
-                    onWorkspaceClick?.(node.relPath)
-                  }}
-                  onMouseEnter={() => setHoveredNode(node.relPath)}
-                  onMouseLeave={() => setHoveredNode(null)}
-                >
-                  {/* Card Background */}
-                  <rect
-                    width={node.width}
-                    height={node.height}
-                    rx="8"
-                    fill="#141414"
-                    stroke={borderColor}
-                    strokeWidth={isSelected || node.hasCycle || isOutgoing || isIncoming ? 2 : 1}
+                return (
+                  <path
+                    key={edgeKey}
+                    d={pathData}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={isCircular ? "5,3" : undefined}
+                    markerEnd={markerEnd}
+                    opacity={opacity}
+                    class="transition-opacity duration-200"
                   />
+                )
+              })}
+            </g>
 
-                  {/* Top Bar / Status */}
-                  {node.hasCycle && (
-                    <circle cx={node.width - 14} cy={14} r="4" fill="#f43f5e" class="animate-pulse" />
-                  )}
+            {/* Render Workspace Node Cards */}
+            <g>
+              {layout.nodes.map((node) => {
+                const isSelected = selectedNode === node.relPath
+                const isHovered = hoveredNode === node.relPath
+                const isSearching =
+                  search &&
+                  (node.name.toLowerCase().includes(search.toLowerCase()) ||
+                    node.relPath.toLowerCase().includes(search.toLowerCase()))
+                const isCycleNode =
+                  focusedCycle?.cycleNodeNames.has(node.name) ||
+                  focusedCycle?.cycleNodeNames.has(node.relPath)
 
-                  {/* Name */}
-                  <text x="14" y="24" fill="#ffffff" fontFamily="monospace" fontWeight="bold" fontSize="12.5">
-                    {node.name.length > 22 ? `${node.name.slice(0, 20)}...` : node.name}
-                  </text>
+                let opacity = 1
+                if (activeRelPath) {
+                  const isDirect =
+                    activeRelPath === node.relPath ||
+                    activeRelations?.outgoing.has(node.relPath) ||
+                    activeRelations?.incoming.has(node.relPath)
+                  opacity = isDirect ? 1 : 0.2
+                } else if (focusedCycle) {
+                  opacity = isCycleNode ? 1 : 0.2
+                } else if (search && !isSearching) {
+                  opacity = 0.2
+                }
 
-                  {/* RelPath */}
-                  <text x="14" y="40" fill="#8b949e" fontFamily="monospace" fontSize="10.5">
-                    {node.relPath.length > 26 ? `${node.relPath.slice(0, 24)}...` : node.relPath}
-                  </text>
+                const isOutgoing = activeRelations?.outgoing.has(node.relPath)
+                const isIncoming = activeRelations?.incoming.has(node.relPath)
 
-                  {/* Bottom Stats: dependencies & dependents */}
-                  <g transform="translate(14, 52)">
-                    <rect x="0" y="0" width="60" height="16" rx="3" fill="#1e1e1e" />
-                    <text x="6" y="11" fill="#8b949e" fontSize="9.5" fontWeight="600">
-                      deps: <tspan fill="#ffffff">{node.deps.length}</tspan>
+                let borderColor = "#3d3a39"
+                if (node.hasCycle) borderColor = "#f43f5e"
+                if (isSelected) borderColor = "#00d992"
+                else if (isOutgoing) borderColor = "#00d992"
+                else if (isIncoming) borderColor = "#38bdf8"
+                else if (isHovered) borderColor = "#8b949e"
+
+                const normRelPath = normalizePath(node.relPath)
+
+                // Category pill styles
+                const categoryBadge =
+                  node.category === "root"
+                    ? { text: "ROOT", bg: "#8b5cf6", color: "#ffffff" }
+                    : node.category === "app"
+                      ? { text: "APP", bg: "#00d992", color: "#101010" }
+                      : node.category === "package"
+                        ? { text: "LIB", bg: "#38bdf8", color: "#101010" }
+                        : null
+
+                return (
+                  <g
+                    key={node.relPath}
+                    transform={`translate(${node.x}, ${node.y})`}
+                    opacity={opacity}
+                    class="cursor-pointer transition-opacity duration-150"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedNode(selectedNode === node.relPath ? null : node.relPath)
+                    }}
+                    onDblClick={(e) => {
+                      e.stopPropagation()
+                      onWorkspaceClick?.(node.relPath)
+                    }}
+                    onMouseEnter={() => setHoveredNode(node.relPath)}
+                    onMouseLeave={() => setHoveredNode(null)}
+                  >
+                    {/* Card Body */}
+                    <rect
+                      width={node.width}
+                      height={node.height}
+                      rx="8"
+                      fill="#141414"
+                      stroke={borderColor}
+                      strokeWidth={isSelected || node.hasCycle || isOutgoing || isIncoming ? 2 : 1}
+                    />
+
+                    {/* Top Header Row: Name & Tag Pill */}
+                    <text x="14" y="26" fill="#ffffff" fontFamily="monospace" fontWeight="bold" fontSize="13">
+                      {node.name.length > 18 ? `${node.name.slice(0, 16)}…` : node.name}
                     </text>
 
-                    <rect x="66" y="0" width="75" height="16" rx="3" fill="#1e1e1e" />
-                    <text x="72" y="11" fill="#8b949e" fontSize="9.5" fontWeight="600">
-                      used by: <tspan fill="#00d992">{node.dependedBy.length}</tspan>
-                    </text>
-
-                    {node.isRoot && (
-                      <text x="150" y="11" fill="#8b949e" fontSize="9.5" fontWeight="600">
-                        ROOT
-                      </text>
+                    {categoryBadge && (
+                      <g transform={`translate(${node.width - 48}, 14)`}>
+                        <rect width="36" height="15" rx="3" fill={categoryBadge.bg} fillOpacity="0.2" />
+                        <text
+                          x="18"
+                          y="11"
+                          fill={categoryBadge.bg}
+                          fontSize="9"
+                          fontWeight="700"
+                          textAnchor="middle"
+                        >
+                          {categoryBadge.text}
+                        </text>
+                      </g>
                     )}
+
+                    {/* Middle: Normalized Relative Path */}
+                    <text x="14" y="44" fill="#8b949e" fontFamily="monospace" fontSize="10.5">
+                      {normRelPath.length > 28 ? `${normRelPath.slice(0, 26)}…` : normRelPath}
+                    </text>
+
+                    {/* Bottom Metadata Pills with exact spacing */}
+                    <g transform="translate(14, 58)">
+                      {/* Dependencies Pill */}
+                      <g>
+                        <rect width="64" height="18" rx="4" fill="#1c1c1c" stroke="#2a2726" strokeWidth="1" />
+                        <text x="7" y="12.5" fill="#8b949e" fontSize="9.5" fontWeight="600">
+                          →{" "}
+                          <tspan fill="#ffffff" fontWeight="bold">
+                            {node.deps.length}
+                          </tspan>{" "}
+                          deps
+                        </text>
+                      </g>
+
+                      {/* Dependents (Used By) Pill */}
+                      <g transform="translate(70, 0)">
+                        <rect width="78" height="18" rx="4" fill="#1c1c1c" stroke="#2a2726" strokeWidth="1" />
+                        <text x="7" y="12.5" fill="#8b949e" fontSize="9.5" fontWeight="600">
+                          ←{" "}
+                          <tspan fill={node.dependedBy.length > 0 ? "#00d992" : "#8b949e"} fontWeight="bold">
+                            {node.dependedBy.length}
+                          </tspan>{" "}
+                          used by
+                        </text>
+                      </g>
+                    </g>
                   </g>
-                </g>
-              )
-            })}
-          </g>
-        </svg>
+                )
+              })}
+            </g>
+          </svg>
+        </div>
+
+        {/* Selected Workspace Interactive Detail Inspector (Floating Bottom-Right Card) */}
+        {selectedNodeObj && (
+          <div class="absolute bottom-4 right-4 w-80 bg-[#141414] border border-[#00d992]/50 shadow-2xl rounded-[8px] p-4 text-xs z-30 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <div class="flex items-start justify-between gap-2 border-b border-[#3d3a39] pb-2.5 mb-2.5">
+              <div class="min-w-0">
+                <div class="text-[10px] uppercase font-bold tracking-wider text-[#00d992]">
+                  WORKSPACE DETAILS
+                </div>
+                <div class="font-mono font-bold text-sm text-[#ffffff] truncate">{selectedNodeObj.name}</div>
+                <div class="font-mono text-[11px] text-[#8b949e] truncate">
+                  {normalizePath(selectedNodeObj.relPath)}
+                </div>
+              </div>
+              <button
+                class="p-1 text-[#8b949e] hover:text-[#ffffff] rounded hover:bg-[#252525]"
+                onClick={() => setSelectedNode(null)}
+              >
+                <IconX size={13} />
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              <div>
+                <div class="text-[10.5px] font-semibold text-[#8b949e] mb-1">
+                  INTERNAL DEPENDENCIES (
+                  {selectedNodeObj.deps
+                    ? Object.keys(selectedNodeObj.deps).filter((d) => graph.nodes.some((n) => n.name === d))
+                        .length
+                    : 0}
+                  ):
+                </div>
+                <div class="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                  {Object.keys(selectedNodeObj.deps)
+                    .filter((d) => graph.nodes.some((n) => n.name === d))
+                    .map((depName) => (
+                      <span
+                        key={depName}
+                        class="px-2 py-0.5 rounded bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992] font-mono text-[10.5px]"
+                      >
+                        → {depName}
+                      </span>
+                    ))}
+                  {Object.keys(selectedNodeObj.deps).filter((d) => graph.nodes.some((n) => n.name === d))
+                    .length === 0 && <span class="text-[#8b949e] italic">No internal dependencies</span>}
+                </div>
+              </div>
+
+              <div>
+                <div class="text-[10.5px] font-semibold text-[#8b949e] mb-1">DEPENDENTS (USED BY):</div>
+                <div class="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                  {graph.nodes
+                    .find((n) => n.relPath === selectedNodeObj.relPath)
+                    ?.dependedBy.map((depBy) => (
+                      <span
+                        key={depBy}
+                        class="px-2 py-0.5 rounded bg-[#38bdf8]/10 border border-[#38bdf8]/30 text-[#38bdf8] font-mono text-[10.5px]"
+                      >
+                        ← {depBy}
+                      </span>
+                    ))}
+                  {(graph.nodes.find((n) => n.relPath === selectedNodeObj.relPath)?.dependedBy.length ??
+                    0) === 0 && <span class="text-[#8b949e] italic">Not depended on by any workspace</span>}
+                </div>
+              </div>
+            </div>
+
+            <button
+              class="w-full mt-3 h-7 bg-[#1e1e1e] hover:bg-[#252525] border border-[#3d3a39] hover:border-[#8b949e] text-[#f2f2f2] rounded-[4px] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+              onClick={() => onWorkspaceClick?.(selectedNodeObj.relPath)}
+            >
+              <span>Inspect Manifest in Drawer</span>
+              <IconExternalLink size={11} />
+            </button>
+          </div>
+        )}
 
         {/* Legend Overlay at bottom-left */}
-        <div class="absolute bottom-3 left-3 bg-[#101010]/90 border border-[#3d3a39] backdrop-blur-md px-3 py-2 rounded-[6px] text-[11px] text-[#8b949e] flex items-center gap-4">
+        <div class="absolute bottom-3 left-3 bg-[#101010]/95 border border-[#3d3a39] backdrop-blur-md px-3.5 py-2.5 rounded-[6px] text-[11px] text-[#8b949e] flex items-center gap-4 shadow-lg">
           <div class="flex items-center gap-1.5">
             <span class="w-2.5 h-2.5 rounded-full bg-[#00d992]" />
-            <span>Selected / Dependency</span>
+            <span class="text-[#f2f2f2]">Selected / Dependency (→)</span>
           </div>
           <div class="flex items-center gap-1.5">
             <span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]" />
-            <span>Dependent (Used By)</span>
+            <span class="text-[#f2f2f2]">Dependent (←)</span>
           </div>
-          <div class="flex items-center gap-1.5">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#f43f5e]" />
-            <span>Circular Loop</span>
+          {graph.hasCycles && (
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#f43f5e]" />
+              <span class="text-[#f43f5e] font-semibold">Circular Loop</span>
+            </div>
+          )}
+          <div class="text-[10px] text-[#8b949e] border-l border-[#3d3a39] pl-3">
+            Click card to inspect · Double-click to open drawer
           </div>
-          <div class="text-[10px] text-[#8b949e]">Double-click card to open details</div>
         </div>
       </div>
     </div>
