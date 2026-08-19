@@ -6,9 +6,10 @@ import type {
   SecurityVulnerability,
   Workspace,
 } from "../types.js"
-import { applyFixes, type FixResult, type PackageFix } from "./fix.js"
+import { applyFixes, compareSemver, type FixResult, type PackageFix } from "./fix.js"
 
-const OSV_API_URL = "https://api.osv.dev/v1/querybatch"
+const OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
+const OSV_VULN_URL = "https://api.osv.dev/v1/vulns"
 
 interface OsvQuery {
   package: {
@@ -58,15 +59,24 @@ interface OsvVuln {
   affected?: OsvAffected[]
   references?: Array<{ type: string; url: string }>
   published?: string
+  modified?: string
 }
 
 interface OsvBatchResponse {
   results?: Array<{
-    vulns?: OsvVuln[]
+    vulns?: Array<{ id: string; modified?: string }>
   }>
 }
 
-function cleanVersion(v: string): string {
+/**
+ * Extracts a clean semver string suitable for registry / OSV queries,
+ * handling simple prefixes (^, ~) and compound ranges (>=1.2.3 <2.0.0, 1.x, etc.).
+ */
+export function cleanVersion(v: string): string {
+  const match = v.match(/(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)/)
+  if (match && match[1]) {
+    return match[1].split("-")[0] ?? match[1]
+  }
   return (
     v
       .replace(/^[\^~>=<\s]+/, "")
@@ -77,7 +87,7 @@ function cleanVersion(v: string): string {
 
 function parseCvssScore(scoreStr?: string): number | undefined {
   if (!scoreStr) return undefined
-  // e.g. "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" or base score number
+  // Check if string is a numeric score directly (e.g. "7.5", "9.8")
   const num = Number(scoreStr)
   if (Number.isFinite(num) && num > 0 && num <= 10) return num
 
@@ -95,14 +105,7 @@ function parseCvssScore(scoreStr?: string): number | undefined {
 }
 
 function mapSeverity(vuln: OsvVuln): { severity: SecuritySeverity; cvssScore?: number } {
-  // 1. Check database_specific.severity
-  const dbSeverity = vuln.database_specific?.severity?.toUpperCase()
-  if (dbSeverity === "CRITICAL") return { severity: "CRITICAL", cvssScore: 9.5 }
-  if (dbSeverity === "HIGH") return { severity: "HIGH", cvssScore: 8.0 }
-  if (dbSeverity === "MODERATE" || dbSeverity === "MEDIUM") return { severity: "MODERATE", cvssScore: 5.5 }
-  if (dbSeverity === "LOW") return { severity: "LOW", cvssScore: 3.0 }
-
-  // 2. Check CVSS score in severity array
+  // 1. Check CVSS score in severity array first for exact score accuracy
   if (vuln.severity && vuln.severity.length > 0) {
     for (const sev of vuln.severity) {
       const cvss = parseCvssScore(sev.score)
@@ -115,10 +118,17 @@ function mapSeverity(vuln: OsvVuln): { severity: SecuritySeverity; cvssScore?: n
     }
   }
 
+  // 2. Check database_specific.severity
+  const dbSeverity = vuln.database_specific?.severity?.toUpperCase()
+  if (dbSeverity === "CRITICAL") return { severity: "CRITICAL", cvssScore: 9.5 }
+  if (dbSeverity === "HIGH") return { severity: "HIGH", cvssScore: 8.0 }
+  if (dbSeverity === "MODERATE" || dbSeverity === "MEDIUM") return { severity: "MODERATE", cvssScore: 5.5 }
+  if (dbSeverity === "LOW") return { severity: "LOW", cvssScore: 3.0 }
+
   return { severity: "MODERATE", cvssScore: 5.0 }
 }
 
-function findPatchedVersion(vuln: OsvVuln): string | null {
+export function findPatchedVersion(vuln: OsvVuln, currentVersion?: string): string | null {
   if (!vuln.affected || !vuln.affected.length) return null
 
   const fixedVersions: string[] = []
@@ -135,7 +145,18 @@ function findPatchedVersion(vuln: OsvVuln): string | null {
   }
 
   if (fixedVersions.length === 0) return null
-  // Return the highest fixed version recommended
+
+  // Sort fixed versions using semver comparison in ascending order
+  fixedVersions.sort((a, b) => compareSemver(a, b))
+
+  if (currentVersion) {
+    const cVer = cleanVersion(currentVersion)
+    // Find the smallest fixed version that is greater than or equal to current version
+    const higherFixed = fixedVersions.find((f) => compareSemver(f, cVer) >= 0)
+    if (higherFixed) return higherFixed
+  }
+
+  // Fallback to the highest fixed version
   return fixedVersions[fixedVersions.length - 1] ?? null
 }
 
@@ -153,16 +174,61 @@ function getAdvisoryUrl(vuln: OsvVuln): string {
 }
 
 /**
- * Queries Google OSV API in batches for all declared dependencies across the monorepo.
+ * Hydrates full vulnerability records for a list of unique vuln IDs via GET /v1/vulns/{id}.
+ */
+async function hydrateVuln(id: string, timeoutMs: number): Promise<OsvVuln | null> {
+  const url = `${OSV_VULN_URL}/${encodeURIComponent(id)}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) return null
+    return (await res.json()) as OsvVuln
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function hydrateAllVulns(
+  vulnIds: string[],
+  concurrency = 16,
+  timeoutMs = 10000
+): Promise<Map<string, OsvVuln>> {
+  const map = new Map<string, OsvVuln>()
+  const uniqueIds = Array.from(new Set(vulnIds))
+  if (uniqueIds.length === 0) return map
+
+  let index = 0
+  const workers = Array.from({ length: Math.min(concurrency, uniqueIds.length) }, async () => {
+    while (index < uniqueIds.length) {
+      const currentId = uniqueIds[index++]!
+      const data = await hydrateVuln(currentId, timeoutMs)
+      if (data) {
+        map.set(currentId, data)
+      }
+    }
+  })
+
+  await Promise.allSettled(workers)
+  return map
+}
+
+/**
+ * Queries Google OSV API in batches for all declared dependencies across the monorepo,
+ * then hydrates full advisory records for rich CVE details, CVSS scores, and safe patches.
  */
 export async function checkVulnerabilities(
   workspaces: Workspace[],
   options: {
     timeoutMs?: number
+    concurrency?: number
     onProgress?: (event: ProgressEvent) => void
   } = {}
 ): Promise<SecurityResult> {
   const timeoutMs = options.timeoutMs ?? 10000
+  const concurrency = options.concurrency ?? 16
 
   // Index all unique package & version declarations
   // Key: "pkg@cleanVersion" -> { pkg, rawVersion, cleanVersion, workspaces: [...] }
@@ -207,7 +273,6 @@ export async function checkVulnerabilities(
 
   const items = Array.from(occurrencesMap.values())
   const vulnerabilities: SecurityVulnerability[] = []
-  const seenVulnKey = new Set<string>()
 
   if (items.length === 0) {
     return {
@@ -221,8 +286,11 @@ export async function checkVulnerabilities(
     }
   }
 
-  // Batch query Google OSV in chunks of 250 queries
+  // 1. Batch query Google OSV in chunks of 250 queries to get minimal vulnerability IDs
   const CHUNK_SIZE = 250
+  const allVulnIds: string[] = []
+  const itemVulnMap = new Map<PkgOccurrence, string[]>()
+
   for (let i = 0; i < items.length; i += CHUNK_SIZE) {
     const chunk = items.slice(i, i + CHUNK_SIZE)
     const queries: OsvQuery[] = chunk.map((item) => ({
@@ -237,7 +305,7 @@ export async function checkVulnerabilities(
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-      const response = await fetch(OSV_API_URL, {
+      const response = await fetch(OSV_BATCH_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ queries }),
@@ -256,30 +324,10 @@ export async function checkVulnerabilities(
         const item = chunk[j]
         if (!res || !item || !res.vulns || res.vulns.length === 0) continue
 
-        for (const vuln of res.vulns) {
-          const dedupeKey = `${vuln.id}:${item.pkg}:${item.cleanVersion}`
-          if (seenVulnKey.has(dedupeKey)) continue
-          seenVulnKey.add(dedupeKey)
-
-          const { severity, cvssScore } = mapSeverity(vuln)
-          const patched = findPatchedVersion(vuln)
-          const suggestedVersion = patched ? `^${patched}` : null
-
-          vulnerabilities.push({
-            id: vuln.id,
-            aliases: vuln.aliases ?? [],
-            pkg: item.pkg,
-            version: item.rawVersion,
-            severity,
-            cvssScore,
-            summary: vuln.summary ?? "Security Vulnerability Advisory",
-            details: vuln.details,
-            patchedVersion: patched,
-            suggestedVersion,
-            advisoryUrl: getAdvisoryUrl(vuln),
-            publishedAt: vuln.published,
-            workspaces: item.workspaces,
-          })
+        const ids = res.vulns.map((v) => v.id)
+        itemVulnMap.set(item, ids)
+        for (const id of ids) {
+          allVulnIds.push(id)
         }
       }
     } catch {
@@ -291,6 +339,41 @@ export async function checkVulnerabilities(
         phase: "security",
         done: Math.min(i + CHUNK_SIZE, items.length),
         total: items.length,
+      })
+    }
+  }
+
+  // 2. Hydration step: Fetch full records for all unique vulnerability IDs
+  const hydratedMap = await hydrateAllVulns(allVulnIds, concurrency, timeoutMs)
+
+  // 3. Assemble full SecurityVulnerability entries
+  const seenVulnKey = new Set<string>()
+
+  for (const [item, vulnIds] of itemVulnMap.entries()) {
+    for (const id of vulnIds) {
+      const dedupeKey = `${id}:${item.pkg}:${item.cleanVersion}`
+      if (seenVulnKey.has(dedupeKey)) continue
+      seenVulnKey.add(dedupeKey)
+
+      const vuln = hydratedMap.get(id) ?? { id }
+      const { severity, cvssScore } = mapSeverity(vuln)
+      const patched = findPatchedVersion(vuln, item.cleanVersion)
+      const suggestedVersion = patched ? `^${patched}` : null
+
+      vulnerabilities.push({
+        id: vuln.id,
+        aliases: vuln.aliases ?? [],
+        pkg: item.pkg,
+        version: item.rawVersion,
+        severity,
+        cvssScore,
+        summary: vuln.summary ?? "Security Vulnerability Advisory",
+        details: vuln.details,
+        patchedVersion: patched,
+        suggestedVersion,
+        advisoryUrl: getAdvisoryUrl(vuln),
+        publishedAt: vuln.published,
+        workspaces: item.workspaces,
       })
     }
   }
