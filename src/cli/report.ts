@@ -326,6 +326,13 @@ function renderUnusedAndPhantoms(
   }
 }
 
+function formatDownloads(n: number | undefined): string {
+  if (n === undefined || n === null) return ""
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M/wk`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k/wk`
+  return `${n}/wk`
+}
+
 function renderDeprecations(
   depResult: ScanResult["deprecation"],
   c: Colorizer,
@@ -342,28 +349,44 @@ function renderDeprecations(
     return
   }
 
-  const { packages, totalDeprecated, totalAbandoned } = depResult
+  const { packages, totalDeprecated, totalAbandoned, totalZombies } = depResult
 
+  const zombieNote = totalZombies > 0 ? `, ${totalZombies} zombie giant(s) >1M downloads/wk` : ""
   out.push(
     c.bold(
       c.yellow(
-        `Package Deprecation & Abandonment Audit (${totalDeprecated} deprecated, ${totalAbandoned} abandoned):`
+        `Package Deprecation & Abandonment Audit (${totalDeprecated} deprecated, ${totalAbandoned} abandoned${zombieNote}):`
       )
     )
   )
 
   for (const pkg of packages) {
     const statusBadges: string[] = []
-    if (pkg.deprecated) {
+    if (pkg.isZombie) {
+      statusBadges.push(c.red(`[🧟 ZOMBIE - ${formatDownloads(pkg.weeklyDownloads)}]`))
+    } else if (pkg.deprecated) {
       statusBadges.push(c.red(`[DEPRECATED${pkg.isProd ? " - PROD" : ""}]`))
     }
     if (pkg.isAbandoned) {
-      statusBadges.push(c.yellow(`[ABANDONED - ${pkg.yearsSinceLastRelease ?? 2}+ yrs]`))
+      const sevLabel =
+        pkg.inactivitySeverity === "critical"
+          ? "CRITICAL"
+          : pkg.inactivitySeverity === "severe"
+            ? "SEVERE"
+            : "MODERATE"
+      statusBadges.push(c.yellow(`[ABANDONED (${sevLabel}) - ${pkg.yearsSinceLastRelease ?? 2}+ yrs]`))
     }
 
+    const dlTag =
+      !pkg.isZombie && pkg.weeklyDownloads ? c.cyan(` [${formatDownloads(pkg.weeklyDownloads)}]`) : ""
     const wsList = pkg.workspaces.map((w) => w.workspace).join(", ")
-    out.push(`  ${statusBadges.join(" ")} ${c.bold(pkg.name)}@${pkg.version} ${c.dim(`(${wsList})`)}`)
+    out.push(`  ${statusBadges.join(" ")} ${c.bold(pkg.name)}@${pkg.version}${dlTag} ${c.dim(`(${wsList})`)}`)
 
+    if (pkg.isZombie) {
+      out.push(
+        `    ${c.red("⚠️ Zombie Warning:")} Massive real-world adoption (${formatDownloads(pkg.weeklyDownloads)}) despite being unmaintained/deprecated!`
+      )
+    }
     if (pkg.deprecationReason) {
       out.push(`    ${c.dim("Notice:")} ${c.yellow(pkg.deprecationReason)}`)
     }

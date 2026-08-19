@@ -672,8 +672,8 @@ export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardP
         </div>
       )}
 
-      {/* Deprecated Packages Banner */}
-      {data.deprecation && data.deprecation.totalDeprecated > 0 && (
+      {/* Deprecated & Zombie Packages Banner */}
+      {data.deprecation && (data.deprecation.totalDeprecated > 0 || data.deprecation.totalZombies > 0) && (
         <div
           class="flex items-center justify-between p-4 bg-[#f43f5e]/10 border border-[#f43f5e]/40 rounded-[8px] cursor-pointer hover:bg-[#f43f5e]/15 transition-colors gap-4"
           onClick={() => onTabChange("deprecation")}
@@ -685,17 +685,20 @@ export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardP
             <div>
               <div class="text-sm font-bold text-[#ffffff] flex items-center gap-2">
                 <span>
-                  {data.deprecation.totalDeprecated} Deprecated Package(s) Detected
+                  {data.deprecation.totalZombies > 0
+                    ? `${data.deprecation.totalZombies} Zombie Giant(s) & ${data.deprecation.totalDeprecated} Deprecated Packages`
+                    : `${data.deprecation.totalDeprecated} Deprecated Package(s) Detected`}
                   {data.deprecation.deprecatedInProd > 0
                     ? ` (${data.deprecation.deprecatedInProd} in production)`
                     : ""}
                 </span>
                 <span class="text-[10px] px-2 py-0.5 rounded-full bg-[#f43f5e]/20 text-[#f43f5e] font-mono">
-                  DEPRECATION ALERT
+                  {data.deprecation.totalZombies > 0 ? "ZOMBIE ALERT" : "DEPRECATION ALERT"}
                 </span>
               </div>
               <div class="text-xs text-[#bdbdbd] mt-0.5">
-                Official author deprecation notices and modern replacements available.
+                Official author deprecation notices, dormant longevity analysis, and modern replacements
+                available.
               </div>
             </div>
           </div>

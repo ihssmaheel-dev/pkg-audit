@@ -1,18 +1,39 @@
 import { describe, expect, it } from "vitest"
-import { auditDeprecations, KNOWN_DEPRECATIONS } from "../src/scan/deprecation.js"
+import {
+  auditDeprecations,
+  calculateInactivitySeverity,
+  calculatePopularityTier,
+  KNOWN_DEPRECATIONS,
+} from "../src/scan/deprecation.js"
 import { buildDependencyMap } from "../src/scan/conflicts.js"
 import type { Workspace } from "../src/types.js"
 
 describe("Package Deprecation & Abandonment Audit", () => {
-  it("includes curated known deprecations with modern replacements", () => {
+  it("includes curated known deprecations with modern replacements and download baselines", () => {
     expect(KNOWN_DEPRECATIONS.request).toBeDefined()
     expect(KNOWN_DEPRECATIONS.request.replacement).toContain("fetch")
+    expect(KNOWN_DEPRECATIONS.request.weeklyDownloads).toBeGreaterThan(1_000_000)
     expect(KNOWN_DEPRECATIONS.querystring).toBeDefined()
     expect(KNOWN_DEPRECATIONS.tslint).toBeDefined()
     expect(KNOWN_DEPRECATIONS["babel-eslint"]).toBeDefined()
   })
 
-  it("identifies deprecated and abandoned dependencies across workspaces", async () => {
+  it("calculates inactivity longevity tiers correctly", () => {
+    expect(calculateInactivitySeverity(undefined)).toBe("recent")
+    expect(calculateInactivitySeverity(200)).toBe("recent")
+    expect(calculateInactivitySeverity(750)).toBe("moderate") // >2 years
+    expect(calculateInactivitySeverity(1200)).toBe("severe") // >3 years
+    expect(calculateInactivitySeverity(2000)).toBe("critical") // >5 years
+  })
+
+  it("calculates popularity and zombie tiers correctly", () => {
+    expect(calculatePopularityTier(15_000_000, true)).toBe("zombie")
+    expect(calculatePopularityTier(500_000, false)).toBe("high")
+    expect(calculatePopularityTier(50_000, false)).toBe("medium")
+    expect(calculatePopularityTier(500, false)).toBe("low")
+  })
+
+  it("identifies deprecated, abandoned, and zombie dependencies across workspaces", async () => {
     const workspaces: Workspace[] = [
       {
         name: "root",
@@ -55,11 +76,14 @@ describe("Package Deprecation & Abandonment Audit", () => {
     expect(result.totalDeprecated).toBeGreaterThanOrEqual(3) // request, querystring, tslint
     expect(result.deprecatedInProd).toBeGreaterThanOrEqual(2) // request, querystring
     expect(result.deprecatedInDev).toBeGreaterThanOrEqual(1) // tslint
+    expect(result.totalZombies).toBeGreaterThanOrEqual(2) // request, querystring
 
     const reqPkg = result.packages.find((p) => p.name === "request")
     expect(reqPkg).toBeDefined()
     expect(reqPkg?.deprecated).toBe(true)
     expect(reqPkg?.isProd).toBe(true)
+    expect(reqPkg?.isZombie).toBe(true)
+    expect(reqPkg?.weeklyDownloads).toBeGreaterThan(1_000_000)
     expect(reqPkg?.replacementSuggestion).toContain("fetch")
     expect(reqPkg?.workspaces[0]?.workspace).toBe("apps/app")
 

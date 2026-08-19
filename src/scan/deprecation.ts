@@ -1,87 +1,110 @@
 import { isLinkedProtocol } from "./conflicts.js"
 import { encodeNpmName, runPool } from "./registry.js"
-import type { DepMap, DeprecatedPackage, DeprecationSummary, DepType, ProgressEvent } from "../types.js"
+import type {
+  DepMap,
+  DeprecatedPackage,
+  DeprecationSummary,
+  DepType,
+  InactivitySeverity,
+  PopularityTier,
+  ProgressEvent,
+} from "../types.js"
 
 /**
- * Curated knowledge base of famous deprecated packages with their official or modern recommended replacements.
- * Provides instant zero-network and offline coverage.
+ * Curated knowledge base of famous deprecated packages with their official or modern recommended replacements
+ * and estimated weekly downloads baseline for instant zero-network/offline coverage.
  */
 export const KNOWN_DEPRECATIONS: Record<
   string,
-  { reason: string; replacement: string; abandoned?: boolean }
+  { reason: string; replacement: string; abandoned?: boolean; weeklyDownloads?: number }
 > = {
   request: {
     reason: "request has been deprecated since Feb 2020. See https://github.com/request/request/issues/3142",
     replacement: "native fetch, undici, or axios",
     abandoned: true,
+    weeklyDownloads: 14_200_000,
   },
   "request-promise": {
     reason: "request-promise is deprecated. See https://github.com/request/request-promise/issues/314",
     replacement: "native fetch, undici, or axios",
     abandoned: true,
+    weeklyDownloads: 3_800_000,
   },
   "request-promise-native": {
     reason: "request-promise-native is deprecated.",
     replacement: "native fetch or undici",
     abandoned: true,
+    weeklyDownloads: 1_200_000,
   },
   querystring: {
     reason: "The querystring API is considered Legacy. New code should use the URLSearchParams API instead.",
     replacement: "URLSearchParams (native Node.js / Web standard)",
     abandoned: true,
+    weeklyDownloads: 24_500_000,
   },
   tslint: {
     reason:
       "TSLint has been deprecated in favor of ESLint. See https://github.com/palantir/tslint/issues/4534",
     replacement: "typescript-eslint (@typescript-eslint/eslint-plugin)",
     abandoned: true,
+    weeklyDownloads: 2_100_000,
   },
   "babel-eslint": {
     reason: "babel-eslint is now @babel/eslint-parser. Please upgrade.",
     replacement: "@babel/eslint-parser",
     abandoned: true,
+    weeklyDownloads: 1_900_000,
   },
   nomnom: {
     reason: "nomnom is deprecated. See commander, yargs, or meow.",
     replacement: "commander, yargs, or citty",
     abandoned: true,
+    weeklyDownloads: 350_000,
   },
   "node-sass": {
     reason: "Node Sass is deprecated. Please use `sass` (Dart Sass) instead.",
     replacement: "sass",
     abandoned: true,
+    weeklyDownloads: 3_400_000,
   },
   "coffee-script": {
     reason: "CoffeeScript has moved to the `coffeescript` package name.",
     replacement: "typescript or coffeescript",
     abandoned: true,
+    weeklyDownloads: 420_000,
   },
   "colors.js": {
     reason: "Deprecated due to supply chain vulnerabilities.",
     replacement: "picocolors, chalk, or colorette",
     abandoned: true,
+    weeklyDownloads: 1_200_000,
   },
   "left-pad": {
     reason: "left-pad is deprecated and obsolete. Use String.prototype.padStart() instead.",
     replacement: "String.prototype.padStart()",
     abandoned: true,
+    weeklyDownloads: 2_000_000,
   },
   "core-js-pure": {
     reason: "Legacy core-js builds should be upgraded to core-js@3.",
     replacement: "core-js@3",
+    weeklyDownloads: 9_500_000,
   },
   optimist: {
     reason: "optimist is deprecated. Use yargs, commander, or minimist instead.",
     replacement: "commander or yargs",
     abandoned: true,
+    weeklyDownloads: 3_100_000,
   },
   "uglify-js": {
     reason: "UglifyJS doesn't support ES6+. Use terser or esbuild instead.",
     replacement: "terser or esbuild",
+    weeklyDownloads: 7_800_000,
   },
   "istanbul-lib-hook": {
     reason: "Use c8 or modern v8 coverage tooling instead.",
     replacement: "c8 or vitest coverage",
+    weeklyDownloads: 4_500_000,
   },
 }
 
@@ -118,6 +141,42 @@ function extractReplacement(reason: string): string | undefined {
       /(?:use|upgrade to|switch to|replaced by|migrated to)\s+[`"']?([@\w\s/-]+?)[`"']?(?:\s+instead|\.|,|$)/i
     ) ?? reason.match(/(?:see|checkout)\s+(https?:\/\/[^\s]+)/i)
   return match ? match[1]?.trim() : undefined
+}
+
+export function calculateInactivitySeverity(days: number | undefined): InactivitySeverity {
+  if (days === undefined) return "recent"
+  if (days >= 1826) return "critical" // > 5 years
+  if (days >= 1095) return "severe" // > 3 years
+  if (days >= 730) return "moderate" // > 2 years
+  return "recent"
+}
+
+export function calculatePopularityTier(
+  downloads: number | undefined,
+  isDeprecatedOrAbandoned: boolean
+): PopularityTier {
+  const d = downloads ?? 0
+  if (d >= 1_000_000 && isDeprecatedOrAbandoned) return "zombie"
+  if (d >= 100_000) return "high"
+  if (d >= 10_000) return "medium"
+  return "low"
+}
+
+export async function fetchWeeklyDownloads(name: string, timeoutMs = 4000): Promise<number | undefined> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(`https://api.npmjs.org/downloads/point/last-week/${encodeNpmName(name)}`, {
+      signal: controller.signal,
+    })
+    if (!res.ok) return undefined
+    const data = (await res.json()) as { downloads?: number }
+    return typeof data.downloads === "number" ? data.downloads : undefined
+  } catch {
+    return undefined
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export async function fetchPackageDeprecationInfo(
@@ -195,7 +254,8 @@ export async function fetchPackageDeprecationInfo(
 }
 
 /**
- * Audits all declared dependencies across the monorepo for official npm deprecations and maintenance abandonment.
+ * Audits all declared dependencies across the monorepo for official npm deprecations,
+ * maintenance abandonment, and ecosystem zombie dependency risks with weekly downloads.
  */
 export async function auditDeprecations(
   depMap: DepMap,
@@ -218,22 +278,28 @@ export async function auditDeprecations(
   const registryData = await runPool(
     names,
     async (name) => {
-      const info = await fetchPackageDeprecationInfo(name, opts.timeoutMs ?? 8000)
+      const [info, weeklyDownloads] = await Promise.all([
+        fetchPackageDeprecationInfo(name, opts.timeoutMs ?? 8000),
+        fetchWeeklyDownloads(name, Math.min(opts.timeoutMs ?? 8000, 5000)),
+      ])
       done++
       if (opts.onProgress) {
         opts.onProgress({ phase: "deprecation", done, total: names.length })
       }
-      return { name, info }
+      return { name, info, weeklyDownloads }
     },
     concurrency
   )
 
-  const registryMap = new Map(registryData.map((d) => [d.name, d.info]))
+  const registryMap = new Map(
+    registryData.map((d) => [d.name, { info: d.info, downloads: d.weeklyDownloads }])
+  )
   const results: DeprecatedPackage[] = []
 
   for (const name of names) {
     const versionMap = depMap.get(name)!
-    const regInfo = registryMap.get(name) || {}
+    const regEntry = registryMap.get(name)
+    const regInfo = regEntry?.info || {}
     const known = KNOWN_DEPRECATIONS[name]
 
     // Gather workspaces where this package is used
@@ -269,7 +335,6 @@ export async function auditDeprecations(
       isDeprecated = true
       deprecationReason = regInfo.deprecated
     } else if (regInfo.versionsDeprecated && Object.keys(regInfo.versionsDeprecated).length > 0) {
-      // Check if current version or all versions are deprecated
       const matched =
         regInfo.versionsDeprecated[chosenVersion] || Object.values(regInfo.versionsDeprecated)[0]
       if (matched) {
@@ -294,8 +359,8 @@ export async function auditDeprecations(
       }
     } else if (known?.abandoned) {
       isAbandoned = true
-      yearsSinceLastRelease = 3.0
-      daysSinceLastRelease = 1095
+      yearsSinceLastRelease = 4.0
+      daysSinceLastRelease = 1460
     }
 
     if (!isDeprecated && !isAbandoned) {
@@ -306,6 +371,11 @@ export async function auditDeprecations(
     if (!replacement && deprecationReason) {
       replacement = extractReplacement(deprecationReason)
     }
+
+    const weeklyDownloads = regEntry?.downloads ?? known?.weeklyDownloads
+    const isZombie = (isDeprecated || isAbandoned) && (weeklyDownloads ?? 0) >= 1_000_000
+    const inactivitySeverity = calculateInactivitySeverity(daysSinceLastRelease)
+    const popularityTier = calculatePopularityTier(weeklyDownloads, isDeprecated || isAbandoned)
 
     results.push({
       name,
@@ -319,18 +389,33 @@ export async function auditDeprecations(
       lastPublished: regInfo.lastPublished,
       daysSinceLastRelease,
       yearsSinceLastRelease,
+      inactivitySeverity,
+      weeklyDownloads,
+      popularityTier,
+      isZombie,
       replacementSuggestion: replacement,
       homepage: regInfo.homepage,
       repository: regInfo.repository,
     })
   }
 
-  // Sort: Deprecated in Prod first, then Deprecated in Dev, then Abandoned, then alphabetical
+  // Smart Sorting:
+  // 1. Zombie Dependencies in Prod (highest downloads first)
+  // 2. Other Zombie Dependencies
+  // 3. Deprecated in Prod
+  // 4. Deprecated in Dev
+  // 5. Inactivity severity (critical > severe > moderate)
+  // 6. Weekly downloads descending
   results.sort((a, b) => {
-    if (a.deprecated && !b.deprecated) return -1
-    if (!a.deprecated && b.deprecated) return 1
+    if (a.isZombie && !b.isZombie) return -1
+    if (!a.isZombie && b.isZombie) return 1
     if (a.isProd && !b.isProd) return -1
     if (!a.isProd && b.isProd) return 1
+    if (a.deprecated && !b.deprecated) return -1
+    if (!a.deprecated && b.deprecated) return 1
+    if ((b.weeklyDownloads ?? 0) !== (a.weeklyDownloads ?? 0)) {
+      return (b.weeklyDownloads ?? 0) - (a.weeklyDownloads ?? 0)
+    }
     if ((b.yearsSinceLastRelease ?? 0) !== (a.yearsSinceLastRelease ?? 0)) {
       return (b.yearsSinceLastRelease ?? 0) - (a.yearsSinceLastRelease ?? 0)
     }
@@ -339,6 +424,7 @@ export async function auditDeprecations(
 
   const totalDeprecated = results.filter((r) => r.deprecated).length
   const totalAbandoned = results.filter((r) => r.isAbandoned).length
+  const totalZombies = results.filter((r) => r.isZombie).length
   const deprecatedInProd = results.filter((r) => r.deprecated && r.isProd).length
   const deprecatedInDev = results.filter((r) => r.deprecated && !r.isProd).length
   const abandonedInProd = results.filter((r) => r.isAbandoned && r.isProd).length
@@ -348,6 +434,7 @@ export async function auditDeprecations(
     totalScanned: names.length,
     totalDeprecated,
     totalAbandoned,
+    totalZombies,
     deprecatedInProd,
     deprecatedInDev,
     abandonedInProd,

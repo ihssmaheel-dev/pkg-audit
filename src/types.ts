@@ -259,6 +259,9 @@ export interface LicenseScanResult {
   totalScanned: number
 }
 
+export type InactivitySeverity = "critical" | "severe" | "moderate" | "recent"
+export type PopularityTier = "zombie" | "high" | "medium" | "low"
+
 export interface DeprecatedPackage {
   name: string
   version: string
@@ -271,6 +274,10 @@ export interface DeprecatedPackage {
   lastPublished?: string
   yearsSinceLastRelease?: number
   daysSinceLastRelease?: number
+  inactivitySeverity: InactivitySeverity
+  weeklyDownloads?: number
+  popularityTier: PopularityTier
+  isZombie: boolean
   replacementSuggestion?: string
   homepage?: string
   repository?: string
@@ -281,6 +288,7 @@ export interface DeprecationSummary {
   totalScanned: number
   totalDeprecated: number
   totalAbandoned: number
+  totalZombies: number
   deprecatedInProd: number
   deprecatedInDev: number
   abandonedInProd: number
