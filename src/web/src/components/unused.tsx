@@ -51,6 +51,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
     return unused.filter((u) => {
       if (filterType === "unused-prod" && u.type !== "prod") return false
       if (filterType === "unused-dev" && u.type === "prod") return false
+      if (filterType === "all" && u.type !== "prod") return false // In 'All', show active issues (Phantoms + Unused Prod)
       const q = search.toLowerCase()
       return u.name.toLowerCase().includes(q) || u.workspace.toLowerCase().includes(q)
     })
@@ -63,6 +64,9 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
       return
     }
     const version = phantomVersions[`${p.workspace}:${p.name}`] || p.suggestedVersion || "^latest"
+    const isRootOrScript =
+      p.workspace === "." || p.files.some((f) => f.includes("scripts/") || f.includes("migrations/"))
+    const depType = isRootOrScript ? "dev" : "prod"
     const fixKey = `phantom:${p.workspace}:${p.name}`
     setFixing(fixKey)
     try {
@@ -73,11 +77,11 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
             workspace: p.workspace,
             pkg: p.name,
             version,
-            type: "prod",
+            type: depType,
           },
         ],
       })
-      notify(`✔ Declared ${p.name}@${version} in ${p.workspace}/package.json`)
+      notify(`✔ Declared ${p.name}@${version} in ${p.workspace}/package.json (${depType}Dependencies)`)
     } catch (err) {
       notify(`Failed to declare ${p.name}: ${String(err)}`)
     } finally {
@@ -117,12 +121,16 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
     if (!onFix || phantoms.length === 0) return
     setFixing("batch-phantoms")
     try {
-      const items = phantoms.map((p) => ({
-        workspace: p.workspace,
-        pkg: p.name,
-        version: phantomVersions[`${p.workspace}:${p.name}`] || p.suggestedVersion || "^latest",
-        type: "prod" as const,
-      }))
+      const items = phantoms.map((p) => {
+        const isRootOrScript =
+          p.workspace === "." || p.files.some((f) => f.includes("scripts/") || f.includes("migrations/"))
+        return {
+          workspace: p.workspace,
+          pkg: p.name,
+          version: phantomVersions[`${p.workspace}:${p.name}`] || p.suggestedVersion || "^latest",
+          type: (isRootOrScript ? "dev" : "prod") as "dev" | "prod",
+        }
+      })
       await onFix({
         action: "declare-phantom",
         phantoms: items,
@@ -157,7 +165,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
     }
   }
 
-  const hasIssues = phantoms.length > 0 || unused.length > 0
+  const activeIssuesCount = phantoms.length + prodUnused.length
 
   return (
     <div class="space-y-6 w-full">
@@ -180,7 +188,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
           <div
             class={`flex items-center gap-1.5 h-8 px-3 rounded-[6px] text-xs font-semibold border ${
               phantoms.length > 0
-                ? "bg-[#f43f5e]/10 text-[#f43f5e] border-[#f43f5e]/30 animate-pulse"
+                ? "bg-[#f43f5e]/10 text-[#f43f5e] border-[#f43f5e]/30"
                 : "bg-[#00d992]/10 text-[#00d992] border-[#00d992]/30"
             }`}
           >
@@ -200,30 +208,38 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
           </div>
 
           {devUnused.length > 0 && (
-            <div class="flex items-center gap-1.5 h-8 px-3 bg-[#101010] border border-[#3d3a39] rounded-[6px] text-xs text-[#8b949e]">
-              <span>Dev / Tools Unused:</span>
-              <span class="font-mono font-bold text-[#f2f2f2]">{devUnused.length}</span>
+            <div class="flex items-center gap-2 h-8 px-3 bg-[#101010] border border-[#3d3a39] rounded-[6px] text-xs">
+              <span class="text-[#8b949e]">Dev / Tools:</span>
+              <span class="font-mono font-bold text-[#8b949e]">{devUnused.length}</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Global Quick-Action Banners if issues exist */}
-      {hasIssues && onFix && (
-        <div class="flex items-center justify-between gap-3 p-3.5 bg-[#141414] border border-[#3d3a39] rounded-[8px] flex-wrap">
-          <div class="flex items-center gap-2">
-            <IconZap size={16} className="text-[#00d992]" />
-            <span class="text-xs text-[#f2f2f2] font-medium">Automated Quick Remediation Available:</span>
+      {/* Quick Fix Banner */}
+      {onFix && activeIssuesCount > 0 && (
+        <div class="bg-[#151515] border border-[#3d3a39] rounded-[8px] p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[6px] bg-[#00d992]/10 text-[#00d992] flex items-center justify-center shrink-0">
+              <IconZap size={16} />
+            </div>
+            <div>
+              <div class="text-xs font-semibold text-[#ffffff]">Automated Quick Remediation Available:</div>
+              <div class="text-[11px] text-[#8b949e] mt-0.5">
+                Automatically declare missing phantom imports and remove dead packages across workspace
+                manifests.
+              </div>
+            </div>
           </div>
 
-          <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex items-center gap-2">
             {phantoms.length > 0 && (
               <button
                 disabled={fixing !== null}
                 onClick={handleBatchDeclarePhantoms}
                 class="h-7 px-3 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded-[6px] text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
-                <IconPlus size={13} />
+                <IconPlus size={12} />
                 <span>
                   {fixing === "batch-phantoms" ? "Declaring..." : `Declare All Phantoms (${phantoms.length})`}
                 </span>
@@ -236,7 +252,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                 onClick={handleBatchRemoveUnusedProd}
                 class="h-7 px-3 bg-[#f43f5e]/15 hover:bg-[#f43f5e]/25 border border-[#f43f5e]/40 text-[#f43f5e] rounded-[6px] text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
-                <IconTrash size={13} />
+                <IconTrash size={12} />
                 <span>
                   {fixing === "batch-unused-prod"
                     ? "Removing..."
@@ -271,7 +287,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
               }`}
               onClick={() => setFilterType("all")}
             >
-              All ({phantoms.length + unused.length})
+              All Active ({activeIssuesCount})
             </button>
             <button
               class={`px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors ${
@@ -308,7 +324,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
       </div>
 
       {/* Main Content Sections */}
-      {!hasIssues ? (
+      {filteredPhantoms.length === 0 && filteredUnused.length === 0 ? (
         <div class="p-12 text-center bg-[#101010] border border-[#3d3a39] rounded-[8px] space-y-3">
           <div class="w-12 h-12 rounded-full bg-[#00d992]/10 text-[#00d992] flex items-center justify-center mx-auto">
             <IconCheckCircle size={24} />
@@ -316,7 +332,8 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
           <h3 class="text-base font-semibold text-[#ffffff]">Flawless Source Code Dependency Hygiene</h3>
           <p class="text-xs text-[#8b949e] max-w-md mx-auto leading-relaxed">
             All imported packages are properly declared in their respective workspace manifests, and no dead
-            or undeclared phantom dependencies were found across {scannedFilesCount} source files.
+            or undeclared phantom dependencies were found across {scannedFilesCount} scanned source & config
+            files.
           </p>
         </div>
       ) : (
@@ -342,6 +359,9 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                   const isFixing = fixing === fixKey
                   const targetVer =
                     phantomVersions[`${p.workspace}:${p.name}`] ?? p.suggestedVersion ?? "^latest"
+                  const isRootScript =
+                    p.workspace === "." &&
+                    p.files.some((f) => f.includes("scripts/") || f.includes("migrations/"))
 
                   return (
                     <div
@@ -356,6 +376,11 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                               <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30">
                                 UNDECLARED
                               </span>
+                              {isRootScript && (
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-[#00d992]/15 text-[#00d992] border border-[#00d992]/30">
+                                  SCRIPT / TOOLING
+                                </span>
+                              )}
                             </span>
                             <div class="font-mono text-xs text-[#8b949e] flex items-center gap-1 mt-0.5">
                               <IconFolder size={11} className="text-[#605c5a]" />
@@ -410,7 +435,13 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                             class="h-6 px-2.5 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50"
                           >
                             <IconPlus size={12} />
-                            <span>{isFixing ? "Declaring..." : "Declare in package.json"}</span>
+                            <span>
+                              {isFixing
+                                ? "Declaring..."
+                                : isRootScript
+                                  ? "Declare in root devDeps"
+                                  : "Declare in package.json"}
+                            </span>
                           </button>
                         )}
                       </div>
@@ -428,11 +459,15 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                 <div class="flex items-center gap-2">
                   <span class="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" />
                   <h2 class="text-sm font-bold text-[#ffffff] uppercase tracking-wider">
-                    Unused (Dead) Dependencies ({filteredUnused.length})
+                    {filterType === "unused-dev"
+                      ? `Dev Tooling & Build Config (${filteredUnused.length})`
+                      : `Unused (Dead) Dependencies (${filteredUnused.length})`}
                   </h2>
                 </div>
                 <span class="text-xs text-[#8b949e]">
-                  Declared in manifests but never imported in any scanned source file
+                  {filterType === "unused-dev"
+                    ? "Configured build tools, plugins, and CLI packages"
+                    : "Declared in manifests but never imported in any scanned source or config file"}
                 </span>
               </div>
 
@@ -448,13 +483,13 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                       class={`bg-[#121212] border rounded-[8px] p-3.5 flex items-center justify-between gap-3 transition-colors ${
                         isProd
                           ? "border-[#f59e0b]/40 hover:border-[#f59e0b]"
-                          : "border-[#2e2a28] hover:border-[#4d4845]"
+                          : "border-[#3d3a39] hover:border-[#8b949e]"
                       }`}
                     >
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
                           <span class="font-mono font-bold text-sm text-[#ffffff] truncate">{u.name}</span>
-                          <span class="font-mono text-xs text-[#8b949e]">@{u.version}</span>
+                          <span class="font-mono text-xs text-[#8b949e]">{u.version}</span>
                           <span
                             class={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
                               isProd
@@ -465,7 +500,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                             {u.type}
                           </span>
                           {u.isDevTool && (
-                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#1a1a1a] text-[#8b949e]">
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono text-[#8b949e] bg-[#1c1c1c] border border-[#3d3a39]">
                               dev tool
                             </span>
                           )}
@@ -481,8 +516,7 @@ export function UnusedView({ data, notify, onFix }: UnusedProps) {
                         <button
                           disabled={fixing !== null}
                           onClick={() => handleRemoveUnused(u)}
-                          class="h-7 px-2.5 bg-[#f43f5e]/10 hover:bg-[#f43f5e]/20 border border-[#f43f5e]/30 text-[#f43f5e] rounded text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors disabled:opacity-50"
-                          title="Remove from package.json"
+                          class="h-6 px-2.5 bg-[#f43f5e]/15 hover:bg-[#f43f5e]/25 border border-[#f43f5e]/40 text-[#f43f5e] rounded text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-50 shrink-0"
                         >
                           <IconTrash size={12} />
                           <span>{isFixing ? "Removing..." : "Remove"}</span>

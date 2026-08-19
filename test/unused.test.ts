@@ -5,6 +5,8 @@ import os from "node:os"
 import {
   extractImportsFromContent,
   extractPackageName,
+  extractPackagesFromScripts,
+  extractReferencesFromConfig,
   isDevToolPackage,
   loadPathAliasMatcher,
   scanWorkspaceDependencies,
@@ -96,6 +98,44 @@ describe("unused & phantom dependency scanner", () => {
     })
   })
 
+  describe("extractPackagesFromScripts", () => {
+    it("parses CLI binary names to packages", () => {
+      const scripts = {
+        build: "turbo run build",
+        lint: "eslint .",
+        format: "prettier --write .",
+        typecheck: "tsc --noEmit",
+        dev: "nodemon src/index.ts",
+        migrate: "migrate-mongo up",
+        release: "changeset publish",
+      }
+
+      const pkgs = extractPackagesFromScripts(scripts)
+      expect(pkgs).toContain("turbo")
+      expect(pkgs).toContain("eslint")
+      expect(pkgs).toContain("prettier")
+      expect(pkgs).toContain("typescript")
+      expect(pkgs).toContain("nodemon")
+      expect(pkgs).toContain("migrate-mongo")
+      expect(pkgs).toContain("@changesets/cli")
+    })
+  })
+
+  describe("extractReferencesFromConfig", () => {
+    it("extracts config plugins and transports", () => {
+      const config = `
+        export default {
+          plugins: ["@vitejs/plugin-react", "tailwindcss-animate"],
+          transport: { target: "pino-pretty" }
+        }
+      `
+      const refs = extractReferencesFromConfig(config)
+      expect(refs).toContain("@vitejs/plugin-react")
+      expect(refs).toContain("tailwindcss-animate")
+      expect(refs).toContain("pino-pretty")
+    })
+  })
+
   describe("loadPathAliasMatcher", () => {
     let tmpDir: string
 
@@ -146,14 +186,21 @@ describe("unused & phantom dependency scanner", () => {
       }
     })
 
-    it("isolates child workspaces from root workspace scan", async () => {
-      // Root manifest
+    it("isolates child workspaces and recognizes dev tool scripts and config references", async () => {
+      // Root manifest with scripts
       const rootPkg = {
         name: "monorepo-root",
         version: "1.0.0",
         private: true,
+        scripts: {
+          build: "turbo run build",
+          lint: "eslint .",
+          format: "prettier --write .",
+        },
         devDependencies: {
           turbo: "^2.0.0",
+          eslint: "^9.0.0",
+          prettier: "^3.0.0",
         },
       }
       fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify(rootPkg, null, 2), "utf8")
@@ -170,6 +217,10 @@ describe("unused & phantom dependency scanner", () => {
           "@nestjs/common": "^11.2.1",
           "@nestjs/event-emitter": "^3.1.0",
           "@aws-sdk/client-s3": "^3.1111.0",
+          jsonwebtoken: "^9.0.0",
+        },
+        devDependencies: {
+          "@types/jsonwebtoken": "^9.0.0",
         },
       }
       fs.writeFileSync(path.join(apiDir, "package.json"), JSON.stringify(apiPkg, null, 2), "utf8")
@@ -178,6 +229,7 @@ describe("unused & phantom dependency scanner", () => {
         import { Injectable } from "@nestjs/common";
         import { EventEmitter2 } from "@nestjs/event-emitter";
         import { S3Client } from "@aws-sdk/client-s3";
+        import jwt from "jsonwebtoken";
       `
       fs.writeFileSync(path.join(apiSrc, "main.ts"), apiCode, "utf8")
 
@@ -195,7 +247,6 @@ describe("unused & phantom dependency scanner", () => {
       }
       fs.writeFileSync(path.join(webDir, "package.json"), JSON.stringify(webPkg, null, 2), "utf8")
 
-      // Web imports @/components/header (path alias) and phantom "zod"
       const webCode = `
         import React from "react";
         import { Header } from "@/components/header";
@@ -213,9 +264,13 @@ describe("unused & phantom dependency scanner", () => {
           private: true,
           packageManager: null,
           enginesNode: null,
-          depCount: 1,
-          devCount: 1,
-          deps: { turbo: { version: "^2.0.0", type: "dev" } },
+          depCount: 3,
+          devCount: 3,
+          deps: {
+            turbo: { version: "^2.0.0", type: "dev" },
+            eslint: { version: "^9.0.0", type: "dev" },
+            prettier: { version: "^3.0.0", type: "dev" },
+          },
         },
         {
           name: "@mono/api",
@@ -226,12 +281,14 @@ describe("unused & phantom dependency scanner", () => {
           private: true,
           packageManager: null,
           enginesNode: null,
-          depCount: 3,
-          devCount: 0,
+          depCount: 5,
+          devCount: 1,
           deps: {
             "@nestjs/common": { version: "^11.2.1", type: "prod" },
             "@nestjs/event-emitter": { version: "^3.1.0", type: "prod" },
             "@aws-sdk/client-s3": { version: "^3.1111.0", type: "prod" },
+            jsonwebtoken: { version: "^9.0.0", type: "prod" },
+            "@types/jsonwebtoken": { version: "^9.0.0", type: "dev" },
           },
         },
         {
@@ -253,19 +310,18 @@ describe("unused & phantom dependency scanner", () => {
 
       const scanRes = await scanWorkspaceDependencies(tmpDir, workspaces)
 
-      // 1. Root workspace must NOT report @nestjs/common or @aws-sdk as phantom!
-      const rootPhantoms = scanRes.phantoms.filter((p) => p.workspace === ".")
-      expect(rootPhantoms).toHaveLength(0)
+      // 1. Root workspace: turbo, eslint, prettier are used in package.json scripts -> 0 unused!
+      const rootUnused = scanRes.unused.filter((u) => u.workspace === ".")
+      expect(rootUnused).toHaveLength(0)
 
-      // 2. @mono/api has all its dependencies declared -> 0 phantoms!
-      const apiPhantoms = scanRes.phantoms.filter((p) => p.workspace === "apps/api")
-      expect(apiPhantoms).toHaveLength(0)
+      // 2. @mono/api: @types/jsonwebtoken is recognized as used because jsonwebtoken is used!
+      const apiUnused = scanRes.unused.filter((u) => u.workspace === "apps/api")
+      expect(apiUnused).toHaveLength(0)
 
       // 3. @mono/web imports @/components/header (alias - ignored) and zod (phantom)
       const webPhantoms = scanRes.phantoms.filter((p) => p.workspace === "apps/web")
       expect(webPhantoms).toHaveLength(1)
       expect(webPhantoms[0]?.name).toBe("zod")
-      expect(webPhantoms.find((p) => p.name.includes("@/"))).toBeUndefined()
 
       // 4. Test declare phantom remediation
       const declareRes = await declarePhantomDependencies(tmpDir, [

@@ -17,7 +17,6 @@ const IGNORED_DIR_NAMES = new Set([
   ".cache",
   ".output",
   ".system_generated",
-  ".husky",
   ".vscode",
   ".idea",
 ])
@@ -34,6 +33,59 @@ const SOURCE_EXTENSIONS = new Set([
   ".vue",
   ".svelte",
   ".astro",
+  ".json",
+])
+
+const CONFIG_FILE_NAMES = new Set([
+  "package.json",
+  "tsconfig.json",
+  "tsconfig.base.json",
+  "tsconfig.build.json",
+  "tsconfig.node.json",
+  "eslint.config.js",
+  "eslint.config.mjs",
+  "eslint.config.cjs",
+  ".eslintrc.js",
+  ".eslintrc.cjs",
+  ".eslintrc.json",
+  ".eslintrc.yaml",
+  ".eslintrc.yml",
+  ".prettierrc",
+  ".prettierrc.json",
+  ".prettierrc.js",
+  ".prettierrc.cjs",
+  "prettier.config.js",
+  "prettier.config.mjs",
+  "prettier.config.cjs",
+  "vite.config.ts",
+  "vite.config.js",
+  "vitest.config.ts",
+  "vitest.config.js",
+  "jest.config.js",
+  "jest.config.ts",
+  "tailwind.config.js",
+  "tailwind.config.ts",
+  "tailwind.config.mjs",
+  "postcss.config.js",
+  "postcss.config.cjs",
+  "postcss.config.mjs",
+  "babel.config.js",
+  "babel.config.json",
+  ".babelrc",
+  "metro.config.js",
+  "app.json",
+  "app.config.js",
+  "app.config.ts",
+  "turbo.json",
+  "nx.json",
+  ".commitlintrc.json",
+  ".commitlintrc.js",
+  "commitlint.config.js",
+  "commitlint.config.ts",
+  "commitlint.config.mjs",
+  "commitlint.config.cjs",
+  ".dependency-cruiser.js",
+  ".dependency-cruiser.cjs",
 ])
 
 const NODE_BUILTINS = new Set([
@@ -127,12 +179,22 @@ const DEV_TOOL_PATTERNS = [
   /^dependency-cruiser/,
   /^type-fest$/,
   /^pino-pretty$/,
+  /^pino-loki$/,
   /^reflect-metadata$/,
+  /^react-native-css-interop$/,
+  /^react-native-screens$/,
+  /^expo-status-bar$/,
+  /^taze$/,
+  /^tsx$/,
+  /^migrate-mongo$/,
+  /^testcontainers$/,
+  /^fast-check$/,
+  /^jsdom$/,
+  /^msw$/,
 ]
 
 export function isDevToolPackage(name: string, type: DepType): boolean {
   if (type === "dev") return true
-  // Even in prod dependencies, some tools/types/polyfills are known non-import or framework runtime plugins
   return DEV_TOOL_PATTERNS.some((pattern) => pattern.test(name))
 }
 
@@ -146,7 +208,6 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
     if (!fs.existsSync(filePath)) return
     try {
       const raw = fs.readFileSync(filePath, "utf8")
-      // Strip comments for JSON parsing
       const cleanJson = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "")
       const parsed = JSON.parse(cleanJson) as {
         compilerOptions?: { paths?: Record<string, string[]> }
@@ -171,7 +232,6 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
   }
 
   return (specifier: string): boolean => {
-    // Universal path alias conventions
     if (
       specifier.startsWith("@/") ||
       specifier.startsWith("~/") ||
@@ -187,14 +247,12 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
 }
 
 /**
- * Parses raw import/require specifier into root package name.
- * Returns null if the specifier is a relative/local path, an alias, or a Node/runtime builtin.
+ * Parses raw import/require/plugin specifier into root package name.
  */
 export function extractPackageName(specifier: string, isAlias?: (spec: string) => boolean): string | null {
   const trimmed = specifier.trim()
   if (!trimmed) return null
 
-  // Ignore relative imports and absolute local paths
   if (
     trimmed.startsWith(".") ||
     trimmed.startsWith("/") ||
@@ -205,24 +263,20 @@ export function extractPackageName(specifier: string, isAlias?: (spec: string) =
     return null
   }
 
-  // Check custom tsconfig path aliases
   if (isAlias && isAlias(trimmed)) {
     return null
   }
 
-  // Ignore node:*, bun:*, deno:* protocols
   if (trimmed.startsWith("node:") || trimmed.startsWith("bun:") || trimmed.startsWith("deno:")) {
     return null
   }
 
-  // Ignore Node standard builtins
   if (NODE_BUILTINS.has(trimmed)) {
     return null
   }
 
-  // Scoped package: @scope/pkg or @scope/pkg/subpath
   if (trimmed.startsWith("@")) {
-    if (trimmed.startsWith("@/")) return null // Path alias
+    if (trimmed.startsWith("@/")) return null
     const parts = trimmed.split("/")
     if (parts.length >= 2) {
       return `${parts[0]}/${parts[1]}`
@@ -230,7 +284,6 @@ export function extractPackageName(specifier: string, isAlias?: (spec: string) =
     return null
   }
 
-  // Non-scoped package: pkg or pkg/subpath
   const firstSlash = trimmed.indexOf("/")
   if (firstSlash !== -1) {
     return trimmed.slice(0, firstSlash)
@@ -243,6 +296,9 @@ export function extractPackageName(specifier: string, isAlias?: (spec: string) =
 const IMPORT_EXPORT_REGEX =
   /(?:import\s+(?:type\s+)?(?:[\s\w*$,{}]+from\s+)?|export\s+(?:[\s\w*$,{}]+from\s+)?|import\s*\(\s*|require\s*\(\s*|require\.resolve\s*\(\s*|import\s+["']|@import\s+["'])["']([^"']+)["']/g
 
+// Regex to capture string literals inside transport configs, plugins, and frameworks
+const STRING_LITERAL_REGEX = /["'](@?[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)?)["']/g
+
 /**
  * Extracts all external package names imported in a source file content.
  */
@@ -250,9 +306,7 @@ export function extractImportsFromContent(content: string, isAlias?: (spec: stri
   const packages = new Set<string>()
   let match: RegExpExecArray | null
 
-  // Reset regex index
   IMPORT_EXPORT_REGEX.lastIndex = 0
-
   while ((match = IMPORT_EXPORT_REGEX.exec(content)) !== null) {
     const specifier = match[1]
     if (!specifier) continue
@@ -266,7 +320,83 @@ export function extractImportsFromContent(content: string, isAlias?: (spec: stri
 }
 
 /**
- * Recursively collects all source files within a workspace directory,
+ * Extracts references from config files (e.g. tsconfig extends, eslint plugins, tailwind plugins, pino transports).
+ */
+export function extractReferencesFromConfig(
+  content: string,
+  isAlias?: (spec: string) => boolean
+): Set<string> {
+  const refs = new Set<string>()
+  let match: RegExpExecArray | null
+
+  STRING_LITERAL_REGEX.lastIndex = 0
+  while ((match = STRING_LITERAL_REGEX.exec(content)) !== null) {
+    const specifier = match[1]
+    if (!specifier) continue
+    const pkg = extractPackageName(specifier, isAlias)
+    if (pkg) {
+      refs.add(pkg)
+    }
+  }
+
+  return refs
+}
+
+/**
+ * Extracts CLI binary names and packages from package.json "scripts".
+ */
+export function extractPackagesFromScripts(scriptsRecord?: Record<string, string>): Set<string> {
+  const referenced = new Set<string>()
+  if (!scriptsRecord) return referenced
+
+  const CLI_NAME_MAP: Record<string, string> = {
+    tsc: "typescript",
+    eslint: "eslint",
+    prettier: "prettier",
+    turbo: "turbo",
+    vitest: "vitest",
+    vite: "vite",
+    tsx: "tsx",
+    taze: "taze",
+    nodemon: "nodemon",
+    concurrently: "concurrently",
+    "migrate-mongo": "migrate-mongo",
+    changeset: "@changesets/cli",
+    changesets: "@changesets/cli",
+    commitlint: "@commitlint/cli",
+    husky: "husky",
+    "lint-staged": "lint-staged",
+    "dependency-cruiser": "dependency-cruiser",
+    depcruise: "dependency-cruiser",
+    tailwindcss: "tailwindcss",
+    swc: "@swc/cli",
+    cross_env: "cross-env",
+    "cross-env": "cross-env",
+    rimraf: "rimraf",
+    next: "next",
+    expo: "expo",
+    jest: "jest",
+    playwright: "@playwright/test",
+    cypress: "cypress",
+  }
+
+  for (const scriptContent of Object.values(scriptsRecord)) {
+    const tokens = scriptContent.split(/[\s;&|><=]+/)
+    for (const token of tokens) {
+      const cleanToken = token.trim().replace(/^npx\s+/, "")
+      if (CLI_NAME_MAP[cleanToken]) {
+        referenced.add(CLI_NAME_MAP[cleanToken]!)
+      } else if (cleanToken.startsWith("@") || cleanToken.length > 2) {
+        referenced.add(cleanToken)
+      }
+    }
+  }
+
+  return referenced
+}
+
+/**
+ * Recursively collects all source and config files within a workspace directory,
  * explicitly skipping child workspace directories to prevent cross-workspace contamination.
  */
 export async function collectSourceFiles(
@@ -285,12 +415,10 @@ export async function collectSourceFiles(
     const fullPath = path.join(dir, entry.name)
 
     if (entry.isDirectory()) {
-      // Skip ignored directories (node_modules, dist, etc.)
       if (IGNORED_DIR_NAMES.has(entry.name) || entry.name.startsWith(".")) {
         continue
       }
 
-      // CRITICAL: Skip any subdirectory that is another registered workspace in the monorepo
       const normalizedPath = path.resolve(fullPath).toLowerCase()
       if (childWorkspaceDirs.has(normalizedPath)) {
         continue
@@ -299,7 +427,7 @@ export async function collectSourceFiles(
       await collectSourceFiles(fullPath, childWorkspaceDirs, results)
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase()
-      if (SOURCE_EXTENSIONS.has(ext)) {
+      if (SOURCE_EXTENSIONS.has(ext) || CONFIG_FILE_NAMES.has(entry.name)) {
         results.push(fullPath)
       }
     }
@@ -348,7 +476,6 @@ export async function scanWorkspaceDependencies(
   for (const ws of workspaces) {
     const wsDir = ws.absPath ? path.dirname(ws.absPath) : path.resolve(rootDir, ws.relPath)
 
-    // Build the set of OTHER workspace directories that this workspace must NOT traverse into
     const childWorkspaceDirs = new Set<string>()
     for (const [otherRelPath, otherAbsDir] of allWorkspaceDirPaths.entries()) {
       if (otherRelPath !== ws.relPath) {
@@ -362,6 +489,25 @@ export async function scanWorkspaceDependencies(
 
     // Map: importedPackage -> Set of relative file paths where imported
     const importedInFiles = new Map<string, Set<string>>()
+    const configReferences = new Set<string>()
+
+    // Check package.json scripts for active CLI tool references
+    let pkgJsonScripts: Record<string, string> | undefined
+    try {
+      const pkgJsonPath = ws.absPath ?? path.join(wsDir, "package.json")
+      if (fs.existsSync(pkgJsonPath)) {
+        const raw = fs.readFileSync(pkgJsonPath, "utf8")
+        const parsed = JSON.parse(raw) as { scripts?: Record<string, string> }
+        pkgJsonScripts = parsed.scripts
+      }
+    } catch {
+      // Ignore
+    }
+
+    const scriptReferencedPkgs = extractPackagesFromScripts(pkgJsonScripts)
+    for (const p of scriptReferencedPkgs) {
+      configReferences.add(p)
+    }
 
     for (const filePath of sourceFiles) {
       let content = ""
@@ -369,6 +515,16 @@ export async function scanWorkspaceDependencies(
         content = await fs.promises.readFile(filePath, "utf8")
       } catch {
         continue
+      }
+
+      const basename = path.basename(filePath)
+      const isConfigFile = CONFIG_FILE_NAMES.has(basename)
+
+      if (isConfigFile) {
+        const configRefs = extractReferencesFromConfig(content, isAlias)
+        for (const ref of configRefs) {
+          configReferences.add(ref)
+        }
       }
 
       const fileImports = extractImportsFromContent(content, isAlias)
@@ -390,10 +546,7 @@ export async function scanWorkspaceDependencies(
       // Valid if self-reference (workspace imports its own package name)
       if (ws.name && ws.name === importedPkg) continue
 
-      // If it's a monorepo workspace package that is imported but missing in deps:
       const isInternalMonorepoPkg = monorepoPackageNames.has(importedPkg)
-
-      // Look up hoisting source
       const globalMatches = globalDepVersions.get(importedPkg) ?? []
       let suggestedVersion: string | null = null
       let hoistedFrom: string | null = null
@@ -423,8 +576,57 @@ export async function scanWorkspaceDependencies(
 
     // 2. Detect Unused Dependencies
     for (const [depName, depRecord] of Object.entries(ws.deps)) {
-      // If it was imported anywhere in this workspace's source files, it is used
+      // Used if imported in any source file
       if (importedInFiles.has(depName)) continue
+
+      // Used if referenced in config files or scripts
+      if (configReferences.has(depName)) continue
+
+      // Check if it's a type definition for a package that IS used or declared
+      if (depName.startsWith("@types/")) {
+        const basePkg = depName.slice(7) // e.g. @types/jsonwebtoken -> jsonwebtoken
+        if (
+          basePkg === "node" ||
+          ws.deps[basePkg] ||
+          importedInFiles.has(basePkg) ||
+          configReferences.has(basePkg)
+        ) {
+          continue
+        }
+      }
+
+      // Framework plugins / JSX runtimes / transports
+      if (
+        (depName === "react" || depName === "react-dom") &&
+        (importedInFiles.has("react") ||
+          importedInFiles.has("react-dom") ||
+          sourceFiles.some((f) => f.endsWith(".tsx") || f.endsWith(".jsx")))
+      ) {
+        continue
+      }
+
+      if (
+        (depName === "pino-pretty" || depName === "pino-loki") &&
+        (ws.deps["pino"] || importedInFiles.has("pino"))
+      ) {
+        continue
+      }
+
+      if (
+        (depName === "reflect-metadata" || depName === "rxjs") &&
+        (ws.deps["@nestjs/core"] || ws.deps["@nestjs/common"] || importedInFiles.has("@nestjs/common"))
+      ) {
+        continue
+      }
+
+      if (
+        (depName === "expo-status-bar" ||
+          depName === "react-native-screens" ||
+          depName === "react-native-css-interop") &&
+        (ws.deps["expo"] || ws.deps["react-native"] || ws.deps["nativewind"])
+      ) {
+        continue
+      }
 
       const isDevTool = isDevToolPackage(depName, depRecord.type)
 
@@ -441,7 +643,6 @@ export async function scanWorkspaceDependencies(
   // Sort phantoms and unused for consistent, deterministic outputs
   phantoms.sort((a, b) => a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name))
   unused.sort((a, b) => {
-    // Prioritize production unused dependencies first
     if (a.type === "prod" && b.type !== "prod") return -1
     if (a.type !== "prod" && b.type === "prod") return 1
     return a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name)
