@@ -165,8 +165,8 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
         </div>
       </div>
 
-      {/* Outdated cards 2-in-a-row grid */}
-      <div class="grid grid-cols-2 gap-4 max-[1000px]:grid-cols-1">
+      {/* Outdated cards 4-in-a-row responsive grid */}
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {items.map((item) => (
           <div
             key={item.name}
@@ -175,24 +175,27 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
             <div>
               {/* Card Header */}
               <div
-                class="flex items-center justify-between gap-2 px-4 py-3 bg-[#151515] border-b border-[#242120] cursor-pointer hover:bg-[#1a1a1a] transition-colors"
+                class="flex items-center justify-between gap-2 px-3.5 py-2.5 bg-[#151515] border-b border-[#242120] cursor-pointer hover:bg-[#1a1a1a] transition-colors"
                 onClick={() => setExpanded(expanded === item.name ? null : item.name)}
+                title={`Click to ${expanded === item.name ? "collapse" : "view"} changelog for ${item.name}`}
               >
-                <div class="flex items-center gap-2 min-w-0">
+                <div class="flex items-center gap-1.5 min-w-0">
                   <span class={`w-2 h-2 rounded-full shrink-0 ${dotColor(item.status)}`} />
-                  <span class="font-mono text-sm font-bold text-[#ffffff] truncate">{item.name}</span>
+                  <span class="font-mono text-xs font-bold text-[#ffffff] truncate" title={item.name}>
+                    {item.name}
+                  </span>
                 </div>
 
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center gap-1.5 shrink-0">
                   <span
-                    class={`inline-flex items-center justify-center h-5 px-2 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusStyle(
+                    class={`inline-flex items-center justify-center h-4.5 px-1.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${statusStyle(
                       item.status
                     )}`}
                   >
                     {item.status}
                   </span>
                   <IconChevronRight
-                    size={13}
+                    size={12}
                     className={`text-[#8b949e] transition-transform ${
                       expanded === item.name ? "rotate-90" : ""
                     }`}
@@ -201,16 +204,20 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
               </div>
 
               {/* Card Semver Drift Row */}
-              <div class="p-4 space-y-3">
-                <div class="flex items-center justify-between p-2.5 bg-[#161616] border border-[#262626] rounded-[6px] text-xs font-mono">
-                  <div>
-                    <span class="text-[#8b949e] text-[10.5px] uppercase block">Current</span>
-                    <span class="text-[#f43f5e] font-semibold">{item.current ?? "—"}</span>
+              <div class="p-3">
+                <div class="flex items-center justify-between p-2 bg-[#141414] border border-[#22201f] rounded-[6px] text-xs font-mono">
+                  <div class="min-w-0">
+                    <span class="text-[#8b949e] text-[9.5px] uppercase block font-semibold">Current</span>
+                    <span class="text-[#f43f5e] font-semibold truncate block" title={item.current ?? "—"}>
+                      {item.current ?? "—"}
+                    </span>
                   </div>
-                  <span class="text-[#8b949e] font-bold">➔</span>
-                  <div class="text-right">
-                    <span class="text-[#8b949e] text-[10.5px] uppercase block">Latest</span>
-                    <span class="text-[#00d992] font-bold">{item.latest ?? "—"}</span>
+                  <span class="text-[#8b949e] font-bold px-1 shrink-0">➔</span>
+                  <div class="text-right min-w-0">
+                    <span class="text-[#8b949e] text-[9.5px] uppercase block font-semibold">Latest</span>
+                    <span class="text-[#00d992] font-bold truncate block" title={item.latest ?? "—"}>
+                      {item.latest ?? "—"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -218,7 +225,7 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
 
             {/* Expandable Changelog Preview */}
             {expanded === item.name && (
-              <div class="border-t border-[#262626] bg-[#161616] p-4 text-xs">
+              <div class="border-t border-[#242120] bg-[#141414] p-3 text-xs">
                 <ChangelogBlock changelog={item.changelog} />
               </div>
             )}
