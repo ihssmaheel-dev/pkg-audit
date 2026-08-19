@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks"
 import type { ScanResult, SecuritySeverity, SecurityVulnerability } from "../../../types"
-import { IconCheckCircle, IconCopy, IconSearch, IconShield, IconWrench, IconZap } from "./icons"
+import { IconCheckCircle, IconCopy, IconFileText, IconSearch, IconShield, IconWrench, IconZap } from "./icons"
+import { AdvisoryModal } from "./advisory-modal"
 
 interface SecurityViewProps {
   data: ScanResult
@@ -51,7 +52,7 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
   const [filterSeverity, setFilterSeverity] = useState<SecuritySeverity | "ALL">("ALL")
   const [search, setSearch] = useState("")
   const [fixingPkg, setFixingPkg] = useState<string | null>(null)
-  const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({})
+  const [selectedVuln, setSelectedVuln] = useState<SecurityVulnerability | null>(null)
 
   const security = data.security
 
@@ -134,10 +135,6 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
     } catch {
       // Clipboard unavailable
     }
-  }
-
-  const toggleDetails = (id: string) => {
-    setExpandedDetails((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
   // Full-page loading state during initial security scan
@@ -334,7 +331,6 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
           {filteredVulns.map((vuln) => {
             const sevInfo = SEVERITY_COLORS[vuln.severity]
             const isFixing = fixingPkg === vuln.id
-            const isExpanded = Boolean(expandedDetails[vuln.id])
 
             return (
               <div
@@ -348,7 +344,7 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
                 }`}
               >
                 <div class="p-4 flex items-start justify-between gap-4 flex-wrap">
-                  <div class="space-y-1.5 min-w-0 flex-1">
+                  <div class="space-y-2 min-w-0 flex-1">
                     {/* Badge header */}
                     <div class="flex items-center gap-2 flex-wrap">
                       <span
@@ -356,14 +352,13 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
                       >
                         {sevInfo.label} {vuln.cvssScore ? `(${vuln.cvssScore.toFixed(1)})` : ""}
                       </span>
-                      <a
-                        href={vuln.advisoryUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        onClick={() => setSelectedVuln(vuln)}
                         class="text-xs font-mono font-bold text-[#00d992] hover:underline"
+                        title="Open Advisory Modal"
                       >
                         {vuln.id}
-                      </a>
+                      </button>
                       {vuln.aliases.length > 0 && (
                         <span class="text-[11px] text-[#8b949e] font-mono">
                           ({vuln.aliases.slice(0, 2).join(", ")})
@@ -387,7 +382,7 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
                     <div class="text-xs text-[#d1d5db]">{vuln.summary}</div>
 
                     {/* Affected Workspaces */}
-                    <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                    <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
                       <span class="text-[11px] text-[#8b949e]">Affected workspaces:</span>
                       {vuln.workspaces.map((w) => (
                         <span
@@ -399,22 +394,16 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
                       ))}
                     </div>
 
-                    {/* Expandable Details */}
-                    {vuln.details && (
-                      <div class="pt-1">
-                        <button
-                          class="text-[11px] text-[#8b949e] hover:text-[#ffffff] underline"
-                          onClick={() => toggleDetails(vuln.id)}
-                        >
-                          {isExpanded ? "Hide Details" : "Show Advisory Details"}
-                        </button>
-                        {isExpanded && (
-                          <div class="mt-2 p-3 bg-[#0d0d0d] border border-[#252525] rounded text-xs text-[#a0a0a0] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
-                            {vuln.details}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {/* Open Full Advisory Modal Link */}
+                    <div class="pt-1">
+                      <button
+                        class="inline-flex items-center gap-1.5 text-xs text-[#00d992] hover:text-[#2fd6a1] hover:underline font-medium"
+                        onClick={() => setSelectedVuln(vuln)}
+                      >
+                        <IconFileText size={13} />
+                        <span>View Full Advisory Details (Markdown) ↗</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Fix Action Button */}
@@ -436,6 +425,16 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
           })}
         </div>
       )}
+
+      {/* Spacious Full Advisory Markdown Modal */}
+      <AdvisoryModal
+        vuln={selectedVuln}
+        isOpen={selectedVuln !== null}
+        onClose={() => setSelectedVuln(null)}
+        notify={notify}
+        onFixSingle={onFix ? handleFixSingle : undefined}
+        isFixing={fixingPkg === selectedVuln?.id}
+      />
     </div>
   )
 }
