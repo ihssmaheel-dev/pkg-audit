@@ -156,6 +156,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
           outdated: url.searchParams.get("outdated") === "true",
           versions: url.searchParams.get("versions") === "true",
           changelog: url.searchParams.get("changelog") === "true",
+          security: url.searchParams.get("security") === "true",
           concurrency: Number(url.searchParams.get("concurrency")) || 8,
           changelogLines: Number(url.searchParams.get("changelogLines")) || 6,
         })
@@ -168,15 +169,16 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
           dir?: string
           outdated?: boolean
           changelog?: boolean
+          security?: boolean
           concurrency?: number
           changelogLines?: number
         }
-        const scanDir = body.dir ?? resolvedDir
-        if (!scanDir) {
+        const targetDir = body.dir ?? resolvedDir
+        if (!targetDir) {
           json(res, { error: "No directory selected", code: "NO_DIR" }, 400)
           return
         }
-        const validation = validatePath(scanDir)
+        const validation = validatePath(targetDir)
         if (!validation.valid) {
           json(res, { error: validation.error }, 400)
           return
@@ -184,8 +186,9 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
         resolvedDir = validation.path!
         addRecent(resolvedDir)
         const result = await scan(resolvedDir, {
-          outdated: body.outdated ?? false,
-          changelog: body.changelog ?? false,
+          outdated: Boolean(body.outdated),
+          changelog: Boolean(body.changelog),
+          security: Boolean(body.security),
           concurrency: body.concurrency ?? 8,
           changelogLines: body.changelogLines ?? 6,
         })
@@ -225,7 +228,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
       if (url.pathname === "/api/fix" && req.method === "POST") {
         const body = JSON.parse(await readBody(req)) as {
           dir?: string
-          action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate"
+          action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate" | "security-fix"
           fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
           unused?: Array<{ workspace: string; pkg: string; type?: string }>
           phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
@@ -267,6 +270,20 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
             return
           }
           fixResult = await declarePhantomDependencies(targetDir, body.phantoms)
+        } else if (body.action === "security-fix") {
+          const { applySecurityFixes } = await import("../scan/security.js")
+          const currentScan = await scan(targetDir, { security: true })
+          const vulns = currentScan.security?.vulnerabilities ?? []
+          fixResult = await applySecurityFixes(targetDir, vulns, currentScan.workspaces)
+          const updatedScan = await scan(targetDir, { security: true })
+          json(res, {
+            ok: fixResult.ok,
+            changes: fixResult.changes,
+            modifiedFiles: fixResult.modifiedFiles,
+            errors: fixResult.errors,
+            result: updatedScan,
+          })
+          return
         } else if (body.action === "catalog-migrate") {
           const { applyCatalogPlan, generateCatalogPlan } = await import("../scan/catalog.js")
           const currentScan = await scan(targetDir, {})

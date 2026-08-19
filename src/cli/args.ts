@@ -42,6 +42,8 @@ export interface CliOptions {
   catalogInit: boolean
   catalogList: boolean
   catalogAll: boolean
+  security: boolean
+  securityFix: boolean
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -102,6 +104,8 @@ export function parseArgs(argv: string[]): CliOptions {
     catalogInit: false,
     catalogList: false,
     catalogAll: false,
+    security: false,
+    securityFix: false,
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -128,6 +132,16 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.noOpen = true
     } else if (arg === "--watch") {
       opts.watch = true
+    } else if (arg === "audit" || arg === "--audit" || arg === "--security") {
+      opts.security = true
+      const nextArg = argv[i + 1]
+      if (nextArg === "fix" || nextArg === "--fix") {
+        opts.securityFix = true
+        i++
+      }
+    } else if (arg === "audit:fix" || arg === "--fix-security" || arg === "--security-fix") {
+      opts.security = true
+      opts.securityFix = true
     } else if (arg === "--fix" || arg === "fix") {
       opts.fix = true
     } else if (arg === "--unused" || arg === "unused") {
@@ -228,6 +242,8 @@ export function printHelp(): void {
 
 Usage:
   pkg-audit [dir] [options]
+  pkg-audit audit [dir]        # check security vulnerabilities via Google OSV API
+  pkg-audit audit fix [dir]    # automatically upgrade vulnerable packages to safe patches
   pkg-audit catalog init [dir] # convert shared dependencies to pnpm catalog:
   pkg-audit catalog list [dir] # show current and proposed catalog entries
   pkg-audit fix [dir]          # automatically resolve and align version conflicts
@@ -236,6 +252,8 @@ Usage:
   pkg-audit json [dir]         # machine output
 
 Options:
+  audit                  Scan dependencies against Google OSV database for CVEs
+  audit fix              Upgrade all vulnerable dependencies to safe patched versions
   catalog init           Migrate monorepo to centralized pnpm-workspace.yaml catalog:
   --all                  Include all external dependencies in catalog (not just shared)
   --fix                  Align conflicting dependency versions across all workspaces

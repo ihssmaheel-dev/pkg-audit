@@ -231,6 +231,7 @@ catalog:
         graph: { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 1 },
         unused: { phantoms: [], unused: [], scannedFilesCount: 3 },
         outdated: null,
+        security: null,
         errors: [],
         meta: {
           ignoredDirs: [],

@@ -5,6 +5,7 @@ import { Matrix } from "./components/matrix"
 import { Conflicts } from "./components/conflicts"
 import { Graph } from "./components/graph"
 import { UnusedView } from "./components/unused"
+import { SecurityView } from "./components/security"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
 import { Outdated } from "./components/outdated"
@@ -22,6 +23,7 @@ const TAB_IDS: TabId[] = [
   "conflicts",
   "graph",
   "unused",
+  "security",
   "outdated",
   "hygiene",
   "workspaces",
@@ -107,10 +109,12 @@ export function App() {
       payload:
         | Array<{ name: string; targetVersion: string; workspaces?: string[] }>
         | {
-            action?: "align" | "remove-unused" | "declare-phantom"
+            action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate" | "security-fix"
             fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
             unused?: Array<{ workspace: string; pkg: string; type?: string }>
             phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
+            catalogStrategy?: "highest" | "most-frequent"
+            catalogAll?: boolean
           }
     ) => {
       const res = await applyFix(payload, data?.root)
@@ -227,6 +231,15 @@ export function App() {
         )}
         {data && tab === "unused" && (
           <UnusedView data={data} notify={notify} onFix={embedded ? undefined : handleFix} />
+        )}
+        {data && tab === "security" && (
+          <SecurityView
+            data={data}
+            loading={loading}
+            notify={notify}
+            onScanSecurity={() => void handleScan(data.root, { security: true })}
+            onFix={embedded ? undefined : handleFix}
+          />
         )}
         {data && tab === "outdated" && (
           <Outdated

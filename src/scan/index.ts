@@ -15,6 +15,7 @@ import { fetchChangelogs } from "./changelog.js"
 import { buildWorkspaceGraph } from "./graph.js"
 import { scanWorkspaceDependencies } from "./unused.js"
 import { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } from "./catalog.js"
+import { checkVulnerabilities, applySecurityFixes } from "./security.js"
 import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
@@ -49,6 +50,7 @@ interface ScanOptions {
   changelog?: boolean
   changelogLines?: number
   concurrency?: number
+  security?: boolean
   onProgress?: (event: ProgressEvent) => void
 }
 
@@ -188,6 +190,11 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     }
   }
 
+  let security: ScanResult["security"] = null
+  if (opts.security) {
+    security = await checkVulnerabilities(workspaces, { onProgress: opts.onProgress })
+  }
+
   const tempScanData: ScanResult = {
     version: 1,
     root: rootDir,
@@ -198,6 +205,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     graph,
     unused,
     outdated,
+    security,
     errors: stats.errors,
     meta: {
       ignoredDirs: [...scanOpts.ignoreDirs].sort(),
@@ -225,6 +233,8 @@ export {
   generateCatalogPlan,
   applyCatalogPlan,
   readPnpmWorkspaceYaml,
+  checkVulnerabilities,
+  applySecurityFixes,
   isLinkedProtocol,
   parseMajor,
   parseVersionTuple,

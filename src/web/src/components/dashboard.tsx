@@ -14,6 +14,7 @@ import {
   IconRefreshCw,
   IconRepeat,
   IconSearch,
+  IconShield,
 } from "./icons"
 
 Chart.register(...registerables)
@@ -575,6 +576,38 @@ export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardP
             </button>
           </div>
         )}
+
+      {/* Security Vulnerabilities Warning Banner */}
+      {data.security && data.security.vulnerabilities.length > 0 && (
+        <div
+          class="flex items-center justify-between p-4 bg-[#f43f5e]/10 border border-[#f43f5e]/40 rounded-[8px] cursor-pointer hover:bg-[#f43f5e]/15 transition-colors gap-4"
+          onClick={() => onTabChange("security")}
+        >
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[6px] bg-[#f43f5e]/20 text-[#f43f5e] flex items-center justify-center shrink-0">
+              <IconShield size={16} />
+            </div>
+            <div>
+              <div class="text-sm font-bold text-[#ffffff] flex items-center gap-2">
+                <span>
+                  {data.security.criticalCount > 0
+                    ? `${data.security.criticalCount} Critical & ${data.security.highCount} High Security Vulnerabilities`
+                    : `${data.security.vulnerabilities.length} Security Vulnerabilities Detected (Google OSV)`}
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-[#f43f5e]/20 text-[#f43f5e] font-mono">
+                  SECURITY ALERT
+                </span>
+              </div>
+              <div class="text-xs text-[#bdbdbd] mt-0.5">
+                Known CVEs detected across workspace manifests. 1-click safe patch upgrades available.
+              </div>
+            </div>
+          </div>
+          <button class="h-7 px-3 bg-[#f43f5e] hover:bg-[#fb7185] text-[#101010] font-semibold text-xs rounded-[6px] transition-colors shrink-0">
+            Fix in Security Tab ➔
+          </button>
+        </div>
+      )}
 
       {/* 6-up Stat Cards Grid spanning full width */}
       <div class="grid grid-cols-6 gap-3.5 max-[1400px]:grid-cols-3 max-[768px]:grid-cols-2">

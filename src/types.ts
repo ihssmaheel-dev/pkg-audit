@@ -171,6 +171,38 @@ export interface CatalogMigrationResult {
   errors: Array<{ path: string; error: string }>
 }
 
+export type SecuritySeverity = "CRITICAL" | "HIGH" | "MODERATE" | "LOW" | "UNKNOWN"
+
+export interface SecurityVulnerability {
+  id: string
+  aliases: string[]
+  pkg: string
+  version: string
+  severity: SecuritySeverity
+  cvssScore?: number
+  summary: string
+  details?: string
+  patchedVersion: string | null
+  suggestedVersion: string | null
+  advisoryUrl: string
+  publishedAt?: string
+  workspaces: Array<{
+    workspace: string
+    type: DepType
+    currentVersion: string
+  }>
+}
+
+export interface SecurityResult {
+  vulnerabilities: SecurityVulnerability[]
+  criticalCount: number
+  highCount: number
+  moderateCount: number
+  lowCount: number
+  totalVulnerablePackages: number
+  scannedPackageCount: number
+}
+
 export interface ScanResult {
   version: 1
   root: string
@@ -181,13 +213,14 @@ export interface ScanResult {
   graph: WorkspaceGraph
   unused: UnusedScanResult
   outdated: OutdatedResult | null
+  security: SecurityResult | null
   errors: ScanError[]
   meta: ScanMeta
   catalog?: CatalogPlan | null
 }
 
 export interface ProgressEvent {
-  phase: "outdated"
+  phase: "outdated" | "security"
   done: number
   total: number
 }

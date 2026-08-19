@@ -27,6 +27,12 @@ const TABS: TabDef[] = [
     count: (d) =>
       (d.unused?.phantoms.length ?? 0) + (d.unused?.unused.filter((u) => u.type === "prod").length ?? 0),
   },
+  {
+    id: "security",
+    label: "Security",
+    warn: true,
+    count: (d) => (d.security?.criticalCount ?? 0) + (d.security?.highCount ?? 0),
+  },
   { id: "outdated", label: "Outdated", count: (d) => d.outdated?.outdated.length ?? 0 },
   { id: "hygiene", label: "Hygiene", count: (d) => d.hygieneIssues.length },
   { id: "workspaces", label: "Workspaces", count: (d) => d.workspaces.length },

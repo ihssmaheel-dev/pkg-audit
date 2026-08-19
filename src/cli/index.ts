@@ -127,7 +127,93 @@ async function main(): Promise<void> {
     changelog: merged.changelog,
     concurrency: merged.concurrency,
     changelogLines: merged.changelogLines,
+    security: merged.security,
   })
+
+  if (merged.security) {
+    const { checkVulnerabilities, applySecurityFixes } = await import("../scan/security.js")
+    let security = result.security
+    if (!security) {
+      process.stdout.write("  Scanning vulnerabilities via Google OSV API...")
+      security = await checkVulnerabilities(result.workspaces)
+      process.stdout.write("\r\x1b[K")
+    }
+
+    if (merged.securityFix) {
+      if (security.vulnerabilities.length === 0) {
+        console.log("\n  ✔ Zero security vulnerabilities found across monorepo dependencies.\n")
+        return
+      }
+
+      if (merged.dryRun) {
+        console.log("\n  ⚡ pkg-audit audit fix (dry run)\n")
+        console.log(`  Security fixes to be applied (${security.vulnerabilities.length} vulnerabilities):`)
+        for (const vuln of security.vulnerabilities) {
+          console.log(
+            `    • ${vuln.pkg}: ${vuln.version} ➔ ${vuln.suggestedVersion ?? "manual review"} [${vuln.severity}] (${vuln.id})`
+          )
+        }
+        console.log("\n  Run without --dry-run to apply upgrades to package.json files.\n")
+        return
+      }
+
+      const fixRes = await applySecurityFixes(dir, security.vulnerabilities, result.workspaces)
+      console.log("\n  ⚡ pkg-audit audit fix\n")
+      if (fixRes.changes.length === 0) {
+        console.log("  No automatic patches available.\n")
+        return
+      }
+      console.log(
+        `  ✔ Upgraded ${fixRes.changes.length} package(s) across ${fixRes.modifiedFiles.length} workspace manifest(s):\n`
+      )
+      for (const ch of fixRes.changes) {
+        console.log(`    • ${ch.pkg}: ${ch.from} ➔ ${ch.to} (${ch.workspace})`)
+      }
+      console.log(`\n  ${fixRes.modifiedFiles.length} package.json file(s) updated successfully.\n`)
+      return
+    }
+
+    // Print Security Report
+    console.log(`\n  🔒 Security Audit Report (Google OSV) — ${dir}\n`)
+    if (security.vulnerabilities.length === 0) {
+      console.log(
+        `  ✔ Zero vulnerabilities found across ${security.scannedPackageCount} scanned packages. Your dependencies are secure!\n`
+      )
+      return
+    }
+
+    console.log(
+      `  Found ${security.vulnerabilities.length} vulnerability(ies) across ${security.totalVulnerablePackages} package(s):`
+    )
+    console.log(
+      `  Critical: ${security.criticalCount} | High: ${security.highCount} | Moderate: ${security.moderateCount} | Low: ${security.lowCount}\n`
+    )
+
+    for (const vuln of security.vulnerabilities) {
+      const sevBadge =
+        vuln.severity === "CRITICAL"
+          ? "🔴 CRITICAL"
+          : vuln.severity === "HIGH"
+            ? "🟠 HIGH"
+            : vuln.severity === "MODERATE"
+              ? "🟡 MODERATE"
+              : "⚪ LOW"
+      console.log(`  ${sevBadge}  ${vuln.pkg}@${vuln.version} — ${vuln.id}`)
+      console.log(`    Summary: ${vuln.summary}`)
+      if (vuln.suggestedVersion) {
+        console.log(`    Fix: Upgrade to ${vuln.suggestedVersion}`)
+      }
+      console.log(`    Advisory: ${vuln.advisoryUrl}`)
+      console.log(`    Workspaces: ${vuln.workspaces.map((w) => w.workspace).join(", ")}`)
+      console.log("")
+    }
+
+    console.log(`  Run 'npx pkg-audit audit fix' to automatically patch all vulnerable packages.\n`)
+    if (security.criticalCount > 0 || security.highCount > 0) {
+      process.exitCode = 1
+    }
+    return
+  }
 
   if (merged.catalog) {
     const { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } =

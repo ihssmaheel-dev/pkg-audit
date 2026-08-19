@@ -31,6 +31,7 @@ export function useScan() {
       if (dir) params.set("dir", dir)
       if (opts.outdated) params.set("outdated", "true")
       if (opts.changelog) params.set("changelog", "true")
+      if (opts.security) params.set("security", "true")
       const query = params.toString()
       const url = `/api/scan${query ? `?${query}` : ""}${token ? `${query ? "&" : "?"}token=${token}` : ""}`
 
@@ -60,7 +61,7 @@ export function useScan() {
       payload:
         | Array<{ name: string; targetVersion: string; workspaces?: string[] }>
         | {
-            action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate"
+            action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate" | "security-fix"
             fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
             unused?: Array<{ workspace: string; pkg: string; type?: string }>
             phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>

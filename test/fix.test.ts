@@ -83,6 +83,7 @@ describe("fix engine", () => {
         graph: { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 0 },
         unused: { phantoms: [], unused: [], scannedFilesCount: 0 },
         outdated: null,
+        security: null,
         errors: [],
         meta: {
           totalDepDeclarations: 2,

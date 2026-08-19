@@ -63,6 +63,7 @@ describe("generatePrComment", () => {
       graph: { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 0 },
       unused: { phantoms: [], unused: [], scannedFilesCount: 0 },
       outdated: null,
+      security: null,
       meta: {
         totalDepDeclarations: 1,
         totalUniquePackages: 1,
