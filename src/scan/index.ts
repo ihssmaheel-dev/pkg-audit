@@ -192,7 +192,10 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
 
   let security: ScanResult["security"] = null
   if (opts.security) {
-    security = await checkVulnerabilities(workspaces, { onProgress: opts.onProgress })
+    security = await checkVulnerabilities(workspaces, {
+      rootDir,
+      onProgress: opts.onProgress,
+    })
   }
 
   const tempScanData: ScanResult = {

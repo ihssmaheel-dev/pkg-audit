@@ -1,4 +1,4 @@
-import { useMemo, useState } from "preact/hooks"
+import { useEffect, useMemo, useState } from "preact/hooks"
 import type { ScanResult, SecuritySeverity, SecurityVulnerability } from "../../../types"
 import { IconCheckCircle, IconCopy, IconSearch, IconShield, IconWrench, IconZap } from "./icons"
 
@@ -54,6 +54,14 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
   const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({})
 
   const security = data.security
+
+  // Auto-scan on initial visit if security data hasn't been fetched yet
+  useEffect(() => {
+    if (!security && !loading && onScanSecurity) {
+      onScanSecurity()
+    }
+  }, [security, loading, onScanSecurity])
+
   const vulnerabilities = useMemo(() => security?.vulnerabilities ?? [], [security])
 
   const filteredVulns = useMemo(() => {
@@ -132,9 +140,30 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
     setExpandedDetails((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
+  // Full-page loading state during initial security scan
+  if (loading && !security) {
+    return (
+      <div class="flex flex-col items-center justify-center gap-4 py-28 text-center animate-fade-in">
+        <div class="relative flex items-center justify-center">
+          <div class="w-16 h-16 rounded-full border-2 border-[#3d3a39] border-t-[#00d992] spinner" />
+          <div class="absolute text-[#00d992]">
+            <IconShield size={24} />
+          </div>
+        </div>
+        <div>
+          <h2 class="text-base font-semibold text-[#ffffff]">Scanning Google OSV Security Database…</h2>
+          <p class="text-xs text-[#8b949e] mt-1 max-w-sm">
+            Cross-referencing declared dependencies across all monorepo workspaces against public CVE & GitHub
+            advisories.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (!security && !loading) {
     return (
-      <div class="flex flex-col items-center justify-center gap-4 py-20 text-center">
+      <div class="flex flex-col items-center justify-center gap-4 py-24 text-center">
         <div class="w-12 h-12 rounded-full bg-[#00d992]/10 text-[#00d992] flex items-center justify-center">
           <IconShield size={26} />
         </div>
@@ -183,7 +212,7 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
               disabled={loading}
             >
               <IconZap size={12} className={loading ? "spinner" : ""} />
-              <span>Rescan Google OSV</span>
+              <span>{loading ? "Scanning OSV…" : "Rescan Google OSV"}</span>
             </button>
           )}
           {vulnerabilities.length > 0 && onFix && (
@@ -207,6 +236,14 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
           )}
         </div>
       </div>
+
+      {/* Rescan In-Progress Alert Banner */}
+      {loading && security && (
+        <div class="flex items-center gap-3 p-3.5 bg-[#00d992]/10 border border-[#00d992]/30 rounded-[8px] text-xs text-[#00d992]">
+          <div class="w-4 h-4 rounded-full border-2 border-[#00d992]/40 border-t-[#00d992] spinner" />
+          <span>Refreshing vulnerability advisory data from Google OSV database…</span>
+        </div>
+      )}
 
       {/* KPI Cards */}
       {security && (

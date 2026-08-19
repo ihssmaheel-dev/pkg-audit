@@ -224,11 +224,23 @@ export async function checkVulnerabilities(
   options: {
     timeoutMs?: number
     concurrency?: number
+    rootDir?: string
     onProgress?: (event: ProgressEvent) => void
   } = {}
 ): Promise<SecurityResult> {
   const timeoutMs = options.timeoutMs ?? 10000
   const concurrency = options.concurrency ?? 16
+
+  let catalogMap: Record<string, string> = {}
+  if (options.rootDir) {
+    try {
+      const { readPnpmWorkspaceYaml } = await import("./catalog.js")
+      const parsed = readPnpmWorkspaceYaml(options.rootDir)
+      catalogMap = parsed.catalog ?? {}
+    } catch {
+      // Ignore
+    }
+  }
 
   // Index all unique package & version declarations
   // Key: "pkg@cleanVersion" -> { pkg, rawVersion, cleanVersion, workspaces: [...] }
@@ -243,22 +255,24 @@ export async function checkVulnerabilities(
 
   for (const ws of workspaces) {
     for (const [pkgName, depRecord] of Object.entries(ws.deps)) {
-      // Skip workspace packages and catalog references
-      if (
-        depRecord.version.startsWith("workspace:") ||
-        depRecord.version.startsWith("catalog:") ||
-        depRecord.version.startsWith("link:")
-      ) {
+      // Skip workspace packages and links
+      if (depRecord.version.startsWith("workspace:") || depRecord.version.startsWith("link:")) {
         continue
       }
-      const cVer = cleanVersion(depRecord.version)
+      let rawVer = depRecord.version
+      if (rawVer.startsWith("catalog:")) {
+        const catVer = catalogMap[pkgName]
+        if (!catVer) continue
+        rawVer = catVer
+      }
+      const cVer = cleanVersion(rawVer)
       if (!cVer || !/^\d+/.test(cVer)) continue
 
       const key = `${pkgName}@${cVer}`
       if (!occurrencesMap.has(key)) {
         occurrencesMap.set(key, {
           pkg: pkgName,
-          rawVersion: depRecord.version,
+          rawVersion: rawVer,
           cleanVersion: cVer,
           workspaces: [],
         })
