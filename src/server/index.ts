@@ -246,6 +246,38 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
         return
       }
 
+      if (url.pathname === "/api/context" && req.method === "GET") {
+        const targetDir = url.searchParams.get("dir") ?? resolvedDir
+        if (!targetDir) {
+          json(res, { error: "No directory selected", code: "NO_DIR" }, 400)
+          return
+        }
+        const validation = validatePath(targetDir)
+        if (!validation.valid) {
+          json(res, { error: validation.error }, 400)
+          return
+        }
+        const scanResult = await scan(validation.path!, {})
+        const { generateMonorepoContext } = await import("../scan/context.js")
+        const fmt = (url.searchParams.get("format") as "markdown" | "json" | "xml") ?? "markdown"
+        const target = (url.searchParams.get("target") as "generic" | "cursor" | "claude") ?? "generic"
+        const text = generateMonorepoContext(scanResult, {
+          format: fmt,
+          target,
+          projectName: path.basename(validation.path!),
+        })
+
+        if (fmt === "json") {
+          res.writeHead(200, { "Content-Type": "application/json" })
+        } else if (fmt === "xml") {
+          res.writeHead(200, { "Content-Type": "application/xml" })
+        } else {
+          res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" })
+        }
+        res.end(text)
+        return
+      }
+
       if (url.pathname === "/api/recents") {
         if (req.method === "GET") {
           json(res, { recents: getRecents(), favorites: getFavorites() })

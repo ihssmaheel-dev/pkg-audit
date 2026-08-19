@@ -50,6 +50,11 @@ export interface CliOptions {
   licenseExport: "notice" | "spdx" | "csv" | null
   licenseOutput: string | null
   failOnCopyleft: boolean
+  context: boolean
+  contextOutput: string | null
+  contextFormat: "markdown" | "json" | "xml" | null
+  contextTarget: "generic" | "cursor" | "claude" | null
+  contextStdout: boolean
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -118,6 +123,11 @@ export function parseArgs(argv: string[]): CliOptions {
     licenseExport: null,
     licenseOutput: null,
     failOnCopyleft: false,
+    context: false,
+    contextOutput: null,
+    contextFormat: null,
+    contextTarget: null,
+    contextStdout: false,
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -144,6 +154,21 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.noOpen = true
     } else if (arg === "--watch") {
       opts.watch = true
+    } else if (arg === "context" || arg === "--context") {
+      opts.context = true
+    } else if (arg.startsWith("--context-output=")) {
+      opts.context = true
+      opts.contextOutput = arg.split("=").slice(1).join("=")
+    } else if (arg.startsWith("--context-format=")) {
+      opts.context = true
+      const f = arg.split("=")[1]?.toLowerCase()
+      opts.contextFormat = f === "json" ? "json" : f === "xml" ? "xml" : "markdown"
+    } else if (arg.startsWith("--target-llm=") || arg.startsWith("--target=")) {
+      opts.context = true
+      const t = arg.split("=")[1]?.toLowerCase()
+      opts.contextTarget = t === "cursor" ? "cursor" : t === "claude" ? "claude" : "generic"
+    } else if (arg === "--stdout") {
+      opts.contextStdout = true
     } else if (arg === "license" || arg === "licenses" || arg === "--license" || arg === "--licenses") {
       opts.licenses = true
       const nextArg = argv[i + 1]
@@ -282,6 +307,7 @@ export function printHelp(): void {
 
 Usage:
   pkg-audit [dir] [options]
+  pkg-audit context [dir]      # export token-efficient MONOREPO_CONTEXT.md for AI coding agents
   pkg-audit license [dir]      # scan open-source licenses and legal copyleft risk
   pkg-audit license export [dir] # generate NOTICE.txt / SPDX / CSV compliance doc
   pkg-audit dedupe [dir]       # analyze duplicate transitive packages in lockfile
@@ -296,6 +322,9 @@ Usage:
   pkg-audit json [dir]         # machine output
 
 Options:
+  context                Generate AI agent architecture and boundary context document
+  --target-llm=<target>  Context preset: 'generic' (default), 'cursor' (.mdc), 'claude' (CLAUDE.md)
+  --stdout               Print context to terminal stdout instead of writing to disk
   license                Scan all dependency licenses and flag copyleft viral risk
   --format=<format>      Export format: 'notice' (NOTICE.txt), 'spdx' (SPDX JSON), 'csv'
   --output=<file>        Write exported license compliance file to path

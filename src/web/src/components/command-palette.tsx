@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
 import {
   IconAlertTriangle,
+  IconBrain,
   IconCopy,
   IconDownload,
   IconFolder,
@@ -74,6 +75,7 @@ export function CommandPalette({ data, onSelect, onClose }: CommandPaletteProps)
       { label: "Go to Conflicts", icon: IconAlertTriangle, action: "goto", payload: "conflicts" },
       { label: "Go to Outdated", icon: IconPackage, action: "goto", payload: "outdated" },
       { label: "Go to Hygiene", icon: IconWrench, action: "goto", payload: "hygiene" },
+      { label: "Go to AI Context", icon: IconBrain, action: "goto", payload: "context" },
       { label: "Go to Workspaces", icon: IconFolder, action: "goto", payload: "workspaces" },
     ]
     const result: Array<{ label: string; items: Command[] }> = [

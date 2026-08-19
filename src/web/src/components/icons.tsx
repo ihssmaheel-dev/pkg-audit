@@ -62,6 +62,19 @@ export const IconShield: IconComponent = (props) => (
   </Icon>
 )
 
+export const IconBrain: IconComponent = (props) => (
+  <Icon {...props}>
+    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.54" />
+    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.54" />
+  </Icon>
+)
+
+export const IconSparkles: IconComponent = (props) => (
+  <Icon {...props}>
+    <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
+  </Icon>
+)
+
 export const IconScissors: IconComponent = (props) => (
   <Icon {...props}>
     <circle cx="6" cy="6" r="3" />

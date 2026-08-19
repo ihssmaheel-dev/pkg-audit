@@ -7,6 +7,7 @@ export type TabId =
   | "security"
   | "dedupe"
   | "licenses"
+  | "context"
   | "outdated"
   | "hygiene"
   | "workspaces"

@@ -111,6 +111,16 @@ describe("parseArgs", () => {
     expect(parseArgs(["fix", "--pkg=react", "--target-version=^19.0.0"]).fixTargetVersion).toBe("^19.0.0")
   })
 
+  it("parses context command and flags", () => {
+    expect(parseArgs(["context"]).context).toBe(true)
+    expect(parseArgs(["--context"]).context).toBe(true)
+    expect(parseArgs(["context", "--context-output=my-rules.md"]).contextOutput).toBe("my-rules.md")
+    expect(parseArgs(["context", "--context-format=json"]).contextFormat).toBe("json")
+    expect(parseArgs(["context", "--target-llm=cursor"]).contextTarget).toBe("cursor")
+    expect(parseArgs(["context", "--target=claude"]).contextTarget).toBe("claude")
+    expect(parseArgs(["context", "--stdout"]).contextStdout).toBe(true)
+  })
+
   it("defaults are sane", () => {
     const opts = parseArgs([])
     expect(opts.target).toBeNull()
@@ -122,5 +132,6 @@ describe("parseArgs", () => {
     expect(opts.fix).toBe(false)
     expect(opts.fixStrategy).toBe("highest")
     expect(opts.dryRun).toBe(false)
+    expect(opts.context).toBe(false)
   })
 })

@@ -45,6 +45,10 @@ const TABS: TabDef[] = [
     warn: true,
     count: (d) => d.licenses?.prodCopyleftCount ?? 0,
   },
+  {
+    id: "context",
+    label: "AI Context",
+  },
   { id: "outdated", label: "Outdated", count: (d) => d.outdated?.outdated.length ?? 0 },
   { id: "hygiene", label: "Hygiene", count: (d) => d.hygieneIssues.length },
   { id: "workspaces", label: "Workspaces", count: (d) => d.workspaces.length },

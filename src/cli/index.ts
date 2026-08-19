@@ -215,6 +215,50 @@ async function main(): Promise<void> {
     return
   }
 
+  if (merged.context) {
+    const { generateMonorepoContext } = await import("../scan/context.js")
+    const contextContent = generateMonorepoContext(result, {
+      format: merged.contextFormat ?? "markdown",
+      target: merged.contextTarget ?? "generic",
+      projectName: path.basename(dir),
+    })
+
+    if (merged.contextStdout) {
+      process.stdout.write(contextContent)
+      return
+    }
+
+    let defaultFileName = "MONOREPO_CONTEXT.md"
+    if (merged.contextTarget === "cursor") {
+      defaultFileName = path.join(".cursor", "rules", "monorepo.mdc")
+    } else if (merged.contextTarget === "claude") {
+      defaultFileName = "CLAUDE.md"
+    } else if (merged.contextFormat === "json") {
+      defaultFileName = "monorepo-context.json"
+    } else if (merged.contextFormat === "xml") {
+      defaultFileName = "monorepo-context.xml"
+    }
+
+    const outPath = path.resolve(dir, merged.contextOutput ?? defaultFileName)
+    const outDir = path.dirname(outPath)
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true })
+    }
+
+    fs.writeFileSync(outPath, contextContent, "utf8")
+    const estTokens = Math.round(contextContent.length / 4)
+    console.log(`\n  🧠 LLM Context & Agent Architecture Exporter — ${dir}\n`)
+    console.log(`  ✔ Successfully generated AI agent context document!`)
+    console.log(`  📄 Output file: ${outPath}`)
+    console.log(
+      `  📊 Approx tokens: ~${estTokens.toLocaleString()} tokens (${contextContent.split(/\s+/).length} words)`
+    )
+    console.log(
+      `  💡 Share this file with Cursor, Claude, Copilot, or Antigravity to prevent boundary violations.\n`
+    )
+    return
+  }
+
   if (merged.licenses || merged.licenseExport) {
     const { scanMonorepoLicenses, generateNoticeText, generateSpdxJson, generateCsvReport } =
       await import("../scan/license.js")

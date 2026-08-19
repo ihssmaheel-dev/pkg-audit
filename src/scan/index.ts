@@ -18,6 +18,7 @@ import { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } from "./
 import { checkVulnerabilities, applySecurityFixes } from "./security.js"
 import { analyzeLockfile, applyDedupeOverrides, generateOverridesDict } from "./dedupe.js"
 import { scanMonorepoLicenses, generateNoticeText, generateSpdxJson, generateCsvReport } from "./license.js"
+import { generateMonorepoContext } from "./context.js"
 import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
@@ -253,6 +254,7 @@ export {
   generateNoticeText,
   generateSpdxJson,
   generateCsvReport,
+  generateMonorepoContext,
   isLinkedProtocol,
   parseMajor,
   parseVersionTuple,
