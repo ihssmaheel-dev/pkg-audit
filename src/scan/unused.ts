@@ -36,58 +36,6 @@ const SOURCE_EXTENSIONS = new Set([
   ".json",
 ])
 
-const CONFIG_FILE_NAMES = new Set([
-  "package.json",
-  "tsconfig.json",
-  "tsconfig.base.json",
-  "tsconfig.build.json",
-  "tsconfig.node.json",
-  "eslint.config.js",
-  "eslint.config.mjs",
-  "eslint.config.cjs",
-  ".eslintrc.js",
-  ".eslintrc.cjs",
-  ".eslintrc.json",
-  ".eslintrc.yaml",
-  ".eslintrc.yml",
-  ".prettierrc",
-  ".prettierrc.json",
-  ".prettierrc.js",
-  ".prettierrc.cjs",
-  "prettier.config.js",
-  "prettier.config.mjs",
-  "prettier.config.cjs",
-  "vite.config.ts",
-  "vite.config.js",
-  "vitest.config.ts",
-  "vitest.config.js",
-  "jest.config.js",
-  "jest.config.ts",
-  "tailwind.config.js",
-  "tailwind.config.ts",
-  "tailwind.config.mjs",
-  "postcss.config.js",
-  "postcss.config.cjs",
-  "postcss.config.mjs",
-  "babel.config.js",
-  "babel.config.json",
-  ".babelrc",
-  "metro.config.js",
-  "app.json",
-  "app.config.js",
-  "app.config.ts",
-  "turbo.json",
-  "nx.json",
-  ".commitlintrc.json",
-  ".commitlintrc.js",
-  "commitlint.config.js",
-  "commitlint.config.ts",
-  "commitlint.config.mjs",
-  "commitlint.config.cjs",
-  ".dependency-cruiser.js",
-  ".dependency-cruiser.cjs",
-])
-
 const NODE_BUILTINS = new Set([
   "assert",
   "async_hooks",
@@ -140,66 +88,71 @@ const NODE_BUILTINS = new Set([
   "zlib",
 ])
 
-const DEV_TOOL_PATTERNS = [
-  /^@types\//,
-  /^eslint(-plugin-|-config-)?/,
-  /^@eslint\//,
-  /^@typescript-eslint\//,
-  /^prettier(-plugin-)?/,
-  /^@biomejs\//,
-  /^stylelint/,
-  /^typescript$/,
-  /^tsup$/,
-  /^vite$/,
-  /^vitest$/,
-  /^jest$/,
-  /^playwright$/,
-  /^@playwright\//,
-  /^cypress$/,
-  /^turbo$/,
-  /^nx$/,
-  /^husky$/,
-  /^lint-staged$/,
-  /^rimraf$/,
-  /^concurrently$/,
-  /^cross-env$/,
-  /^nodemon$/,
-  /^tailwindcss$/,
-  /^@tailwindcss\//,
-  /^postcss$/,
-  /^autoprefixer$/,
-  /^sass$/,
-  /^less$/,
-  /^@babel\//,
-  /^@swc\//,
-  /^changesets/,
-  /^@changesets\//,
-  /^@commitlint\//,
-  /^commitlint/,
-  /^dependency-cruiser/,
-  /^type-fest$/,
-  /^pino-pretty$/,
-  /^pino-loki$/,
-  /^reflect-metadata$/,
-  /^react-native-css-interop$/,
-  /^react-native-screens$/,
-  /^expo-status-bar$/,
-  /^taze$/,
-  /^tsx$/,
-  /^migrate-mongo$/,
-  /^testcontainers$/,
-  /^fast-check$/,
-  /^jsdom$/,
-  /^msw$/,
-]
-
-export function isDevToolPackage(name: string, type: DepType): boolean {
-  if (type === "dev") return true
-  return DEV_TOOL_PATTERNS.some((pattern) => pattern.test(name))
+/**
+ * Common CLI binary name alias mappings to package names (e.g. tsc -> typescript, swc -> @swc/cli).
+ */
+const KNOWN_CLI_ALIASES: Record<string, string> = {
+  tsc: "typescript",
+  swc: "@swc/cli",
+  changeset: "@changesets/cli",
+  changesets: "@changesets/cli",
+  commitlint: "@commitlint/cli",
+  depcruise: "dependency-cruiser",
+  "drizzle-kit": "drizzle-kit",
+  prisma: "prisma",
+  "graphql-codegen": "@graphql-codegen/cli",
 }
 
 /**
- * Loads tsconfig / jsconfig compilerOptions.paths to detect custom path aliases.
+ * Determines whether a file is a project configuration file based on naming patterns.
+ */
+export function isConfigurationFile(filename: string): boolean {
+  const lower = filename.toLowerCase()
+  if (lower === "package.json") return true
+  if (lower.startsWith("tsconfig") && lower.endsWith(".json")) return true
+  if (lower.startsWith("jsconfig") && lower.endsWith(".json")) return true
+  if (lower.includes(".config.") || lower.includes("config.")) return true
+  if (lower.startsWith(".") && (lower.endsWith("rc") || lower.includes("rc."))) return true
+  if (lower === "turbo.json" || lower === "nx.json" || lower === "biome.json") return true
+  return false
+}
+
+/**
+ * Determines if a package is a dev tool based on dev dependency type or common tooling naming patterns.
+ */
+export function isDevToolPackage(name: string, type: DepType): boolean {
+  if (type === "dev") return true
+  const lower = name.toLowerCase()
+
+  // Types, linters, bundlers, testing tools, and compilers
+  if (
+    lower.startsWith("@types/") ||
+    lower.startsWith("@typescript-eslint/") ||
+    lower.startsWith("@eslint/") ||
+    lower.startsWith("@biomejs/") ||
+    lower.startsWith("@babel/") ||
+    lower.startsWith("@swc/") ||
+    lower.startsWith("@playwright/") ||
+    lower.startsWith("@testing-library/") ||
+    lower.startsWith("@storybook/") ||
+    lower.startsWith("eslint") ||
+    lower.startsWith("prettier") ||
+    lower.startsWith("stylelint") ||
+    lower.startsWith("postcss") ||
+    lower.startsWith("tailwind") ||
+    lower.endsWith("-plugin") ||
+    lower.endsWith("-preset") ||
+    lower.endsWith("-loader") ||
+    lower.endsWith("-cli")
+  ) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Loads compilerOptions.paths from tsconfig.json / jsconfig.json to dynamically match custom path aliases.
  */
 export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier: string) => boolean {
   const aliasPrefixes: string[] = []
@@ -208,6 +161,7 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
     if (!fs.existsSync(filePath)) return
     try {
       const raw = fs.readFileSync(filePath, "utf8")
+      // Remove comments for JSON parsing
       const cleanJson = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "")
       const parsed = JSON.parse(cleanJson) as {
         compilerOptions?: { paths?: Record<string, string[]> }
@@ -247,7 +201,7 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
 }
 
 /**
- * Parses raw import/require/plugin specifier into root package name.
+ * Parses raw import/require/specifier into root package name.
  */
 export function extractPackageName(specifier: string, isAlias?: (spec: string) => boolean): string | null {
   const trimmed = specifier.trim()
@@ -292,11 +246,11 @@ export function extractPackageName(specifier: string, isAlias?: (spec: string) =
   return trimmed
 }
 
-// Regex patterns to capture import/require/export/plugin specifiers across ES/CJS/CSS/Frameworks
+// Regex patterns to capture import/require/export specifiers across ES/CJS/CSS/Frameworks
 const IMPORT_EXPORT_REGEX =
   /(?:import\s+(?:type\s+)?(?:[\s\w*$,{}]+from\s+)?|export\s+(?:[\s\w*$,{}]+from\s+)?|import\s*\(\s*|require\s*\(\s*|require\.resolve\s*\(\s*|import\s+["']|@import\s+["'])["']([^"']+)["']/g
 
-// Regex to capture string literals inside transport configs, plugins, and frameworks
+// Regex to capture string literals inside configuration files and dynamic transports
 const STRING_LITERAL_REGEX = /["'](@?[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)?)["']/g
 
 /**
@@ -320,7 +274,7 @@ export function extractImportsFromContent(content: string, isAlias?: (spec: stri
 }
 
 /**
- * Extracts references from config files (e.g. tsconfig extends, eslint plugins, tailwind plugins, pino transports).
+ * Extracts all potential package names referenced in configuration files.
  */
 export function extractReferencesFromConfig(
   content: string,
@@ -343,51 +297,28 @@ export function extractReferencesFromConfig(
 }
 
 /**
- * Extracts CLI binary names and packages from package.json "scripts".
+ * Generic extraction of CLI commands and binary names from package.json "scripts".
  */
 export function extractPackagesFromScripts(scriptsRecord?: Record<string, string>): Set<string> {
   const referenced = new Set<string>()
   if (!scriptsRecord) return referenced
 
-  const CLI_NAME_MAP: Record<string, string> = {
-    tsc: "typescript",
-    eslint: "eslint",
-    prettier: "prettier",
-    turbo: "turbo",
-    vitest: "vitest",
-    vite: "vite",
-    tsx: "tsx",
-    taze: "taze",
-    nodemon: "nodemon",
-    concurrently: "concurrently",
-    "migrate-mongo": "migrate-mongo",
-    changeset: "@changesets/cli",
-    changesets: "@changesets/cli",
-    commitlint: "@commitlint/cli",
-    husky: "husky",
-    "lint-staged": "lint-staged",
-    "dependency-cruiser": "dependency-cruiser",
-    depcruise: "dependency-cruiser",
-    tailwindcss: "tailwindcss",
-    swc: "@swc/cli",
-    cross_env: "cross-env",
-    "cross-env": "cross-env",
-    rimraf: "rimraf",
-    next: "next",
-    expo: "expo",
-    jest: "jest",
-    playwright: "@playwright/test",
-    cypress: "cypress",
-  }
-
   for (const scriptContent of Object.values(scriptsRecord)) {
-    const tokens = scriptContent.split(/[\s;&|><=]+/)
-    for (const token of tokens) {
-      const cleanToken = token.trim().replace(/^npx\s+/, "")
-      if (CLI_NAME_MAP[cleanToken]) {
-        referenced.add(CLI_NAME_MAP[cleanToken]!)
-      } else if (cleanToken.startsWith("@") || cleanToken.length > 2) {
+    // Split on command separators (&&, ||, ;, |, >, <)
+    const subCommands = scriptContent.split(/[;&|><]+/)
+    for (const cmd of subCommands) {
+      const tokens = cmd.trim().split(/\s+/)
+      for (const token of tokens) {
+        const cleanToken = token.trim().replace(/^npx\s+/, "")
+        if (!cleanToken) continue
+
+        // Direct token
         referenced.add(cleanToken)
+
+        // Known CLI aliases (e.g. tsc -> typescript)
+        if (KNOWN_CLI_ALIASES[cleanToken]) {
+          referenced.add(KNOWN_CLI_ALIASES[cleanToken]!)
+        }
       }
     }
   }
@@ -396,8 +327,8 @@ export function extractPackagesFromScripts(scriptsRecord?: Record<string, string
 }
 
 /**
- * Recursively collects all source and config files within a workspace directory,
- * explicitly skipping child workspace directories to prevent cross-workspace contamination.
+ * Recursively collects all source and configuration files in a directory,
+ * strictly skipping child workspace directories.
  */
 export async function collectSourceFiles(
   dir: string,
@@ -427,13 +358,99 @@ export async function collectSourceFiles(
       await collectSourceFiles(fullPath, childWorkspaceDirs, results)
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase()
-      if (SOURCE_EXTENSIONS.has(ext) || CONFIG_FILE_NAMES.has(entry.name)) {
+      if (SOURCE_EXTENSIONS.has(ext) || isConfigurationFile(entry.name)) {
         results.push(fullPath)
       }
     }
   }
 
   return results
+}
+
+/**
+ * Checks if a declared package is generically connected to any active package in the workspace
+ * via scoped ecosystem, plugin prefix/suffix pairing, or runtime framework conventions.
+ */
+export function isConnectedEcosystemPackage(
+  depName: string,
+  activePackages: Set<string>,
+  sourceFileExtensions: Set<string>
+): boolean {
+  const lowerDep = depName.toLowerCase()
+
+  // 1. Scoped Ecosystem Connection (e.g. @fastify/*, @nestjs/*, @opentelemetry/*, @tanstack/*, @aws-sdk/*, @expo/*)
+  if (lowerDep.startsWith("@")) {
+    const scope = lowerDep.split("/")[0]!
+    for (const active of activePackages) {
+      if (active.toLowerCase().startsWith(`${scope}/`)) {
+        return true
+      }
+    }
+  }
+
+  // 2. Generic Plugin / Preset / Config / Adapter / Driver Suffix Pairing
+  // (e.g. tailwindcss-animate for tailwindcss, eslint-plugin-x for eslint, pino-loki for pino)
+  const PLUGIN_PREFIX_REGEX =
+    /^(@?[a-z0-9_-]+)[/-](?:plugin|preset|config|adapter|driver|theme|reporter|loader|transformer)(?:-[a-z0-9_-]+)?$/i
+  const match = lowerDep.match(PLUGIN_PREFIX_REGEX)
+  if (match && match[1]) {
+    const baseTool = match[1].toLowerCase()
+    if (activePackages.has(baseTool)) {
+      return true
+    }
+  }
+
+  // 3. Reverse Plugin Connection: if base tool matches active tool prefix
+  for (const active of activePackages) {
+    const activeLower = active.toLowerCase()
+    if (lowerDep.startsWith(`${activeLower}-`) || lowerDep.startsWith(`@${activeLower}/`)) {
+      return true
+    }
+  }
+
+  // 4. Type Definitions (@types/<pkg>)
+  if (lowerDep.startsWith("@types/")) {
+    const basePkg = lowerDep.slice(7)
+    if (basePkg === "node" && (sourceFileExtensions.has(".ts") || sourceFileExtensions.has(".tsx"))) {
+      return true
+    }
+    if (
+      (basePkg === "react" || basePkg === "react-dom") &&
+      (sourceFileExtensions.has(".tsx") || sourceFileExtensions.has(".jsx"))
+    ) {
+      return true
+    }
+    if (activePackages.has(basePkg)) {
+      return true
+    }
+  }
+
+  // 5. Template & UI Runtimes (e.g. react, preact, vue, svelte in workspaces with corresponding file types)
+  if (
+    (lowerDep === "react" || lowerDep === "react-dom" || lowerDep === "preact" || lowerDep === "solid-js") &&
+    (sourceFileExtensions.has(".tsx") || sourceFileExtensions.has(".jsx"))
+  ) {
+    return true
+  }
+
+  if (lowerDep === "vue" && sourceFileExtensions.has(".vue")) {
+    return true
+  }
+
+  if (lowerDep === "svelte" && sourceFileExtensions.has(".svelte")) {
+    return true
+  }
+
+  // 6. Common Decorator Polyfill (reflect-metadata used with TypeScript decorators)
+  if (lowerDep === "reflect-metadata" && sourceFileExtensions.has(".ts")) {
+    for (const active of activePackages) {
+      if (active.includes("nest") || active.includes("typeorm") || active.includes("routing-controllers")) {
+        return true
+      }
+    }
+  }
+
+  return false
 }
 
 /**
@@ -447,7 +464,7 @@ export async function scanWorkspaceDependencies(
   const unused: UnusedDependency[] = []
   let totalFilesScanned = 0
 
-  // Index all workspace absolute directory paths for strict boundary isolation
+  // Index all workspace absolute directory paths for boundary isolation
   const allWorkspaceDirPaths = new Map<string, string>()
   const monorepoPackageNames = new Set<string>()
 
@@ -490,6 +507,7 @@ export async function scanWorkspaceDependencies(
     // Map: importedPackage -> Set of relative file paths where imported
     const importedInFiles = new Map<string, Set<string>>()
     const configReferences = new Set<string>()
+    const fileExtensionsPresent = new Set<string>()
 
     // Check package.json scripts for active CLI tool references
     let pkgJsonScripts: Record<string, string> | undefined
@@ -510,6 +528,9 @@ export async function scanWorkspaceDependencies(
     }
 
     for (const filePath of sourceFiles) {
+      const ext = path.extname(filePath).toLowerCase()
+      if (ext) fileExtensionsPresent.add(ext)
+
       let content = ""
       try {
         content = await fs.promises.readFile(filePath, "utf8")
@@ -518,7 +539,7 @@ export async function scanWorkspaceDependencies(
       }
 
       const basename = path.basename(filePath)
-      const isConfigFile = CONFIG_FILE_NAMES.has(basename)
+      const isConfigFile = isConfigurationFile(basename)
 
       if (isConfigFile) {
         const configRefs = extractReferencesFromConfig(content, isAlias)
@@ -537,6 +558,9 @@ export async function scanWorkspaceDependencies(
         importedInFiles.get(pkg)!.add(relFilePath)
       }
     }
+
+    // Combine all actively referenced packages in this workspace
+    const activePackages = new Set<string>([...importedInFiles.keys(), ...configReferences])
 
     // 1. Detect Phantom (Undeclared) Dependencies
     for (const [importedPkg, fileSet] of importedInFiles.entries()) {
@@ -576,55 +600,14 @@ export async function scanWorkspaceDependencies(
 
     // 2. Detect Unused Dependencies
     for (const [depName, depRecord] of Object.entries(ws.deps)) {
-      // Used if imported in any source file
+      // Used if directly imported in source code
       if (importedInFiles.has(depName)) continue
 
       // Used if referenced in config files or scripts
       if (configReferences.has(depName)) continue
 
-      // Check if it's a type definition for a package that IS used or declared
-      if (depName.startsWith("@types/")) {
-        const basePkg = depName.slice(7) // e.g. @types/jsonwebtoken -> jsonwebtoken
-        if (
-          basePkg === "node" ||
-          ws.deps[basePkg] ||
-          importedInFiles.has(basePkg) ||
-          configReferences.has(basePkg)
-        ) {
-          continue
-        }
-      }
-
-      // Framework plugins / JSX runtimes / transports
-      if (
-        (depName === "react" || depName === "react-dom") &&
-        (importedInFiles.has("react") ||
-          importedInFiles.has("react-dom") ||
-          sourceFiles.some((f) => f.endsWith(".tsx") || f.endsWith(".jsx")))
-      ) {
-        continue
-      }
-
-      if (
-        (depName === "pino-pretty" || depName === "pino-loki") &&
-        (ws.deps["pino"] || importedInFiles.has("pino"))
-      ) {
-        continue
-      }
-
-      if (
-        (depName === "reflect-metadata" || depName === "rxjs") &&
-        (ws.deps["@nestjs/core"] || ws.deps["@nestjs/common"] || importedInFiles.has("@nestjs/common"))
-      ) {
-        continue
-      }
-
-      if (
-        (depName === "expo-status-bar" ||
-          depName === "react-native-screens" ||
-          depName === "react-native-css-interop") &&
-        (ws.deps["expo"] || ws.deps["react-native"] || ws.deps["nativewind"])
-      ) {
+      // Used if connected generically via ecosystem, plugin pairing, type definition, or template runtime
+      if (isConnectedEcosystemPackage(depName, activePackages, fileExtensionsPresent)) {
         continue
       }
 

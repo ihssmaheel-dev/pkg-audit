@@ -7,6 +7,8 @@ import {
   extractPackageName,
   extractPackagesFromScripts,
   extractReferencesFromConfig,
+  isConfigurationFile,
+  isConnectedEcosystemPackage,
   isDevToolPackage,
   loadPathAliasMatcher,
   scanWorkspaceDependencies,
@@ -121,7 +123,20 @@ describe("unused & phantom dependency scanner", () => {
     })
   })
 
-  describe("extractReferencesFromConfig", () => {
+  describe("extractReferencesFromConfig and isConfigurationFile", () => {
+    it("identifies config files generically", () => {
+      expect(isConfigurationFile("package.json")).toBe(true)
+      expect(isConfigurationFile("tsconfig.build.json")).toBe(true)
+      expect(isConfigurationFile("tailwind.config.ts")).toBe(true)
+      expect(isConfigurationFile("vite.config.mjs")).toBe(true)
+      expect(isConfigurationFile(".eslintrc.cjs")).toBe(true)
+      expect(isConfigurationFile(".prettierrc")).toBe(true)
+      expect(isConfigurationFile("turbo.json")).toBe(true)
+
+      expect(isConfigurationFile("app.tsx")).toBe(false)
+      expect(isConfigurationFile("index.ts")).toBe(false)
+    })
+
     it("extracts config plugins and transports", () => {
       const config = `
         export default {
@@ -133,6 +148,22 @@ describe("unused & phantom dependency scanner", () => {
       expect(refs).toContain("@vitejs/plugin-react")
       expect(refs).toContain("tailwindcss-animate")
       expect(refs).toContain("pino-pretty")
+    })
+  })
+
+  describe("isConnectedEcosystemPackage", () => {
+    it("connects scoped packages, plugin pairs, and type definitions generically", () => {
+      const active = new Set(["@fastify/cookie", "eslint", "react", "tailwindcss"])
+      const exts = new Set([".tsx", ".ts"])
+
+      expect(isConnectedEcosystemPackage("@fastify/static", active, exts)).toBe(true)
+      expect(isConnectedEcosystemPackage("eslint-plugin-react-hooks", active, exts)).toBe(true)
+      expect(isConnectedEcosystemPackage("tailwindcss-animate", active, exts)).toBe(true)
+      expect(isConnectedEcosystemPackage("@types/react", active, exts)).toBe(true)
+      expect(isConnectedEcosystemPackage("@types/node", active, exts)).toBe(true)
+      expect(isConnectedEcosystemPackage("react-dom", active, exts)).toBe(true)
+
+      expect(isConnectedEcosystemPackage("zod", active, exts)).toBe(false)
     })
   })
 
@@ -342,8 +373,8 @@ describe("unused & phantom dependency scanner", () => {
       expect(isDevToolPackage("@types/node", "dev")).toBe(true)
       expect(isDevToolPackage("eslint", "dev")).toBe(true)
       expect(isDevToolPackage("prettier", "dev")).toBe(true)
-      expect(isDevToolPackage("pino-pretty", "prod")).toBe(true)
-      expect(isDevToolPackage("reflect-metadata", "prod")).toBe(true)
+      expect(isDevToolPackage("eslint-plugin-react", "prod")).toBe(true)
+      expect(isDevToolPackage("tailwindcss-animate", "prod")).toBe(true)
       expect(isDevToolPackage("zod", "prod")).toBe(false)
     })
   })
