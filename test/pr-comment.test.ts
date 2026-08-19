@@ -60,6 +60,7 @@ describe("generatePrComment", () => {
       ],
       conflicts: [],
       hygieneIssues: [],
+      graph: { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 0 },
       outdated: null,
       meta: {
         totalDepDeclarations: 1,

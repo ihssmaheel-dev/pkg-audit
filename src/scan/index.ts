@@ -12,6 +12,7 @@ import {
 import { findHygieneIssues } from "./hygiene.js"
 import { checkOutdated, fetchLatestVersion } from "./registry.js"
 import { fetchChangelogs } from "./changelog.js"
+import { buildWorkspaceGraph } from "./graph.js"
 import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
@@ -172,6 +173,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
   const depMap = buildDependencyMap(workspaces)
   const conflicts = findConflicts(depMap)
   const hygieneIssues = findHygieneIssues(workspaces)
+  const graph = buildWorkspaceGraph(workspaces)
 
   const totalDepDeclarations = workspaces.reduce((sum, w) => sum + w.depCount, 0)
 
@@ -190,6 +192,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     workspaces: workspaces.map(({ absPath: _absPath, ...rest }) => rest),
     conflicts,
     hygieneIssues,
+    graph,
     outdated,
     errors: stats.errors,
     meta: {
@@ -204,6 +207,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
 
 export {
   buildDependencyMap,
+  buildWorkspaceGraph,
   findConflicts,
   findHygieneIssues,
   isLinkedProtocol,

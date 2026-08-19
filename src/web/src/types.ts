@@ -1,4 +1,4 @@
-export type TabId = "dashboard" | "matrix" | "conflicts" | "outdated" | "hygiene" | "workspaces"
+export type TabId = "dashboard" | "matrix" | "conflicts" | "graph" | "outdated" | "hygiene" | "workspaces"
 
 export type Theme = "dark" | "light"
 

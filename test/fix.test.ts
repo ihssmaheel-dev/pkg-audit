@@ -80,6 +80,7 @@ describe("fix engine", () => {
           },
         ],
         hygieneIssues: [],
+        graph: { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 0 },
         outdated: null,
         errors: [],
         meta: {

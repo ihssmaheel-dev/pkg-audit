@@ -87,6 +87,16 @@ function renderTopShared(
   out.push("")
 }
 
+function renderCycles(cycles: ScanResult["graph"]["cycles"], c: Colorizer, out: string[]): void {
+  if (!cycles || !cycles.length) return
+  out.push(c.bold(c.red(`Circular workspace dependencies (${cycles.length}):`)))
+  out.push(c.dim(`  Warning: Circular loops deadlock build tools (Turborepo, Nx, pnpm).`))
+  for (const cycle of cycles) {
+    out.push(`  ${c.red("⟲")} ${cycle.path.join(c.dim(" ➔ "))}`)
+  }
+  out.push("")
+}
+
 function renderHygiene(issues: ScanResult["hygieneIssues"], c: Colorizer, out: string[]): void {
   if (!issues.length) {
     out.push(c.green("No hygiene issues found. OK"))
@@ -300,6 +310,9 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
   }
 
   renderConflicts(result.conflicts, c, out)
+  if (result.graph) {
+    renderCycles(result.graph.cycles, c, out)
+  }
   renderHygiene(result.hygieneIssues, c, out)
 
   if (result.outdated) {
@@ -330,6 +343,9 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
     )
   } else {
     out.push(`  ${c.green("0 version conflicts")}`)
+  }
+  if (result.graph && result.graph.hasCycles) {
+    out.push(`  ${c.red(`${result.graph.cycles.length} circular dependency cycle(s) detected`)}`)
   }
   out.push(
     `  ${result.hygieneIssues.length ? result.hygieneIssues.length + " hygiene issue" + (result.hygieneIssues.length === 1 ? "" : "s") : c.green("0 hygiene issues")}`

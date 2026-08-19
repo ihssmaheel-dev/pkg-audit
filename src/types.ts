@@ -92,6 +92,37 @@ export interface ScanMeta {
   totalUniquePackages: number
 }
 
+export interface WorkspaceGraphNode {
+  name: string
+  relPath: string
+  isRoot: boolean
+  deps: string[]
+  dependedBy: string[]
+  depth: number
+  hasCycle: boolean
+}
+
+export interface WorkspaceGraphEdge {
+  from: string
+  to: string
+  type: DepType
+  version: string
+  isCircular: boolean
+}
+
+export interface WorkspaceCycle {
+  path: string[]
+  length: number
+}
+
+export interface WorkspaceGraph {
+  nodes: WorkspaceGraphNode[]
+  edges: WorkspaceGraphEdge[]
+  cycles: WorkspaceCycle[]
+  hasCycles: boolean
+  maxDepth: number
+}
+
 export interface ScanResult {
   version: 1
   root: string
@@ -99,6 +130,7 @@ export interface ScanResult {
   workspaces: Workspace[]
   conflicts: Conflict[]
   hygieneIssues: HygieneIssue[]
+  graph: WorkspaceGraph
   outdated: OutdatedResult | null
   errors: ScanError[]
   meta: ScanMeta

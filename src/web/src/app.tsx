@@ -3,6 +3,7 @@ import { Shell } from "./components/shell"
 import { Dashboard } from "./components/dashboard"
 import { Matrix } from "./components/matrix"
 import { Conflicts } from "./components/conflicts"
+import { Graph } from "./components/graph"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
 import { Outdated } from "./components/outdated"
@@ -14,7 +15,7 @@ import { useScan, getToken } from "./hooks/use-scan"
 import type { ScanResult } from "../../types"
 import type { DrawerState, ScanUiOptions, TabId } from "./types"
 
-const TAB_IDS: TabId[] = ["dashboard", "matrix", "conflicts", "outdated", "hygiene", "workspaces"]
+const TAB_IDS: TabId[] = ["dashboard", "matrix", "conflicts", "graph", "outdated", "hygiene", "workspaces"]
 
 function conflictsAsMarkdown(data: ScanResult): string {
   if (!data.conflicts.length) return ""
@@ -190,6 +191,13 @@ export function App() {
         )}
         {data && tab === "conflicts" && (
           <Conflicts data={data} notify={notify} onFix={embedded ? undefined : handleFix} />
+        )}
+        {data && tab === "graph" && (
+          <Graph
+            data={data}
+            notify={notify}
+            onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
+          />
         )}
         {data && tab === "outdated" && (
           <Outdated

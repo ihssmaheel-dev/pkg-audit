@@ -67,6 +67,12 @@ export function generatePrComment(result: ScanResult, opts: PrCommentOptions = {
     `| 🧹 **Hygiene Issues** | **${result.hygieneIssues.length}** | ${result.hygieneIssues.length === 0 ? "All manifests healthy" : `${result.hygieneIssues.length} warning(s)`} |`,
   ]
 
+  if (result.graph && result.graph.hasCycles) {
+    lines.push(
+      `| 🔄 **Circular Dependencies** | **🔴 ${result.graph.cycles.length} loop(s)** | Causes build tool deadlocks |`
+    )
+  }
+
   if (result.outdated) {
     const outdatedCount = result.outdated.outdated.length
     lines.push(
@@ -75,6 +81,23 @@ export function generatePrComment(result: ScanResult, opts: PrCommentOptions = {
   }
 
   lines.push("")
+
+  // Circular Dependency Details
+  if (result.graph && result.graph.hasCycles) {
+    lines.push(
+      "<details open>",
+      `<summary><b>🚨 Circular Workspace Dependencies (${result.graph.cycles.length})</b></summary>`,
+      "",
+      "| # | Cycle Path | Length |",
+      "| :--- | :--- | :--- |"
+    )
+
+    result.graph.cycles.forEach((c, idx) => {
+      lines.push(`| ${idx + 1} | \`${c.path.join(" ➔ ")}\` | ${c.length} workspaces |`)
+    })
+
+    lines.push("</details>", "")
+  }
 
   // Version Conflicts Details
   if (result.conflicts.length > 0) {

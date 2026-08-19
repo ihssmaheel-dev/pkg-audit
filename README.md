@@ -45,6 +45,13 @@
     <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/conflicts-preview.png" alt="Conflicts Preview" width="100%" />
   </p>
 
+### Workspace Architecture & Topology Graph
+
+  <!-- UI Screenshot Placeholder: Graph View -->
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/graph-preview.png" alt="Workspace Graph & Circular Dependency Preview" width="100%" />
+  </p>
+
 ### Outdated Dependencies & GitHub Changelogs
 
   <!-- UI Screenshot Placeholder: Outdated View -->
@@ -66,12 +73,16 @@
 ## Highlights
 
 - **⚡ Blazing Fast** — Scans full monorepos with hundreds of workspaces in under 50 milliseconds.
+- **🕸️ Workspace Dependency Graph** — Interactive SVG canvas with zoom, pan, and topological layer hierarchy mapping internal linkages.
+- **🚨 Circular Dependency Detector** — Automatically identifies and isolates cyclic loops (e.g. `A ➔ B ➔ C ➔ A`) that deadlock Turborepo/Nx/pnpm builds.
+- **⚡ One-Click Conflict Fixer** — Automatically align version mismatches via `pkg-audit fix` or 1-click UI buttons.
 - **📊 6-Chart Monorepo Intelligence** — Donut distributions, dependency compositions, workspace loads, and upstream drift charts powered by Chart.js.
 - **🔍 Matrix Alignment Grid** — Cross-workspace view with cell drilldown and automated pin alignment recommendations.
 - **⚠️ Conflict Detection** — Differentiates major breaking mismatches from range discrepancies with one-click markdown exports.
 - **📦 Registry & Changelog Sync** — Live npm version queries with inline GitHub release notes.
 - **🧹 Manifest Hygiene Audit** — Flags duplicate workspace names, missing package fields, engine drifts, and packageManager conflicts.
-- **⌨️ Keyboard First** — Fast navigation via `Ctrl+K` / `Cmd+K` command palette and number hotkeys (`1`–`6`).
+- **🤖 GitHub Action & PR Bot** — Post automated sticky drift reports and alignment score deltas directly to Pull Requests.
+- **⌨️ Keyboard First** — Fast navigation via `Ctrl+K` / `Cmd+K` command palette and number hotkeys (`1`–`7`).
 - **📄 Standalone HTML Export** — Generate portable, single-file offline reports for pull requests, audits, and Slack sharing.
 
 ---
