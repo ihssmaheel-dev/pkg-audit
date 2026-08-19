@@ -259,6 +259,33 @@ export interface LicenseScanResult {
   totalScanned: number
 }
 
+export interface DeprecatedPackage {
+  name: string
+  version: string
+  workspaces: Array<{ workspace: string; type: DepType; rawVersion: string }>
+  isProd: boolean
+  isDev: boolean
+  deprecated: boolean
+  deprecationReason?: string
+  isAbandoned: boolean
+  lastPublished?: string
+  yearsSinceLastRelease?: number
+  daysSinceLastRelease?: number
+  replacementSuggestion?: string
+  homepage?: string
+  repository?: string
+}
+
+export interface DeprecationSummary {
+  packages: DeprecatedPackage[]
+  totalScanned: number
+  totalDeprecated: number
+  totalAbandoned: number
+  deprecatedInProd: number
+  deprecatedInDev: number
+  abandonedInProd: number
+}
+
 export interface ScanResult {
   version: 1
   root: string
@@ -272,13 +299,14 @@ export interface ScanResult {
   security: SecurityResult | null
   dedupe: DedupeResult | null
   licenses: LicenseScanResult | null
+  deprecation?: DeprecationSummary | null
   errors: ScanError[]
   meta: ScanMeta
   catalog?: CatalogPlan | null
 }
 
 export interface ProgressEvent {
-  phase: "outdated" | "security"
+  phase: "outdated" | "security" | "deprecation"
   done: number
   total: number
 }

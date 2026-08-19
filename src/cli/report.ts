@@ -326,6 +326,59 @@ function renderUnusedAndPhantoms(
   }
 }
 
+function renderDeprecations(
+  depResult: ScanResult["deprecation"],
+  c: Colorizer,
+  out: string[],
+  alwaysShow = false
+): void {
+  if (!depResult || !depResult.packages.length) {
+    if (alwaysShow) {
+      out.push(
+        c.green("✔ Zero deprecated or abandoned packages detected. All dependencies are actively maintained!")
+      )
+      out.push("")
+    }
+    return
+  }
+
+  const { packages, totalDeprecated, totalAbandoned } = depResult
+
+  out.push(
+    c.bold(
+      c.yellow(
+        `Package Deprecation & Abandonment Audit (${totalDeprecated} deprecated, ${totalAbandoned} abandoned):`
+      )
+    )
+  )
+
+  for (const pkg of packages) {
+    const statusBadges: string[] = []
+    if (pkg.deprecated) {
+      statusBadges.push(c.red(`[DEPRECATED${pkg.isProd ? " - PROD" : ""}]`))
+    }
+    if (pkg.isAbandoned) {
+      statusBadges.push(c.yellow(`[ABANDONED - ${pkg.yearsSinceLastRelease ?? 2}+ yrs]`))
+    }
+
+    const wsList = pkg.workspaces.map((w) => w.workspace).join(", ")
+    out.push(`  ${statusBadges.join(" ")} ${c.bold(pkg.name)}@${pkg.version} ${c.dim(`(${wsList})`)}`)
+
+    if (pkg.deprecationReason) {
+      out.push(`    ${c.dim("Notice:")} ${c.yellow(pkg.deprecationReason)}`)
+    }
+    if (pkg.replacementSuggestion) {
+      out.push(`    ${c.dim("Replacement:")} ${c.green(pkg.replacementSuggestion)}`)
+    }
+    if (pkg.lastPublished) {
+      out.push(
+        `    ${c.dim("Last Release:")} ${new Date(pkg.lastPublished).toISOString().slice(0, 10)} (${pkg.yearsSinceLastRelease} years ago)`
+      )
+    }
+    out.push("")
+  }
+}
+
 export function renderTerminalReport(result: ScanResult, opts: CliOptions): string {
   const c = makeColorizer(opts.color)
   const out: string[] = []
@@ -361,6 +414,10 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
     renderUnusedAndPhantoms(result.unused, c, out, opts.unused || opts.phantom)
   }
   renderHygiene(result.hygieneIssues, c, out)
+
+  if (result.deprecation) {
+    renderDeprecations(result.deprecation, c, out, opts.unused || opts.phantom)
+  }
 
   if (result.outdated) {
     if (opts.versions) {

@@ -8,6 +8,7 @@ import { UnusedView } from "./components/unused"
 import { SecurityView } from "./components/security"
 import { DedupeView } from "./components/dedupe"
 import { LicensesView } from "./components/licenses"
+import { DeprecationView } from "./components/deprecation"
 import { AiContextView } from "./components/ai-context"
 import { Hygiene } from "./components/hygiene"
 import { Workspaces } from "./components/workspaces"
@@ -29,6 +30,7 @@ const TAB_IDS: TabId[] = [
   "security",
   "dedupe",
   "licenses",
+  "deprecation",
   "context",
   "outdated",
   "hygiene",
@@ -264,6 +266,7 @@ export function App() {
           />
         )}
         {data && tab === "licenses" && <LicensesView data={data} loading={loading} notify={notify} />}
+        {data && tab === "deprecation" && <DeprecationView deprecation={data.deprecation ?? null} />}
         {data && tab === "context" && <AiContextView data={data} notify={notify} />}
         {data && tab === "outdated" && (
           <Outdated

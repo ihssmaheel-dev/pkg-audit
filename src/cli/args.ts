@@ -50,6 +50,8 @@ export interface CliOptions {
   licenseExport: "notice" | "spdx" | "csv" | null
   licenseOutput: string | null
   failOnCopyleft: boolean
+  deprecation: boolean
+  abandonedDays: number
   context: boolean
   contextOutput: string | null
   contextFormat: "markdown" | "json" | "xml" | null
@@ -123,6 +125,8 @@ export function parseArgs(argv: string[]): CliOptions {
     licenseExport: null,
     licenseOutput: null,
     failOnCopyleft: false,
+    deprecation: false,
+    abandonedDays: 730,
     context: false,
     contextOutput: null,
     contextFormat: null,
@@ -154,6 +158,14 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.noOpen = true
     } else if (arg === "--watch") {
       opts.watch = true
+    } else if (arg === "deprecation" || arg === "--deprecation" || arg === "--deprecated") {
+      opts.deprecation = true
+    } else if (arg === "--no-deprecation") {
+      opts.deprecation = false
+    } else if (arg.startsWith("--abandoned-days=") || arg.startsWith("--abandoned-threshold=")) {
+      opts.deprecation = true
+      const n = Number(arg.split("=")[1])
+      if (Number.isFinite(n) && n > 0) opts.abandonedDays = n
     } else if (arg === "context" || arg === "--context") {
       opts.context = true
     } else if (arg.startsWith("--context-output=")) {

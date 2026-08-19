@@ -7,6 +7,7 @@ export type TabId =
   | "security"
   | "dedupe"
   | "licenses"
+  | "deprecation"
   | "context"
   | "outdated"
   | "hygiene"
@@ -23,4 +24,7 @@ export interface ScanUiOptions {
   outdated?: boolean
   changelog?: boolean
   security?: boolean
+  deprecation?: boolean
 }
+
+export type { DeprecatedPackage, DeprecationSummary } from "../../types.js"

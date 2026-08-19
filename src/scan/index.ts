@@ -19,6 +19,7 @@ import { checkVulnerabilities, applySecurityFixes } from "./security.js"
 import { analyzeLockfile, applyDedupeOverrides, generateOverridesDict } from "./dedupe.js"
 import { scanMonorepoLicenses, generateNoticeText, generateSpdxJson, generateCsvReport } from "./license.js"
 import { generateMonorepoContext } from "./context.js"
+import { auditDeprecations } from "./deprecation.js"
 import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
@@ -54,6 +55,8 @@ interface ScanOptions {
   changelogLines?: number
   concurrency?: number
   security?: boolean
+  deprecation?: boolean
+  abandonedDaysThreshold?: number
   onProgress?: (event: ProgressEvent) => void
 }
 
@@ -201,6 +204,15 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     })
   }
 
+  let deprecation: ScanResult["deprecation"] = null
+  if (opts.deprecation || opts.outdated || opts.versions) {
+    deprecation = await auditDeprecations(depMap, {
+      concurrency: opts.concurrency ?? 8,
+      abandonedDaysThreshold: opts.abandonedDaysThreshold ?? 730,
+      onProgress: opts.onProgress,
+    })
+  }
+
   const rootWs = workspaces.find((w) => w.isRoot)
   const dedupe = analyzeLockfile(rootDir, rootWs?.packageManager ?? null)
   const licenses = scanMonorepoLicenses(workspaces, rootDir)
@@ -218,6 +230,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     security,
     dedupe,
     licenses,
+    deprecation,
     errors: stats.errors,
     meta: {
       ignoredDirs: [...scanOpts.ignoreDirs].sort(),
@@ -255,6 +268,7 @@ export {
   generateSpdxJson,
   generateCsvReport,
   generateMonorepoContext,
+  auditDeprecations,
   isLinkedProtocol,
   parseMajor,
   parseVersionTuple,

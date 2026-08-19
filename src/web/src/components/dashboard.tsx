@@ -17,6 +17,7 @@ import {
   IconScissors,
   IconSearch,
   IconShield,
+  IconXCircle,
 } from "./icons"
 
 Chart.register(...registerables)
@@ -667,6 +668,39 @@ export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardP
           </div>
           <button class="h-7 px-3 bg-[#f43f5e] hover:bg-[#ff5270] text-[#ffffff] font-semibold text-xs rounded-[6px] transition-colors shrink-0">
             Review Licenses ➔
+          </button>
+        </div>
+      )}
+
+      {/* Deprecated Packages Banner */}
+      {data.deprecation && data.deprecation.totalDeprecated > 0 && (
+        <div
+          class="flex items-center justify-between p-4 bg-[#f43f5e]/10 border border-[#f43f5e]/40 rounded-[8px] cursor-pointer hover:bg-[#f43f5e]/15 transition-colors gap-4"
+          onClick={() => onTabChange("deprecation")}
+        >
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[6px] bg-[#f43f5e]/20 text-[#f43f5e] flex items-center justify-center shrink-0">
+              <IconXCircle size={16} />
+            </div>
+            <div>
+              <div class="text-sm font-bold text-[#ffffff] flex items-center gap-2">
+                <span>
+                  {data.deprecation.totalDeprecated} Deprecated Package(s) Detected
+                  {data.deprecation.deprecatedInProd > 0
+                    ? ` (${data.deprecation.deprecatedInProd} in production)`
+                    : ""}
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-[#f43f5e]/20 text-[#f43f5e] font-mono">
+                  DEPRECATION ALERT
+                </span>
+              </div>
+              <div class="text-xs text-[#bdbdbd] mt-0.5">
+                Official author deprecation notices and modern replacements available.
+              </div>
+            </div>
+          </div>
+          <button class="h-7 px-3 bg-[#f43f5e] hover:bg-[#ff5270] text-[#ffffff] font-semibold text-xs rounded-[6px] transition-colors shrink-0">
+            View Replacements ➔
           </button>
         </div>
       )}

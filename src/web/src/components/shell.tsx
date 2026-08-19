@@ -46,6 +46,12 @@ const TABS: TabDef[] = [
     count: (d) => d.licenses?.prodCopyleftCount ?? 0,
   },
   {
+    id: "deprecation",
+    label: "Deprecation",
+    warn: true,
+    count: (d) => d.deprecation?.totalDeprecated ?? 0,
+  },
+  {
     id: "context",
     label: "AI Context",
   },
