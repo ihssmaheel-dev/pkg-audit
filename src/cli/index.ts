@@ -129,6 +129,79 @@ async function main(): Promise<void> {
     changelogLines: merged.changelogLines,
   })
 
+  if (merged.catalog) {
+    const { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } =
+      await import("../scan/catalog.js")
+    const plan = generateCatalogPlan(result, {
+      strategy: merged.fixStrategy,
+      allPackages: merged.catalogAll,
+    })
+
+    if (merged.catalogList) {
+      const existing = readPnpmWorkspaceYaml(dir)
+      console.log(`\n  📦 pnpm-workspace.yaml Catalog Inspection (${dir})\n`)
+      if (Object.keys(existing.catalog).length === 0) {
+        console.log("  No existing catalog entries found in pnpm-workspace.yaml.")
+      } else {
+        console.log(`  Current catalog (${Object.keys(existing.catalog).length} packages):`)
+        for (const [pkg, ver] of Object.entries(existing.catalog).sort()) {
+          console.log(`    • ${pkg}: ${ver}`)
+        }
+      }
+
+      if (plan.catalogEntries.length > 0) {
+        console.log(`\n  Proposed additions / sync (${plan.catalogEntries.length} packages):`)
+        for (const entry of plan.catalogEntries) {
+          console.log(
+            `    + ${entry.name}: ${entry.targetVersion} (used across ${entry.workspacesCount} workspaces)`
+          )
+        }
+        console.log(`\n  Run 'npx pkg-audit catalog init' to migrate workspaces to catalog:\n`)
+      } else {
+        console.log("\n  All shared dependencies are already centralized in catalog.\n")
+      }
+      return
+    }
+
+    if (plan.catalogEntries.length === 0) {
+      console.log("\n  ✔ All shared dependencies are already centralized in pnpm-workspace.yaml catalog:!\n")
+      return
+    }
+
+    if (merged.dryRun) {
+      console.log(`\n  ⚡ pkg-audit catalog init (dry run — strategy: ${merged.fixStrategy})\n`)
+      console.log(`  Catalog entries to be created in ${path.basename(plan.pnpmWorkspaceYamlPath)}:`)
+      for (const e of plan.catalogEntries) {
+        console.log(`    + ${e.name}: ${e.targetVersion} (${e.workspacesCount} workspaces)`)
+      }
+      console.log(`\n  Affected workspace package.json files (${plan.totalWorkspacesUpdated}):`)
+      for (const ws of plan.updatedWorkspaceFiles) {
+        console.log(`    • ${ws}/package.json ➔ updated to "catalog:"`)
+      }
+      console.log(`\n  Run without --dry-run to apply migration to disk.\n`)
+      return
+    }
+
+    const catalogRes = await applyCatalogPlan(dir, plan, result)
+    console.log(`\n  ⚡ pkg-audit catalog init (strategy: ${merged.fixStrategy})\n`)
+    if (!catalogRes.ok && catalogRes.errors.length > 0) {
+      console.log(`  ⚠ Migration encountered errors:`)
+      for (const err of catalogRes.errors) {
+        console.log(`    • ${err.path}: ${err.error}`)
+      }
+    }
+
+    console.log(
+      `  ✔ Centralized ${plan.totalPackages} package(s) into ${path.basename(plan.pnpmWorkspaceYamlPath)}:`
+    )
+    for (const e of plan.catalogEntries) {
+      console.log(`    • ${e.name}: ${e.targetVersion}`)
+    }
+
+    console.log(`\n  ✔ Updated ${catalogRes.modifiedFiles.length} file(s) across monorepo to "catalog:".\n`)
+    return
+  }
+
   if (merged.fix) {
     const { resolveConflictsAuto, applyFixes, pickTargetVersion } = await import("../scan/fix.js")
 

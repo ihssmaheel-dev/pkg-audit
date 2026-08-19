@@ -14,6 +14,7 @@ import { checkOutdated, fetchLatestVersion } from "./registry.js"
 import { fetchChangelogs } from "./changelog.js"
 import { buildWorkspaceGraph } from "./graph.js"
 import { scanWorkspaceDependencies } from "./unused.js"
+import { generateCatalogPlan, applyCatalogPlan, readPnpmWorkspaceYaml } from "./catalog.js"
 import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
@@ -187,7 +188,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     }
   }
 
-  return {
+  const tempScanData: ScanResult = {
     version: 1,
     root: rootDir,
     scannedMs: Date.now() - startedAt,
@@ -206,6 +207,13 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
       totalUniquePackages: depMap.size,
     },
   }
+
+  const catalog = generateCatalogPlan(tempScanData)
+
+  return {
+    ...tempScanData,
+    catalog,
+  }
 }
 
 export {
@@ -214,6 +222,9 @@ export {
   scanWorkspaceDependencies,
   findConflicts,
   findHygieneIssues,
+  generateCatalogPlan,
+  applyCatalogPlan,
+  readPnpmWorkspaceYaml,
   isLinkedProtocol,
   parseMajor,
   parseVersionTuple,

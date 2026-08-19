@@ -18,6 +18,8 @@ function conflictsAsMarkdown(conflicts: Conflict[]): string {
 
 type Severity = "all" | "major" | "range"
 
+import { CatalogModal } from "./catalog-modal"
+
 export interface FixItem {
   name: string
   targetVersion: string
@@ -28,6 +30,11 @@ interface ConflictsProps {
   data: ScanResult
   notify: (message: string) => void
   onFix?: (fixes: FixItem[]) => Promise<void>
+  onCatalogMigrate?: (options: {
+    action: "catalog-migrate"
+    catalogStrategy: "highest" | "most-frequent"
+    catalogAll: boolean
+  }) => Promise<{ ok: boolean; count: number; result: ScanResult | null }>
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -79,9 +86,10 @@ function getMostFrequentVersion(conflict: Conflict): string {
   return best.version
 }
 
-export function Conflicts({ data, notify, onFix }: ConflictsProps) {
+export function Conflicts({ data, notify, onFix, onCatalogMigrate }: ConflictsProps) {
   const [severity, setSeverity] = useState<Severity>("all")
   const [fixingPkg, setFixingPkg] = useState<string | null>(null)
+  const [showCatalogModal, setShowCatalogModal] = useState(false)
 
   const conflicts = (data.conflicts ?? []).filter((c) => {
     if (severity === "major" && c.severity !== "major") return false
@@ -131,6 +139,24 @@ export function Conflicts({ data, notify, onFix }: ConflictsProps) {
         <IconCheckCircle size={40} className="text-[#00d992]" />
         <h3 class="text-sm font-semibold text-[#ffffff]">No version conflicts</h3>
         <p class="text-xs text-[#8b949e]">Every shared dependency is aligned across all workspaces.</p>
+        {onCatalogMigrate && (
+          <div class="mt-4">
+            <button
+              class="flex items-center gap-1.5 h-8 px-4 bg-[#1a1a1a] hover:bg-[#252525] border border-[#00d992]/40 text-[#00d992] rounded-[6px] text-xs font-semibold transition-colors"
+              onClick={() => setShowCatalogModal(true)}
+            >
+              <IconZap size={13} />
+              <span>Convert Monorepo to pnpm catalog:</span>
+            </button>
+            <CatalogModal
+              data={data}
+              isOpen={showCatalogModal}
+              onClose={() => setShowCatalogModal(false)}
+              notify={notify}
+              onMigrate={onCatalogMigrate}
+            />
+          </div>
+        )}
       </div>
     )
   }
@@ -147,6 +173,15 @@ export function Conflicts({ data, notify, onFix }: ConflictsProps) {
 
         {/* Action Buttons */}
         <div class="flex items-center gap-2 flex-wrap">
+          {onCatalogMigrate && (
+            <button
+              class="flex items-center gap-1.5 h-8 px-3.5 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded-[6px] text-xs font-semibold transition-colors"
+              onClick={() => setShowCatalogModal(true)}
+            >
+              <IconZap size={13} />
+              <span>Convert to pnpm catalog:</span>
+            </button>
+          )}
           {onFix && (
             <>
               <button
@@ -176,6 +211,16 @@ export function Conflicts({ data, notify, onFix }: ConflictsProps) {
           </button>
         </div>
       </div>
+
+      {onCatalogMigrate && (
+        <CatalogModal
+          data={data}
+          isOpen={showCatalogModal}
+          onClose={() => setShowCatalogModal(false)}
+          notify={notify}
+          onMigrate={onCatalogMigrate}
+        />
+      )}
 
       {/* Filter bar */}
       <div class="flex items-center gap-2">

@@ -109,7 +109,7 @@ export function resolveConflictsAuto(result: ScanResult, strategy: FixStrategy =
 }
 
 // Detect indentation (e.g. 2 spaces, 4 spaces, tab)
-function detectIndent(raw: string): string | number {
+export function detectIndent(raw: string): string | number {
   const match = raw.match(/^[ \t]+(?=")/m)
   if (!match) return 2
   const indent = match[0]

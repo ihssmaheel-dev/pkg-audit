@@ -206,10 +206,17 @@ export function App() {
             data={data}
             onCellClick={setDrawer}
             onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
+            notify={notify}
+            onCatalogMigrate={embedded ? undefined : (opts) => applyFix(opts, data.root)}
           />
         )}
         {data && tab === "conflicts" && (
-          <Conflicts data={data} notify={notify} onFix={embedded ? undefined : handleFix} />
+          <Conflicts
+            data={data}
+            notify={notify}
+            onFix={embedded ? undefined : handleFix}
+            onCatalogMigrate={embedded ? undefined : (opts) => applyFix(opts, data.root)}
+          />
         )}
         {data && tab === "graph" && (
           <Graph

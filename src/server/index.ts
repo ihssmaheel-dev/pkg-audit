@@ -225,10 +225,12 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
       if (url.pathname === "/api/fix" && req.method === "POST") {
         const body = JSON.parse(await readBody(req)) as {
           dir?: string
-          action?: "align" | "remove-unused" | "declare-phantom"
+          action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate"
           fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
           unused?: Array<{ workspace: string; pkg: string; type?: string }>
           phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
+          catalogStrategy?: "highest" | "most-frequent"
+          catalogAll?: boolean
         }
         const targetDir = body.dir ?? resolvedDir
         if (!targetDir) {
@@ -265,6 +267,32 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
             return
           }
           fixResult = await declarePhantomDependencies(targetDir, body.phantoms)
+        } else if (body.action === "catalog-migrate") {
+          const { applyCatalogPlan, generateCatalogPlan } = await import("../scan/catalog.js")
+          const currentScan = await scan(targetDir, {})
+          const plan = generateCatalogPlan(currentScan, {
+            strategy:
+              (body as { catalogStrategy?: "highest" | "most-frequent" }).catalogStrategy ?? "highest",
+            allPackages: (body as { catalogAll?: boolean }).catalogAll ?? false,
+          })
+          const catalogRes = await applyCatalogPlan(targetDir, plan, currentScan)
+          const updatedScan = await scan(targetDir, {})
+          json(res, {
+            ok: catalogRes.ok,
+            changes: plan.catalogEntries.map((e) => ({
+              workspace: e.workspaces.join(", "),
+              filePath: plan.pnpmWorkspaceYamlPath,
+              pkg: e.name,
+              from: Object.values(e.previousVersions).join(", "),
+              to: "catalog:",
+              depType: "catalog",
+            })),
+            modifiedFiles: catalogRes.modifiedFiles,
+            catalogCount: catalogRes.catalogCount,
+            errors: catalogRes.errors,
+            result: updatedScan,
+          })
+          return
         } else {
           if (!body.fixes || !Array.isArray(body.fixes) || body.fixes.length === 0) {
             json(res, { error: "No fixes provided" }, 400)

@@ -145,6 +145,32 @@ export interface UnusedScanResult {
   scannedFilesCount: number
 }
 
+export interface CatalogEntry {
+  name: string
+  targetVersion: string
+  workspacesCount: number
+  workspaces: string[]
+  previousVersions: Record<string, string>
+}
+
+export interface CatalogPlan {
+  catalogEntries: CatalogEntry[]
+  strategy: "highest" | "most-frequent"
+  totalPackages: number
+  totalWorkspacesUpdated: number
+  pnpmWorkspaceYamlPath: string
+  existingCatalogCount: number
+  updatedWorkspaceFiles: string[]
+}
+
+export interface CatalogMigrationResult {
+  ok: boolean
+  pnpmWorkspaceYamlPath: string
+  catalogCount: number
+  modifiedFiles: string[]
+  errors: Array<{ path: string; error: string }>
+}
+
 export interface ScanResult {
   version: 1
   root: string
@@ -157,6 +183,7 @@ export interface ScanResult {
   outdated: OutdatedResult | null
   errors: ScanError[]
   meta: ScanMeta
+  catalog?: CatalogPlan | null
 }
 
 export interface ProgressEvent {

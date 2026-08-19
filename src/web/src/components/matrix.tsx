@@ -1,7 +1,8 @@
 import { useMemo, useState } from "preact/hooks"
 import type { DepMap, ScanResult } from "../../../types"
 import type { DrawerState } from "../types"
-import { IconSearch } from "./icons"
+import { CatalogModal } from "./catalog-modal"
+import { IconSearch, IconZap } from "./icons"
 
 interface MatrixRow {
   name: string
@@ -58,12 +59,19 @@ interface MatrixProps {
   data: ScanResult
   onCellClick: (state: DrawerState) => void
   onWorkspaceClick: (relPath: string) => void
+  notify?: (msg: string) => void
+  onCatalogMigrate?: (options: {
+    action: "catalog-migrate"
+    catalogStrategy: "highest" | "most-frequent"
+    catalogAll: boolean
+  }) => Promise<{ ok: boolean; count: number; result: ScanResult | null }>
 }
 
-export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
+export function Matrix({ data, onCellClick, onWorkspaceClick, notify, onCatalogMigrate }: MatrixProps) {
   const [chip, setChip] = useState<Chip>("all")
   const [query, setQuery] = useState("")
   const [hideAligned, setHideAligned] = useState(true)
+  const [showCatalogModal, setShowCatalogModal] = useState(false)
   const [page, setPage] = useState(0)
   const pageSize = 50
 
@@ -146,8 +154,18 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
 
         <div class="flex-1" />
 
+        {onCatalogMigrate && (
+          <button
+            class="flex items-center gap-1.5 h-8 px-3 bg-[#00d992]/15 hover:bg-[#00d992]/25 border border-[#00d992]/40 text-[#00d992] rounded-[6px] text-xs font-semibold transition-colors shrink-0"
+            onClick={() => setShowCatalogModal(true)}
+          >
+            <IconZap size={12} />
+            <span>Convert to pnpm catalog:</span>
+          </button>
+        )}
+
         {/* Toggle hide aligned */}
-        <div class="flex items-center gap-2 text-xs text-[#8b949e]">
+        <div class="flex items-center gap-2 text-xs text-[#8b949e] shrink-0">
           <span>Hide aligned rows</span>
           <div
             class={`relative w-8 h-4 rounded-full cursor-pointer transition-colors ${
@@ -176,6 +194,16 @@ export function Matrix({ data, onCellClick, onWorkspaceClick }: MatrixProps) {
           </div>
         </div>
       </div>
+
+      {onCatalogMigrate && (
+        <CatalogModal
+          data={data}
+          isOpen={showCatalogModal}
+          onClose={() => setShowCatalogModal(false)}
+          notify={notify ?? (() => {})}
+          onMigrate={onCatalogMigrate}
+        />
+      )}
 
       {/* Grid Container */}
       <div class="overflow-x-auto border border-[#3d3a39] rounded-[8px] bg-[#101010]">

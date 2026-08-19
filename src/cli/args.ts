@@ -38,6 +38,10 @@ export interface CliOptions {
   phantom: boolean
   removeUnused: boolean
   declarePhantoms: boolean
+  catalog: boolean
+  catalogInit: boolean
+  catalogList: boolean
+  catalogAll: boolean
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -94,9 +98,14 @@ export function parseArgs(argv: string[]): CliOptions {
     phantom: false,
     removeUnused: false,
     declarePhantoms: false,
+    catalog: false,
+    catalogInit: false,
+    catalogList: false,
+    catalogAll: false,
   }
 
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!
     if (arg === "-h" || arg === "--help") {
       opts.help = true
     } else if (arg === "-v" || arg === "--version") {
@@ -131,6 +140,26 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.declarePhantoms = true
     } else if (arg === "--dry-run") {
       opts.dryRun = true
+    } else if (arg === "catalog" || arg === "--catalog") {
+      opts.catalog = true
+      const nextArg = argv[i + 1]
+      if (nextArg === "init") {
+        opts.catalogInit = true
+        i++
+      } else if (nextArg === "list" || nextArg === "ls") {
+        opts.catalogList = true
+        i++
+      } else {
+        opts.catalogInit = true
+      }
+    } else if (arg === "catalog:init" || arg === "--catalog-init") {
+      opts.catalog = true
+      opts.catalogInit = true
+    } else if (arg === "catalog:list" || arg === "--catalog-list") {
+      opts.catalog = true
+      opts.catalogList = true
+    } else if (arg === "--all") {
+      opts.catalogAll = true
     } else if (arg.startsWith("--strategy=")) {
       const s = arg.split("=")[1]
       opts.fixStrategy = s === "most-frequent" ? "most-frequent" : "highest"
@@ -199,15 +228,19 @@ export function printHelp(): void {
 
 Usage:
   pkg-audit [dir] [options]
+  pkg-audit catalog init [dir] # convert shared dependencies to pnpm catalog:
+  pkg-audit catalog list [dir] # show current and proposed catalog entries
   pkg-audit fix [dir]          # automatically resolve and align version conflicts
   pkg-audit ui [dir]           # alias of --ui
   pkg-audit html [dir]         # write standalone HTML report
   pkg-audit json [dir]         # machine output
 
 Options:
+  catalog init           Migrate monorepo to centralized pnpm-workspace.yaml catalog:
+  --all                  Include all external dependencies in catalog (not just shared)
   --fix                  Align conflicting dependency versions across all workspaces
-  --strategy=<strategy>  Fix strategy: 'highest' (default) or 'most-frequent'
-  --dry-run              Preview changes without modifying package.json files
+  --strategy=<strategy>  Fix/Catalog strategy: 'highest' (default) or 'most-frequent'
+  --dry-run              Preview changes without modifying files on disk
   --pkg=<name>           Limit fix to a single package name
   --target-version=<ver> Specify custom target version to align to (used with --pkg)
   --unused               Scan source files and show unused & phantom dependencies

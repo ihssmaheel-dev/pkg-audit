@@ -60,10 +60,12 @@ export function useScan() {
       payload:
         | Array<{ name: string; targetVersion: string; workspaces?: string[] }>
         | {
-            action?: "align" | "remove-unused" | "declare-phantom"
+            action?: "align" | "remove-unused" | "declare-phantom" | "catalog-migrate"
             fixes?: Array<{ name: string; targetVersion: string; workspaces?: string[] }>
             unused?: Array<{ workspace: string; pkg: string; type?: string }>
             phantoms?: Array<{ workspace: string; pkg: string; version: string; type?: "prod" | "dev" }>
+            catalogStrategy?: "highest" | "most-frequent"
+            catalogAll?: boolean
           },
       dir?: string
     ): Promise<{ ok: boolean; count: number; result: ScanResult | null }> => {
