@@ -44,10 +44,7 @@ describe("conflicts", () => {
     const result = await scan(FIXTURE)
     const react = result.conflicts.find((c) => c.name === "react")!
     const v19 = react.versions.find((v) => v.version === "19.0.0")!
-    expect(v19.occurrences.map((o) => o.workspace).sort()).toEqual([
-      path.join("apps", "web"),
-      path.join("packages", "ui-kit"),
-    ])
+    expect(v19.occurrences.map((o) => o.workspace).sort()).toEqual(["apps/web", "packages/ui-kit"])
     expect(v19.occurrences.every((o) => o.type === "prod")).toBe(true)
   })
 

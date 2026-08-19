@@ -5,6 +5,7 @@ import {
   IconCheckCircle,
   IconCopy,
   IconExternalLink,
+  IconFolder,
   IconMaximize,
   IconRepeat,
   IconSearch,
@@ -27,14 +28,18 @@ interface LayoutNode extends WorkspaceGraphNode {
   category: "app" | "package" | "root" | "other"
 }
 
-const CARD_WIDTH = 240
-const CARD_HEIGHT = 86
-const COL_SPACING = 360
-const ROW_SPACING = 110
+const CARD_WIDTH = 250
+const CARD_HEIGHT = 92
+const COL_SPACING = 370
+const ROW_SPACING = 118
 const PADDING = 60
 
 function normalizePath(p: string): string {
   return p.replace(/\\/g, "/")
+}
+
+function cleanWorkspaceName(name: string): string {
+  return name.replace(/\\/g, "/")
 }
 
 function getCategory(relPath: string, isRoot: boolean): "app" | "package" | "root" | "other" {
@@ -115,9 +120,9 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
       })
     })
 
-    // Layout standalone nodes in balanced 2-column or 3-column grid
+    // Layout standalone nodes in balanced 2-column grid to the right
     if (standaloneNodes.length > 0) {
-      const startX = connectedNodes.length > 0 ? maxConnectedX + 100 : PADDING
+      const startX = connectedNodes.length > 0 ? maxConnectedX + 110 : PADDING
       const cols = 2
       const standaloneColSpacing = CARD_WIDTH + 24
 
@@ -125,7 +130,7 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
         const col = idx % cols
         const row = Math.floor(idx / cols)
         const x = startX + col * standaloneColSpacing
-        const y = PADDING + row * (CARD_HEIGHT + 20)
+        const y = PADDING + row * (CARD_HEIGHT + 24)
 
         const layoutNode: LayoutNode = {
           ...node,
@@ -160,7 +165,7 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
 
     const scaleX = (containerW - 80) / layout.width
     const scaleY = (containerH - 80) / layout.height
-    const initialZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.5), 1.1)
+    const initialZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.5), 1.05)
 
     setZoom(Number(initialZoom.toFixed(2)))
     setPan({
@@ -242,7 +247,7 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
 
     const scaleX = (containerW - 80) / layout.width
     const scaleY = (containerH - 80) / layout.height
-    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.4), 1.1)
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.4), 1.05)
 
     setZoom(Number(targetZoom.toFixed(2)))
     setPan({
@@ -604,7 +609,7 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
               })}
             </g>
 
-            {/* Render Workspace Node Cards */}
+            {/* Render Workspace Node Cards (Using ForeignObject for Pixel-Perfect Typography & Layout) */}
             <g>
               {layout.nodes.map((node) => {
                 const isSelected = selectedNode === node.relPath
@@ -633,105 +638,104 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
                 const isOutgoing = activeRelations?.outgoing.has(node.relPath)
                 const isIncoming = activeRelations?.incoming.has(node.relPath)
 
-                let borderColor = "#3d3a39"
-                if (node.hasCycle) borderColor = "#f43f5e"
-                if (isSelected) borderColor = "#00d992"
-                else if (isOutgoing) borderColor = "#00d992"
-                else if (isIncoming) borderColor = "#38bdf8"
-                else if (isHovered) borderColor = "#8b949e"
-
                 const normRelPath = normalizePath(node.relPath)
+                const cleanName = cleanWorkspaceName(node.name)
 
                 // Category pill styles
                 const categoryBadge =
                   node.category === "root"
-                    ? { text: "ROOT", bg: "#8b5cf6", color: "#ffffff" }
+                    ? { label: "ROOT", classes: "bg-[#8b5cf6]/20 text-[#a78bfa] border border-[#8b5cf6]/40" }
                     : node.category === "app"
-                      ? { text: "APP", bg: "#00d992", color: "#101010" }
+                      ? { label: "APP", classes: "bg-[#00d992]/15 text-[#00d992] border border-[#00d992]/40" }
                       : node.category === "package"
-                        ? { text: "LIB", bg: "#38bdf8", color: "#101010" }
+                        ? {
+                            label: "LIB",
+                            classes: "bg-[#38bdf8]/15 text-[#38bdf8] border border-[#38bdf8]/40",
+                          }
                         : null
 
                 return (
-                  <g
+                  <foreignObject
                     key={node.relPath}
-                    transform={`translate(${node.x}, ${node.y})`}
+                    x={node.x}
+                    y={node.y}
+                    width={node.width}
+                    height={node.height}
                     opacity={opacity}
-                    class="cursor-pointer transition-opacity duration-150"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedNode(selectedNode === node.relPath ? null : node.relPath)
-                    }}
-                    onDblClick={(e) => {
-                      e.stopPropagation()
-                      onWorkspaceClick?.(node.relPath)
-                    }}
-                    onMouseEnter={() => setHoveredNode(node.relPath)}
-                    onMouseLeave={() => setHoveredNode(null)}
+                    class="overflow-visible"
                   >
-                    {/* Card Body */}
-                    <rect
-                      width={node.width}
-                      height={node.height}
-                      rx="8"
-                      fill="#141414"
-                      stroke={borderColor}
-                      strokeWidth={isSelected || node.hasCycle || isOutgoing || isIncoming ? 2 : 1}
-                    />
-
-                    {/* Top Header Row: Name & Tag Pill */}
-                    <text x="14" y="26" fill="#ffffff" fontFamily="monospace" fontWeight="bold" fontSize="13">
-                      {node.name.length > 18 ? `${node.name.slice(0, 16)}…` : node.name}
-                    </text>
-
-                    {categoryBadge && (
-                      <g transform={`translate(${node.width - 48}, 14)`}>
-                        <rect width="36" height="15" rx="3" fill={categoryBadge.bg} fillOpacity="0.2" />
-                        <text
-                          x="18"
-                          y="11"
-                          fill={categoryBadge.bg}
-                          fontSize="9"
-                          fontWeight="700"
-                          textAnchor="middle"
+                    <div
+                      class={`w-full h-full rounded-[8px] p-2.5 flex flex-col justify-between border cursor-pointer select-none transition-all duration-150 ${
+                        isSelected
+                          ? "bg-[#161616] border-[#00d992] ring-1 ring-[#00d992]/50 shadow-lg shadow-[#00d992]/10"
+                          : node.hasCycle
+                            ? "bg-[#161616] border-[#f43f5e] ring-1 ring-[#f43f5e]/50 shadow-lg shadow-[#f43f5e]/10 animate-pulse"
+                            : isOutgoing
+                              ? "bg-[#161616] border-[#00d992]"
+                              : isIncoming
+                                ? "bg-[#161616] border-[#38bdf8]"
+                                : isHovered
+                                  ? "bg-[#181818] border-[#8b949e]"
+                                  : "bg-[#121212] border-[#2e2a28] hover:border-[#4d4845]"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedNode(selectedNode === node.relPath ? null : node.relPath)
+                      }}
+                      onDblClick={(e) => {
+                        e.stopPropagation()
+                        onWorkspaceClick?.(node.relPath)
+                      }}
+                      onMouseEnter={() => setHoveredNode(node.relPath)}
+                      onMouseLeave={() => setHoveredNode(null)}
+                    >
+                      {/* Top Header Row */}
+                      <div class="flex items-center justify-between gap-1.5 min-w-0">
+                        <span
+                          class="font-mono font-bold text-[12.5px] text-[#ffffff] truncate tracking-tight"
+                          title={cleanName}
                         >
-                          {categoryBadge.text}
-                        </text>
-                      </g>
-                    )}
+                          {cleanName}
+                        </span>
 
-                    {/* Middle: Normalized Relative Path */}
-                    <text x="14" y="44" fill="#8b949e" fontFamily="monospace" fontSize="10.5">
-                      {normRelPath.length > 28 ? `${normRelPath.slice(0, 26)}…` : normRelPath}
-                    </text>
+                        {categoryBadge && (
+                          <span
+                            class={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider shrink-0 leading-none ${categoryBadge.classes}`}
+                          >
+                            {categoryBadge.label}
+                          </span>
+                        )}
+                      </div>
 
-                    {/* Bottom Metadata Pills with exact spacing */}
-                    <g transform="translate(14, 58)">
-                      {/* Dependencies Pill */}
-                      <g>
-                        <rect width="64" height="18" rx="4" fill="#1c1c1c" stroke="#2a2726" strokeWidth="1" />
-                        <text x="7" y="12.5" fill="#8b949e" fontSize="9.5" fontWeight="600">
-                          →{" "}
-                          <tspan fill="#ffffff" fontWeight="bold">
-                            {node.deps.length}
-                          </tspan>{" "}
-                          deps
-                        </text>
-                      </g>
+                      {/* Middle Row: Normalized Relative Path */}
+                      <div
+                        class="font-mono text-[10.5px] text-[#8b949e] truncate flex items-center gap-1 leading-none"
+                        title={normRelPath}
+                      >
+                        <IconFolder size={11} className="shrink-0 text-[#605c5a]" />
+                        <span class="truncate">{normRelPath}</span>
+                      </div>
 
-                      {/* Dependents (Used By) Pill */}
-                      <g transform="translate(70, 0)">
-                        <rect width="78" height="18" rx="4" fill="#1c1c1c" stroke="#2a2726" strokeWidth="1" />
-                        <text x="7" y="12.5" fill="#8b949e" fontSize="9.5" fontWeight="600">
-                          ←{" "}
-                          <tspan fill={node.dependedBy.length > 0 ? "#00d992" : "#8b949e"} fontWeight="bold">
+                      {/* Bottom Row: Exact Metadata Badges */}
+                      <div class="flex items-center gap-1.5 text-[10px] font-mono leading-none">
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1a1a1a] border border-[#2e2a28] text-[#8b949e]">
+                          <span>→</span>
+                          <strong class="text-[#f2f2f2] font-semibold">{node.deps.length}</strong>
+                          <span>deps</span>
+                        </span>
+
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1a1a1a] border border-[#2e2a28] text-[#8b949e]">
+                          <span>←</span>
+                          <strong
+                            class={`font-semibold ${node.dependedBy.length > 0 ? "text-[#00d992]" : "text-[#8b949e]"}`}
+                          >
                             {node.dependedBy.length}
-                          </tspan>{" "}
-                          used by
-                        </text>
-                      </g>
-                    </g>
-                  </g>
+                          </strong>
+                          <span>used by</span>
+                        </span>
+                      </div>
+                    </div>
+                  </foreignObject>
                 )
               })}
             </g>

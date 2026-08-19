@@ -126,7 +126,7 @@ function loadWorkspace(filePath: string, rootDir: string, stats: ScanStats): Wor
     return null
   }
 
-  const relPath = path.relative(rootDir, path.dirname(filePath)) || "."
+  const relPath = (path.relative(rootDir, path.dirname(filePath)) || ".").replace(/\\/g, "/")
   const deps: Workspace["deps"] = {}
 
   for (const [field, type] of DEP_FIELDS) {
