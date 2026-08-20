@@ -4,6 +4,7 @@ import {
   IconAlertTriangle,
   IconExternalLink,
   IconFolder,
+  IconRefreshCw,
   IconSearch,
   IconShield,
   IconXCircle,
@@ -11,6 +12,8 @@ import {
 
 interface DeprecationProps {
   deprecation: DeprecationSummary | null
+  loading?: boolean
+  onRescan?: () => void
 }
 
 type FilterType = "all" | "zombies" | "deprecated" | "abandoned" | "prod" | "dev"
@@ -27,7 +30,7 @@ function formatDownloads(n?: number): string {
   return `${n}/wk`
 }
 
-export function DeprecationView({ deprecation }: DeprecationProps) {
+export function DeprecationView({ deprecation, loading, onRescan }: DeprecationProps) {
   const [search, setSearch] = useState("")
   const [filterType, setFilterType] = useState<FilterType>("all")
   const [sortKey, setSortKey] = useState<SortKey>("downloads")
@@ -93,6 +96,17 @@ export function DeprecationView({ deprecation }: DeprecationProps) {
             high-adoption Zombie packages.
           </p>
         </div>
+
+        {onRescan && (
+          <button
+            onClick={onRescan}
+            disabled={loading}
+            class="flex items-center gap-1.5 h-8 px-3.5 bg-[#181818] hover:bg-[#22201f] border border-[#383432] rounded-[6px] text-xs font-medium text-[#f2f2f2] transition-colors disabled:opacity-50"
+          >
+            <IconRefreshCw size={13} className={loading ? "spinner" : ""} />
+            <span>{loading ? "Auditing..." : "Re-audit Deprecations"}</span>
+          </button>
+        )}
       </div>
 
       {/* KPI Summary Scorecard */}

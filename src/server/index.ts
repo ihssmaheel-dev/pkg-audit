@@ -157,6 +157,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
           versions: url.searchParams.get("versions") === "true",
           changelog: url.searchParams.get("changelog") === "true",
           security: url.searchParams.get("security") === "true",
+          deprecation: url.searchParams.get("deprecation") !== "false",
           concurrency: Number(url.searchParams.get("concurrency")) || 8,
           changelogLines: Number(url.searchParams.get("changelogLines")) || 6,
         })
@@ -170,6 +171,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
           outdated?: boolean
           changelog?: boolean
           security?: boolean
+          deprecation?: boolean
           concurrency?: number
           changelogLines?: number
         }
@@ -189,6 +191,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
           outdated: Boolean(body.outdated),
           changelog: Boolean(body.changelog),
           security: Boolean(body.security),
+          deprecation: body.deprecation !== false,
           concurrency: body.concurrency ?? 8,
           changelogLines: body.changelogLines ?? 6,
         })

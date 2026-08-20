@@ -128,6 +128,8 @@ async function main(): Promise<void> {
     concurrency: merged.concurrency,
     changelogLines: merged.changelogLines,
     security: merged.security,
+    deprecation: merged.deprecation !== false,
+    abandonedDaysThreshold: merged.abandonedDays,
   })
 
   if (merged.security) {

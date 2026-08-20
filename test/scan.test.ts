@@ -55,6 +55,12 @@ describe("scan", () => {
     expect(result.errors).toHaveLength(1)
   })
 
+  it("populates deprecation summary by default on scan", async () => {
+    const result = await scan(FIXTURE)
+    expect(result.deprecation).toBeDefined()
+    expect(result.deprecation?.totalScanned).toBeGreaterThan(0)
+  })
+
   it("reports read errors for missing directories", async () => {
     const result = await scan(path.join(FIXTURE, "does-not-exist"))
     expect(result.errors.length).toBeGreaterThan(0)

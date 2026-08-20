@@ -270,7 +270,13 @@ export function App() {
           />
         )}
         {data && tab === "licenses" && <LicensesView data={data} loading={loading} notify={notify} />}
-        {data && tab === "deprecation" && <DeprecationView deprecation={data.deprecation ?? null} />}
+        {data && tab === "deprecation" && (
+          <DeprecationView
+            deprecation={data.deprecation ?? null}
+            loading={loading}
+            onRescan={() => void handleScan(data.root, { deprecation: true })}
+          />
+        )}
         {data && tab === "context" && <AiContextView data={data} notify={notify} />}
         {data && tab === "outdated" && (
           <Outdated
