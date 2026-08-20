@@ -1,10 +1,10 @@
 # pkg-audit
 
 <div align="center">
-  <img src="src/web/src/assets/logo.png" alt="pkg-audit logo" width="120" height="120" />
+  <img src="docs/images/logo.png" alt="pkg-audit logo" width="120" height="120" />
   <br />
   <br />
-  <p><b>Developer-first dependency drift, hygiene, and semver conflict auditor for JS/TS monorepos.</b></p>
+  <p><b>Developer-first dependency drift, hygiene, security SLA, and semver conflict auditor for JS/TS monorepos.</b></p>
   <p>Scan any monorepo and open a clean local dashboard in under 10 seconds.</p>
 
   <p>
@@ -17,86 +17,129 @@
 
 ---
 
-## Preview
+## 📸 Preview
 
-<!-- UI Screenshot Placeholder: Main Dashboard -->
 <div align="center">
   <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/dashboard-preview.png" alt="pkg-audit Dashboard Preview" width="100%" />
-  <p><i>Dashboard: Monorepo Health Overview with 6 interactive Chart.js visualizations & KPI metrics</i></p>
+  <p><i>Dashboard: Monorepo Health Overview with interactive Chart.js visualizations & KPI metrics</i></p>
 </div>
 
 <br />
 
-<details>
-  <summary><b>📷 More UI Screenshots & Views</b></summary>
+<details open>
+  <summary><b>📷 Interactive Dashboard Views & Screenshots</b></summary>
   <br />
 
-### Cross-Workspace Matrix Grid
+### 1. Cross-Workspace Matrix Grid
 
-  <!-- UI Screenshot Placeholder: Matrix View -->
-  <p align="center">
-    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/matrix-preview.png" alt="Matrix Grid Preview" width="100%" />
-  </p>
+Cross-workspace alignment matrix showing package versions declared across all packages with conflict badges.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/matrix-preview.png" alt="Matrix Grid Preview" width="100%" />
+</p>
 
-### Version Conflicts Breakdown
+### 2. Version Conflicts Breakdown & 1-Click Aligner
 
-  <!-- UI Screenshot Placeholder: Conflicts View -->
-  <p align="center">
-    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/conflicts-preview.png" alt="Conflicts Preview" width="100%" />
-  </p>
+Isolates major breaking mismatches and range discrepancies with automated alignment recommendations.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/conflicts-preview.png" alt="Conflicts Preview" width="100%" />
+</p>
 
-### Workspace Architecture & Topology Graph
+### 3. Lockfile Deduplication & Disk Savings
 
-  <!-- UI Screenshot Placeholder: Graph View -->
-  <p align="center">
-    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/graph-preview.png" alt="Workspace Graph & Circular Dependency Preview" width="100%" />
-  </p>
+Analyzes lockfile transitive bloat, measures actual physical disk bytes, and calculates disk savings from collapsing duplicate packages.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/dedupe-preview.png" alt="Deduplication & Disk Savings Preview" width="100%" />
+</p>
 
-### Phantom & Unused Dependency Scanner
+### 4. Package Deprecation & Abandonment Audit
 
-  <!-- UI Screenshot Placeholder: Unused & Phantom View -->
-  <p align="center">
-    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/unused-preview.png" alt="Phantom and Unused Dependency Scanner Preview" width="100%" />
-  </p>
+Detects officially deprecated packages, unmaintained/abandoned libraries (>2 years without updates), and high-risk zombie dependencies.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/deprecation-preview.png" alt="Deprecation & Zombie Packages Preview" width="100%" />
+</p>
 
-### Outdated Dependencies & GitHub Changelogs
+### 5. Interactive Workspace Topology & Cycle Detection
 
-  <!-- UI Screenshot Placeholder: Outdated View -->
-  <p align="center">
-    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/outdated-preview.png" alt="Outdated Changelogs Preview" width="100%" />
-  </p>
+Visual dependency graph canvas with automatic cycle isolation (e.g. `A ➔ B ➔ C ➔ A`) that deadlock build tools.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/graph-preview.png" alt="Workspace Graph & Circular Dependency Preview" width="100%" />
+</p>
 
-### Workspace Manifests
+### 6. Phantom & Unused Dependency Scanner
 
-  <!-- UI Screenshot Placeholder: Workspaces View -->
-  <p align="center">
-    <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/workspaces-preview.png" alt="Workspaces Preview" width="100%" />
-  </p>
+Detects undeclared imports in source files (`.ts`, `.tsx`, `.vue`, `.svelte`) and dead dependencies declared in `package.json`.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/unused-preview.png" alt="Phantom and Unused Dependency Scanner Preview" width="100%" />
+</p>
+
+### 7. Security Vulnerabilities & SLA Tracking
+
+Scans dependencies via Google OSV API, tracks vulnerability age, and enforces organizational SLA compliance gates.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/security-preview.png" alt="Security Vulnerability Audit Preview" width="100%" />
+</p>
+
+### 8. License Compliance & Copyleft Risk Audit
+
+Audits dependency licenses across monorepos, flags restrictive AGPL/GPL copyleft licenses, and exports SPDX JSON / Notice text.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/licenses-preview.png" alt="License Compliance Preview" width="100%" />
+</p>
+
+### 9. AI Monorepo Architect Prompt Generator
+
+Generates curated, token-efficient architecture context markdown for AI agents (Cursor, Claude, Copilot, ChatGPT).
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/context-preview.png" alt="AI Context Generator Preview" width="100%" />
+</p>
+
+### 10. Outdated Releases & Inline GitHub Changelogs
+
+Queries the npm registry for latest updates and embeds inline GitHub release notes and changelogs.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/outdated-preview.png" alt="Outdated Releases Preview" width="100%" />
+</p>
+
+### 11. Manifest Hygiene Audit
+
+Audits package manifests for duplicate names, missing fields, engine drifts, and mismatched package managers.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/hygiene-preview.png" alt="Manifest Hygiene Preview" width="100%" />
+</p>
+
+### 12. Workspace Manifest Inventory
+
+Detailed dependency breakdown per workspace with uniform columns and type filters.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ihssmaheel-dev/pkg-audit/main/docs/images/workspaces-preview.png" alt="Workspaces Inventory Preview" width="100%" />
+</p>
 
 </details>
 
 ---
 
-## Highlights
+## ✨ Highlights
 
 - **⚡ Blazing Fast** — Scans full monorepos with hundreds of workspaces in under 50 milliseconds.
-- **👻 Phantom Dependency Scanner** — Catches undeclared imports in source files (`.ts`, `.tsx`, `.js`, `.vue`, `.svelte`) that silently hoist locally but fail in Docker/CI builds.
+- **⏳ Suppression Engine with Expiry** — Suppress specific CVEs, licenses, or false-positive phantoms with a mandatory `reason` and `expires` date (`.pkg-audit-ignore.json`).
+- **💾 Local Cache & `--offline` Mode** — Persistent disk cache under `.pkg-audit/cache/` enables fast offline audits and avoids redundant network calls.
+- **⏱️ Vulnerability SLA & Age Gate** — Persists vulnerability discovery history and breaks CI builds when unpatched CVEs breach SLA thresholds (`--fail-on=critical:7d`).
+- **🛡️ Cross-Boundary Import Enforcement** — Static analysis ensures shared packages never import from applications (`packages/*` ➔ `apps/*`), preserving clean modularity.
+- **💾 Lockfile Dedupe & Disk Size Impact** — Computes physical byte savings from collapsing duplicate transitive packages (e.g. `~14.2 MB saved`).
+- **⚠️ Deprecation & Zombie Audit** — Queries official npm deprecations and flags abandoned packages unmaintained for >2 years.
+- **👻 Phantom Dependency Scanner** — Catches undeclared imports in source files (`.ts`, `.tsx`, `.js`, `.vue`, `.svelte`) that silently hoist locally but fail in Docker/CI.
 - **🗑️ Unused Dependency Remover** — Identifies dead packages declared in `package.json` with 1-click removal.
 - **🕸️ Workspace Dependency Graph** — Interactive SVG canvas with zoom, pan, and topological layer hierarchy mapping internal linkages.
-- **🚨 Circular Dependency Detector** — Automatically identifies and isolates cyclic loops (e.g. `A ➔ B ➔ C ➔ A`) that deadlock Turborepo/Nx/pnpm builds.
+- **🚨 Circular Dependency Detector** — Automatically isolates cyclic loops (e.g. `A ➔ B ➔ C ➔ A`) that deadlock Turborepo/Nx/pnpm builds.
 - **⚡ One-Click Conflict Fixer** — Automatically align version mismatches via `pkg-audit fix` or 1-click UI buttons.
-- **📊 6-Chart Monorepo Intelligence** — Donut distributions, dependency compositions, workspace loads, and upstream drift charts powered by Chart.js.
-- **🔍 Matrix Alignment Grid** — Cross-workspace view with cell drilldown and automated pin alignment recommendations.
-- **⚠️ Conflict Detection** — Differentiates major breaking mismatches from range discrepancies with one-click markdown exports.
-- **📦 Registry & Changelog Sync** — Live npm version queries with inline GitHub release notes.
-- **🧹 Manifest Hygiene Audit** — Flags duplicate workspace names, missing package fields, engine drifts, and packageManager conflicts.
-- **🤖 GitHub Action & PR Bot** — Post automated sticky drift reports and alignment score deltas directly to Pull Requests.
-- **⌨️ Keyboard First** — Fast navigation via `Ctrl+K` / `Cmd+K` command palette and number hotkeys (`1`–`8`).
+- **📜 License Governance** — Identifies copyleft risks in production dependencies and exports SPDX JSON, CSV, or NOTICE files.
+- **🤖 AI Monorepo Context** — Exports concise repository structure and rules formatted for Cursor (`.cursorrules`), Claude (`CLAUDE.md`), and Copilot.
+- **📦 pnpm Catalog Migrator** — Generates and applies `pnpm-workspace.yaml` catalog plans automatically.
 - **📄 Standalone HTML Export** — Generate portable, single-file offline reports for pull requests, audits, and Slack sharing.
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 # One-shot scan with UI dashboard (no install required)
@@ -108,90 +151,142 @@ npx pkg-audit --ui ~/code/my-monorepo
 # Install locally as dev dependency
 npm i -D pkg-audit
 
-# Install globally
+# Install globally to audit any repository across your computer
 npm i -g pkg-audit
 ```
 
 ---
 
-## Usage
+## 💻 CLI Usage
 
 ```bash
 pkg-audit [dir] [options]
 pkg-audit fix [dir]         # Automatically resolve and align version conflicts
-pkg-audit ui [dir]          # Alias of --ui
+pkg-audit ui [dir]          # Launch interactive browser dashboard
 pkg-audit html [dir]        # Export standalone HTML report
 pkg-audit json [dir]        # Machine-readable JSON output
 ```
 
-| Invocation                               | Output / Behavior                                          |
-| ---------------------------------------- | ---------------------------------------------------------- |
-| `pkg-audit`                              | Scans current directory and prints terminal report         |
-| `pkg-audit fix`                          | Automatically aligns all conflicts to highest semver       |
-| `pkg-audit fix --strategy=most-frequent` | Aligns all conflicts to most frequent version              |
-| `pkg-audit fix --dry-run`                | Previews manifest modifications without writing to disk    |
-| `pkg-audit fix --pkg=react`              | Aligns version conflicts for a specific package only       |
-| `pkg-audit --ui`                         | Scans current directory and launches browser dashboard     |
-| `pkg-audit --ui ~/code/shop`             | Scans target directory and launches browser dashboard      |
-| `pkg-audit html`                         | Generates `pkg-audit-report.html` in current directory     |
-| `pkg-audit json --out audit.json`        | Emits structured JSON for CI and custom tooling            |
-| `pkg-audit --outdated --ui`              | Scans repository, queries npm registry, opens dashboard    |
-| `pkg-audit --watch --ui`                 | Live-reloads dashboard automatically when manifests change |
+| Invocation                               | Output / Behavior                                           |
+| ---------------------------------------- | ----------------------------------------------------------- |
+| `pkg-audit`                              | Scans current directory and prints terminal report          |
+| `pkg-audit fix`                          | Automatically aligns all conflicts to highest semver        |
+| `pkg-audit fix --strategy=most-frequent` | Aligns all conflicts to most frequent version               |
+| `pkg-audit fix --dry-run`                | Previews manifest modifications without writing to disk     |
+| `pkg-audit fix --pkg=react`              | Aligns version conflicts for a specific package only        |
+| `pkg-audit --ui`                         | Scans current directory and launches browser dashboard      |
+| `pkg-audit --ui ~/code/shop`             | Scans target directory and launches browser dashboard       |
+| `pkg-audit --offline`                    | Runs scan without network requests using local disk cache   |
+| `pkg-audit --fail-on=critical:7d`        | Breaks CI if critical vulnerabilities exceed 7 days old     |
+| `pkg-audit --fail-on=copyleft`           | Breaks CI if restrictive copyleft licenses are in prod deps |
+| `pkg-audit html`                         | Generates `pkg-audit-report.html` in current directory      |
+| `pkg-audit json --out audit.json`        | Emits structured JSON for CI and custom tooling             |
+| `pkg-audit --watch --ui`                 | Live-reloads dashboard automatically when manifests change  |
 
 ---
 
-## CLI Options
+## ⚙️ CLI Options Reference
 
-| Option                   | Description                                              | Default   |
-| ------------------------ | -------------------------------------------------------- | --------- |
-| `--fix`                  | Automatically align conflicting dependency versions      | `false`   |
-| `--strategy=<strategy>`  | Fix strategy: `highest` or `most-frequent`               | `highest` |
-| `--dry-run`              | Preview changes without modifying `package.json` files   | `false`   |
-| `--pkg=<name>`           | Limit fix remediation to a single package name           | none      |
-| `--target-version=<ver>` | Specify custom target version (used with `--pkg`)        | none      |
-| `--ui`                   | Launch local web dashboard in browser                    | `false`   |
-| `--html[=file]`          | Write standalone self-contained HTML report to file      | `false`   |
-| `--json[=file]`          | Emit structured JSON to stdout or specified file         | `false`   |
-| `--pr-comment[=file]`    | Generate GitHub PR comment markdown                      | `false`   |
-| `--post-pr-comment`      | Post or update sticky comment on PR in GitHub Actions    | `false`   |
-| `--base-json=file`       | Compare with base branch JSON audit to compute delta     | none      |
-| `--outdated`             | Query npm registry for latest version drift              | `false`   |
-| `--changelog`            | Fetch GitHub release notes and changelogs per package    | `false`   |
-| `--changelog-lines=N`    | Maximum lines of release notes to display                | `6`       |
-| `--concurrency=N`        | Maximum concurrent registry requests                     | `8`       |
-| `--top=N`                | Number of top shared dependencies to report              | `10`      |
-| `--only-conflicts`       | Filter output to only packages with version conflicts    | `false`   |
-| `--workspace=<name>`     | Inspect dependencies for a single specified workspace    | `all`     |
-| `--full`                 | Render full dependency matrix across all manifests       | `false`   |
-| `--watch`                | Watch `package.json` files and rescan automatically      | `false`   |
-| `--port=N`               | Custom port for `--ui` web server                        | `auto`    |
-| `--no-open`              | Prevent opening browser window automatically with `--ui` | `false`   |
-| `--ignore-dir=a,b`       | Extra directory patterns to ignore during scan           | none      |
-| `--no-gitignore`         | Ignore `.gitignore` exclusions during scanning           | `false`   |
-| `--fail-on=major\|range` | Exit with code 2 if conflicts at or above severity exist | none      |
-| `-h, --help`             | Display help information                                 |           |
-| `-v, --version`          | Display version number                                   |           |
-
----
-
-## Dashboard Views
-
-1. **Dashboard** — 6-up high-level KPI cards and 6 interactive Chart.js charts:
-   - **Version Alignment** (Doughnut)
-   - **Dependency Composition** (Doughnut)
-   - **Dependencies by Workspace** (Horizontal Bar)
-   - **Top Shared Dependencies** (Horizontal Bar)
-   - **Outdated Semver Drift** (Vertical Column)
-   - **Active Version Conflicts** (Color-coded Bar)
-2. **Matrix** — Dense cross-workspace dependency matrix. Click any cell to view version details across workspaces and copy suggested alignment pins.
-3. **Conflicts** — Grouped version conflicts categorized by Major breaking vs Range discrepancies with copy-to-clipboard markdown support.
-4. **Outdated** — Real-time upstream semver drift with inline GitHub changelogs and release notes.
-5. **Hygiene** — Monorepo sanity checks for duplicate package names, missing package fields, Node engines, and package manager consistency.
-6. **Workspaces** — Dedicated dependency tables per workspace with uniform column widths and filter capabilities.
+| Option                   | Description                                                                        | Default   |
+| ------------------------ | ---------------------------------------------------------------------------------- | --------- |
+| `--ui`                   | Launch local web dashboard in browser                                              | `false`   |
+| `--fix`                  | Automatically align conflicting dependency versions                                | `false`   |
+| `--strategy=<strategy>`  | Fix strategy: `highest` or `most-frequent`                                         | `highest` |
+| `--dry-run`              | Preview changes without modifying `package.json` files                             | `false`   |
+| `--pkg=<name>`           | Limit fix remediation to a single package name                                     | none      |
+| `--target-version=<ver>` | Specify custom target version (used with `--pkg`)                                  | none      |
+| `--offline`              | Skip network requests and use local disk response cache                            | `false`   |
+| `--no-cache`, `--fresh`  | Bypass local disk response cache and fetch fresh network data                      | `false`   |
+| `--boundaries`           | Enforce cross-boundary import architecture rules                                   | `false`   |
+| `--fail-on=<val>`        | CI Gate: `major`, `range`, `copyleft`, or `<severity>:<days>` (e.g. `critical:7d`) | none      |
+| `--security`             | Run security vulnerability audit via Google OSV API                                | `false`   |
+| `--security-fix`         | Automatically apply non-breaking vulnerability patch upgrades                      | `false`   |
+| `--dedupe`               | Run lockfile transitive deduplication audit                                        | `false`   |
+| `--dedupe-fix`           | Automatically apply package manager overrides/resolutions                          | `false`   |
+| `--licenses`             | Run license compliance audit                                                       | `false`   |
+| `--license-export=<fmt>` | Export licenses as `notice`, `spdx`, or `csv`                                      | none      |
+| `--deprecation`          | Audit deprecated, abandoned (>2y), and zombie packages                             | `true`    |
+| `--html[=file]`          | Write standalone self-contained HTML report to file                                | `false`   |
+| `--json[=file]`          | Emit structured JSON to stdout or specified file                                   | `false`   |
+| `--pr-comment[=file]`    | Generate GitHub PR comment markdown                                                | `false`   |
+| `--post-pr-comment`      | Post or update sticky comment on PR in GitHub Actions                              | `false`   |
+| `--base-json=file`       | Compare with base branch JSON audit to compute delta                               | none      |
+| `--outdated`             | Query npm registry for latest version drift                                        | `false`   |
+| `--changelog`            | Fetch GitHub release notes and changelogs per package                              | `false`   |
+| `--concurrency=N`        | Maximum concurrent registry requests                                               | `8`       |
+| `--top=N`                | Number of top shared dependencies to report                                        | `10`      |
+| `--workspace=<name>`     | Inspect dependencies for a single specified workspace                              | `all`     |
+| `--full`                 | Render full dependency matrix across all manifests                                 | `false`   |
+| `--watch`                | Watch `package.json` files and rescan automatically                                | `false`   |
+| `--port=N`               | Custom port for `--ui` web server                                                  | `auto`    |
+| `--no-open`              | Prevent opening browser window automatically with `--ui`                           | `false`   |
 
 ---
 
-## Keyboard Shortcuts
+## 🛡️ Enterprise Feature Deep Dive
+
+### 1. Suppression File with Expiry (`.pkg-audit-ignore.json`)
+
+Manage known exceptions without permanently hiding technical debt. Expired suppressions automatically trigger warnings.
+
+```json
+[
+  {
+    "id": "GHSA-1234-*",
+    "pkg": "lodash",
+    "type": "security",
+    "reason": "Internal dev build tool only; migration scheduled for Q4",
+    "expires": "2026-12-31"
+  },
+  {
+    "pkg": "@mono/legacy-helper",
+    "type": "phantom",
+    "workspace": "apps/web",
+    "reason": "Legacy build script phantom import",
+    "expires": "2026-11-30"
+  }
+]
+```
+
+### 2. Vulnerability SLA Age Tracking
+
+Enforce strict remediation timelines in your CI pipelines:
+
+```bash
+# Break build only if critical vulnerabilities remain unpatched after 7 days
+pkg-audit --fail-on=critical:7d
+
+# Break build for high severity CVEs older than 14 days
+pkg-audit --fail-on=high:14d
+```
+
+Discovery timestamps are tracked in `.pkg-audit/vulnerability-history.json`.
+
+### 3. Cross-Boundary Import Rules
+
+Ensure modular architecture is preserved across apps and packages:
+
+```javascript
+// pkg-audit.config.js
+export default {
+  boundaryRules: [
+    {
+      from: "packages/**",
+      disallow: ["apps/**"],
+      reason: "Shared libraries must never import application code",
+    },
+    {
+      from: "apps/web/**",
+      disallow: ["apps/api/**"],
+      reason: "Frontend application must not directly import backend server code",
+    },
+  ],
+}
+```
+
+---
+
+## ⌨️ Keyboard Shortcuts
 
 | Shortcut           | Action                                                      |
 | ------------------ | ----------------------------------------------------------- |
@@ -206,30 +301,9 @@ pkg-audit json [dir]        # Machine-readable JSON output
 
 ---
 
-## Configuration File
-
-You can define default configuration options in `pkg-audit.config.js`, `pkg-audit.config.mjs`, `pkg-audit.config.cjs`, or under the `"pkg-audit"` key in `package.json`:
-
-```javascript
-export default {
-  ignoreDirs: ["fixtures", "examples", "legacy"],
-  top: 15,
-  outdated: false,
-  changelog: false,
-  changelogLines: 6,
-  concurrency: 8,
-  respectGitignore: true,
-  color: true,
-}
-```
-
-_Precedence:_ CLI Arguments > Config File > Default Values.
-
----
-
 ## 🤖 Official GitHub Action & PR Bot
 
-Automate dependency drift auditing on every Pull Request using the official GitHub Action. It analyzes cross-workspace changes, uploads a standalone HTML report artifact, and posts/updates a sticky rich PR comment with alignment scores, conflict tables, and hygiene alerts.
+Automate dependency drift auditing on every Pull Request using the official GitHub Action.
 
 ```yaml
 # .github/workflows/dependency-audit.yml
@@ -261,85 +335,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-pr: "true"
           html-report: "true"
-          fail-on: "major" # Optional: fail step if major version conflicts are introduced
+          fail-on: "major"
 ```
-
-### Action Inputs
-
-| Input           | Description                                                            | Default               |
-| :-------------- | :--------------------------------------------------------------------- | :-------------------- |
-| `github-token`  | GitHub Token for posting or updating pull request comments             | `${{ github.token }}` |
-| `comment-on-pr` | Whether to post or update a sticky summary comment on the Pull Request | `true`                |
-| `html-report`   | Whether to generate and upload a standalone interactive HTML report    | `true`                |
-| `fail-on`       | Fail the workflow step if conflicts exist (`major`, `range`, `none`)   | `none`                |
-| `outdated`      | Query the npm registry for upstream version drift and release notes    | `false`               |
-| `directory`     | Directory path of the monorepo root to audit                           | `.`                   |
-| `report-name`   | Artifact name for the uploaded standalone HTML report                  | `pkg-audit-report`    |
 
 ---
 
-## CI / CD Integration (CLI)
-
-Integrate `pkg-audit` directly into CLI scripts or generic CI environments:
-
-```json
-{
-  "scripts": {
-    "audit:deps": "pkg-audit --ui",
-    "audit:ci": "pkg-audit --fail-on major --html reports/dependency-audit.html"
-  }
-}
-```
-
-### Exit Codes
-
-- `0` — Clean scan, no qualifying conflicts found.
-- `1` — Scan or filesystem error.
-- `2` — Conflicts detected exceeding `--fail-on` threshold.
-
----
-
-## Development
+## 🧪 Verification & Testing
 
 ```bash
-# Clone and install dependencies
-git clone https://github.com/ihssmaheel-dev/pkg-audit.git
-cd pkg-audit
-npm install
-
-# Run CLI locally
-npm run dev
-
-# Run web UI in development mode
-npm run dev:ui
-
-# Execute test suite
-npm test
-
-# Run full verification (format, lint, typecheck, tests, build)
+# Run full verification pipeline (formatting, linting, strict types, 151 unit tests, and build)
 npm run verify
 ```
 
 ---
 
-## Architecture
-
-```
-pkg-audit/
-  src/
-    scan/          Core scanner engine (zero UI dependencies)
-    cli/           CLI parser, terminal report renderer
-    server/        Local web server & API handlers
-    web/           Preact + Tailwind CSS v4 Dashboard
-    html/          Standalone HTML report bundler
-    config/        Configuration loader & persistent state
-    pick-folder/   Native directory dialog bindings
-  test/
-    fixtures/      Test monorepo fixture suite
-```
-
----
-
-## License
+## 📄 License
 
 MIT © [ihssmaheel-dev](https://github.com/ihssmaheel-dev)

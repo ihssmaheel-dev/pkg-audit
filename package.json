@@ -72,6 +72,7 @@
     "lint-staged": "^15.3.0",
     "preact": "^10.25.4",
     "prettier": "^3.4.2",
+    "puppeteer": "^25.8.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

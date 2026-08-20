@@ -103,10 +103,24 @@ export function App() {
         document.activeElement?.tagName === "SELECT"
       if (isTyping) return
       const index = Number(e.key) - 1
-      if (index >= 0 && index < TAB_IDS.length) setTab(TAB_IDS[index])
+      if (index >= 0 && index < TAB_IDS.length) setTab(TAB_IDS[index]!)
     }
     window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
+    ;(window as unknown as { __pkgAuditSetTab?: (t: TabId) => void }).__pkgAuditSetTab = (t: TabId) => {
+      if (TAB_IDS.includes(t)) setTab(t)
+    }
+
+    const onHashChange = () => {
+      const h = window.location.hash.replace(/^#/, "") as TabId
+      if (TAB_IDS.includes(h)) setTab(h)
+    }
+    window.addEventListener("hashchange", onHashChange)
+    if (window.location.hash) onHashChange()
+
+    return () => {
+      window.removeEventListener("keydown", handler)
+      window.removeEventListener("hashchange", onHashChange)
+    }
   }, [])
 
   const handleScan = useCallback(
