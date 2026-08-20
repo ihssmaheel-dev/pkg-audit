@@ -32,6 +32,17 @@ async function main() {
   await page.waitForSelector("header", { timeout: 10000 })
   await new Promise((r) => setTimeout(r, 1200))
 
+  console.log("Triggering full scan with security, outdated, and changelogs...")
+  await page.evaluate(async () => {
+    const win = globalThis
+    if (win.__pkgAuditScan) {
+      await win.__pkgAuditScan({ security: true, outdated: true, changelog: true })
+    }
+  })
+
+  // Wait for scan to complete
+  await new Promise((r) => setTimeout(r, 3500))
+
   const tabs = [
     { id: "dashboard", file: "dashboard-preview.png" },
     { id: "matrix", file: "matrix-preview.png" },
@@ -59,8 +70,21 @@ async function main() {
       }
     }, tab.id)
 
+    // If on outdated tab, click the first outdated package card header to expand its release notes
+    if (tab.id === "outdated") {
+      await new Promise((r) => setTimeout(r, 800))
+      await page.evaluate(() => {
+        const doc = globalThis.document
+        if (!doc) return
+        const cards = doc.querySelectorAll("div[title*='changelog']")
+        if (cards.length > 0) {
+          cards[0].click()
+        }
+      })
+    }
+
     // Wait for animations and charts to settle
-    await new Promise((r) => setTimeout(r, 1000))
+    await new Promise((r) => setTimeout(r, 1200))
 
     const outPath = path.join(OUT_DIR, tab.file)
     await page.screenshot({ path: outPath, type: "png" })

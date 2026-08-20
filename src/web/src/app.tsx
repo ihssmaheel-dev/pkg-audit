@@ -109,6 +109,11 @@ export function App() {
     ;(window as unknown as { __pkgAuditSetTab?: (t: TabId) => void }).__pkgAuditSetTab = (t: TabId) => {
       if (TAB_IDS.includes(t)) setTab(t)
     }
+    ;(
+      window as unknown as { __pkgAuditScan?: (opts?: ScanUiOptions) => Promise<ScanResult | null> }
+    ).__pkgAuditScan = async (opts) => {
+      return scan(undefined, opts)
+    }
 
     const onHashChange = () => {
       const h = window.location.hash.replace(/^#/, "") as TabId
@@ -121,7 +126,7 @@ export function App() {
       window.removeEventListener("keydown", handler)
       window.removeEventListener("hashchange", onHashChange)
     }
-  }, [])
+  }, [scan])
 
   const handleScan = useCallback(
     async (dir?: string, opts?: ScanUiOptions) => {
