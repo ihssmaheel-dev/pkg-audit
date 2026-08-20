@@ -399,12 +399,6 @@ export const IconLogo: IconComponent = ({ size = 20, className }) => (
       strokeLinejoin="round"
       strokeOpacity="0.3"
     />
-    <path
-      d="M18.5 4.5L11 15.5H16.5L13.5 27.5L22.5 14H16.5L18.5 4.5Z"
-      fill="#00d992"
-      stroke="#101010"
-      strokeWidth="1"
-      strokeLinejoin="round"
-    />
+    <path d="M18.5 4.5L11 15.5H16.5L13.5 27.5L22.5 14H16.5L18.5 4.5Z" fill="#00d992" />
   </svg>
 )
