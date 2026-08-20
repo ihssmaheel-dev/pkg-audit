@@ -158,7 +158,7 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
           >
             <span
               class={`absolute top-0.5 w-3 h-3 rounded-full bg-[#101010] transition-transform ${
-                showUpToDate ? "translate-x-4.5" : "translate-x-0.5"
+                showUpToDate ? "translate-x-[18px]" : "translate-x-0.5"
               }`}
             />
           </div>

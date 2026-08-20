@@ -70,13 +70,13 @@ export function App() {
   const [tab, setTab] = useState<TabId>("dashboard")
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; variant?: "success" | "error" | "info" } | null>(null)
   const toastTimer = useRef<number | null>(null)
 
   const data: ScanResult | null = result ?? embedded ?? null
 
-  const notify = useCallback((message: string) => {
-    setToast(message)
+  const notify = useCallback((message: string, variant?: "success" | "error" | "info") => {
+    setToast({ message, variant })
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToast(null), 2200)
   }, [])
@@ -304,7 +304,7 @@ export function App() {
           onClose={() => setPaletteOpen(false)}
         />
       )}
-      <Toast message={toast} />
+      <Toast message={toast?.message ?? null} variant={toast?.variant} />
     </div>
   )
 }

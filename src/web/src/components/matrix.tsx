@@ -188,7 +188,7 @@ export function Matrix({ data, onCellClick, onWorkspaceClick, notify, onCatalogM
           >
             <span
               class={`absolute top-0.5 w-3 h-3 rounded-full bg-[#101010] transition-transform ${
-                hideAligned ? "translate-x-4.5" : "translate-x-0.5"
+                hideAligned ? "translate-x-[18px]" : "translate-x-0.5"
               }`}
             />
           </div>

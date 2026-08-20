@@ -136,6 +136,14 @@ export function parseArgs(argv: string[]): CliOptions {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!
+    const nextVal = (): string | undefined => {
+      if (i + 1 < argv.length && !argv[i + 1]!.startsWith("-")) {
+        i++
+        return argv[i]
+      }
+      return undefined
+    }
+
     if (arg === "-h" || arg === "--help") {
       opts.help = true
     } else if (arg === "-v" || arg === "--version") {
@@ -166,18 +174,34 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.deprecation = true
       const n = Number(arg.split("=")[1])
       if (Number.isFinite(n) && n > 0) opts.abandonedDays = n
+    } else if (arg === "--abandoned-days" || arg === "--abandoned-threshold") {
+      opts.deprecation = true
+      const v = nextVal()
+      const n = v ? Number(v) : NaN
+      if (Number.isFinite(n) && n > 0) opts.abandonedDays = n
     } else if (arg === "context" || arg === "--context") {
       opts.context = true
     } else if (arg.startsWith("--context-output=")) {
       opts.context = true
       opts.contextOutput = arg.split("=").slice(1).join("=")
+    } else if (arg === "--context-output") {
+      opts.context = true
+      opts.contextOutput = nextVal() ?? null
     } else if (arg.startsWith("--context-format=")) {
       opts.context = true
       const f = arg.split("=")[1]?.toLowerCase()
       opts.contextFormat = f === "json" ? "json" : f === "xml" ? "xml" : "markdown"
+    } else if (arg === "--context-format") {
+      opts.context = true
+      const f = nextVal()?.toLowerCase()
+      opts.contextFormat = f === "json" ? "json" : f === "xml" ? "xml" : "markdown"
     } else if (arg.startsWith("--target-llm=") || arg.startsWith("--target=")) {
       opts.context = true
       const t = arg.split("=")[1]?.toLowerCase()
+      opts.contextTarget = t === "cursor" ? "cursor" : t === "claude" ? "claude" : "generic"
+    } else if (arg === "--target-llm" || arg === "--target") {
+      opts.context = true
+      const t = nextVal()?.toLowerCase()
       opts.contextTarget = t === "cursor" ? "cursor" : t === "claude" ? "claude" : "generic"
     } else if (arg === "--stdout") {
       opts.contextStdout = true
@@ -192,11 +216,20 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.licenses = true
       const fmt = arg.split("=")[1]?.toLowerCase()
       opts.licenseExport = fmt === "spdx" ? "spdx" : fmt === "csv" ? "csv" : "notice"
+    } else if (arg === "--license-export") {
+      opts.licenses = true
+      const fmt = nextVal()?.toLowerCase()
+      opts.licenseExport = fmt === "spdx" ? "spdx" : fmt === "csv" ? "csv" : "notice"
     } else if (arg.startsWith("--format=")) {
       const fmt = arg.split("=")[1]?.toLowerCase()
       opts.licenseExport = fmt === "spdx" ? "spdx" : fmt === "csv" ? "csv" : "notice"
+    } else if (arg === "--format") {
+      const fmt = nextVal()?.toLowerCase()
+      opts.licenseExport = fmt === "spdx" ? "spdx" : fmt === "csv" ? "csv" : "notice"
     } else if (arg.startsWith("--license-output=") || arg.startsWith("--output=")) {
       opts.licenseOutput = arg.split("=").slice(1).join("=")
+    } else if (arg === "--license-output" || arg === "--output") {
+      opts.licenseOutput = nextVal() ?? null
     } else if (arg === "--fail-on-copyleft" || arg === "--fail-on=copyleft") {
       opts.failOnCopyleft = true
     } else if (arg === "dedupe" || arg === "--dedupe") {
@@ -254,43 +287,78 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (arg.startsWith("--strategy=")) {
       const s = arg.split("=")[1]
       opts.fixStrategy = s === "most-frequent" ? "most-frequent" : "highest"
+    } else if (arg === "--strategy") {
+      const s = nextVal()
+      opts.fixStrategy = s === "most-frequent" ? "most-frequent" : "highest"
     } else if (arg.startsWith("--pkg=")) {
       opts.fixPkg = arg.split("=").slice(1).join("=")
+    } else if (arg === "--pkg") {
+      opts.fixPkg = nextVal() ?? null
     } else if (arg.startsWith("--target-version=")) {
       opts.fixTargetVersion = arg.split("=").slice(1).join("=")
+    } else if (arg === "--target-version") {
+      opts.fixTargetVersion = nextVal() ?? null
     } else if (arg === "--post-pr-comment") {
       opts.postPrComment = true
       opts.prComment = true
     } else if (arg === "--pr-comment") {
       opts.prComment = true
+      const v = nextVal()
+      if (v) opts.prCommentFile = v
     } else if (arg.startsWith("--pr-comment=")) {
       opts.prComment = true
       opts.prCommentFile = arg.split("=").slice(1).join("=")
     } else if (arg.startsWith("--base-json=")) {
       opts.baseJson = arg.split("=").slice(1).join("=")
+    } else if (arg === "--base-json") {
+      opts.baseJson = nextVal() ?? null
     } else if (arg.startsWith("--changelog-lines=")) {
       const n = Number(arg.split("=")[1])
+      opts.changelogLines = Number.isFinite(n) && n > 0 ? n : 6
+    } else if (arg === "--changelog-lines") {
+      const v = nextVal()
+      const n = v ? Number(v) : NaN
       opts.changelogLines = Number.isFinite(n) && n > 0 ? n : 6
     } else if (arg.startsWith("--concurrency=")) {
       const n = Number(arg.split("=")[1])
       opts.concurrency = Number.isFinite(n) && n > 0 ? n : 8
+    } else if (arg === "--concurrency") {
+      const v = nextVal()
+      const n = v ? Number(v) : NaN
+      opts.concurrency = Number.isFinite(n) && n > 0 ? n : 8
     } else if (arg.startsWith("--top=")) {
       const n = Number(arg.split("=")[1])
       opts.top = Number.isFinite(n) && n >= 0 ? n : 10
+    } else if (arg === "--top") {
+      const v = nextVal()
+      const n = v ? Number(v) : NaN
+      opts.top = Number.isFinite(n) && n >= 0 ? n : 10
     } else if (arg.startsWith("--workspace=")) {
       opts.workspace = arg.split("=").slice(1).join("=")
+    } else if (arg === "--workspace" || arg === "-w") {
+      opts.workspace = nextVal() ?? null
     } else if (arg.startsWith("--fail-on=")) {
       const value = arg.split("=")[1]
       opts.failOn = value === "major" || value === "range" ? value : null
+    } else if (arg === "--fail-on") {
+      const value = nextVal()
+      opts.failOn = value === "major" || value === "range" ? value : null
     } else if (arg.startsWith("--port=")) {
       opts.port = Number(arg.split("=")[1]) || 0
+    } else if (arg === "--port" || arg === "-p") {
+      const v = nextVal()
+      opts.port = v ? Number(v) || 0 : 0
     } else if (arg === "--json") {
       opts.json = true
+      const v = nextVal()
+      if (v) opts.jsonFile = v
     } else if (arg.startsWith("--json=")) {
       opts.json = true
       opts.jsonFile = arg.split("=").slice(1).join("=")
     } else if (arg === "--html") {
       opts.html = true
+      const v = nextVal()
+      if (v) opts.htmlFile = v
     } else if (arg.startsWith("--html=")) {
       opts.html = true
       opts.htmlFile = arg.split("=").slice(1).join("=")
@@ -299,6 +367,13 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (arg.startsWith("--ignore-dir=")) {
       for (const d of arg.split("=")[1].split(",")) {
         if (d) opts.ignoreDirs.add(d)
+      }
+    } else if (arg === "--ignore-dir") {
+      const v = nextVal()
+      if (v) {
+        for (const d of v.split(",")) {
+          if (d) opts.ignoreDirs.add(d)
+        }
       }
     } else if (arg === "ui") {
       opts.ui = true

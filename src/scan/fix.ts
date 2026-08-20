@@ -32,6 +32,12 @@ export interface AutoFixPlan {
   totalConflicts: number
 }
 
+// Verify that a resolved path is strictly inside the parent directory (blocks directory traversal)
+export function isPathInside(childPath: string, parentDir: string): boolean {
+  const rel = path.relative(path.resolve(parentDir), path.resolve(childPath))
+  return !rel.startsWith("..") && !path.isAbsolute(rel)
+}
+
 // Clean semver string for numerical comparison: "^19.0.0-rc.1" -> "19.0.0-rc.1"
 function cleanSemver(v: string): string {
   return v.replace(/^[\^~>=<\s]+/, "").trim()
@@ -136,11 +142,14 @@ export async function applyFixes(
 
   if (scanData && scanData.workspaces.length > 0) {
     for (const ws of scanData.workspaces) {
-      workspacePaths.push({
-        name: ws.name,
-        relPath: ws.relPath,
-        absPath: ws.absPath ?? path.resolve(rootDir, ws.relPath, "package.json"),
-      })
+      const abs = ws.absPath ?? path.resolve(rootDir, ws.relPath, "package.json")
+      if (isPathInside(abs, rootDir)) {
+        workspacePaths.push({
+          name: ws.name,
+          relPath: ws.relPath,
+          absPath: abs,
+        })
+      }
     }
   } else {
     // Fallback: search all package.json files recursively
@@ -296,14 +305,30 @@ export async function removeUnusedDependencies(
   ] as const
 
   for (const [wsTarget, wsItems] of workspaceMap.entries()) {
-    let pkgJsonPath = path.resolve(rootDir, wsTarget, "package.json")
+    let pkgJsonPath: string | null = null
 
     // Find actual path via scanData if available
-    if (scanData) {
+    if (scanData && scanData.workspaces.length > 0) {
       const match = scanData.workspaces.find((w) => w.relPath === wsTarget || w.name === wsTarget)
       if (match) {
         pkgJsonPath = path.resolve(rootDir, match.relPath, "package.json")
+      } else {
+        errors.push({ path: wsTarget, error: `Workspace '${wsTarget}' not found in scan results` })
+        continue
       }
+    } else {
+      const candidate = path.resolve(rootDir, wsTarget, "package.json")
+      if (isPathInside(candidate, rootDir)) {
+        pkgJsonPath = candidate
+      } else {
+        errors.push({ path: wsTarget, error: "Access denied: target path is outside repository root" })
+        continue
+      }
+    }
+
+    if (!isPathInside(pkgJsonPath, rootDir)) {
+      errors.push({ path: pkgJsonPath, error: "Access denied: manifest path is outside repository root" })
+      continue
     }
 
     if (!fs.existsSync(pkgJsonPath)) {
@@ -398,14 +423,30 @@ export async function declarePhantomDependencies(
   }
 
   for (const [wsTarget, wsItems] of workspaceMap.entries()) {
-    let pkgJsonPath = path.resolve(rootDir, wsTarget, "package.json")
+    let pkgJsonPath: string | null = null
 
     // Find actual path via scanData if available
-    if (scanData) {
+    if (scanData && scanData.workspaces.length > 0) {
       const match = scanData.workspaces.find((w) => w.relPath === wsTarget || w.name === wsTarget)
       if (match) {
         pkgJsonPath = path.resolve(rootDir, match.relPath, "package.json")
+      } else {
+        errors.push({ path: wsTarget, error: `Workspace '${wsTarget}' not found in scan results` })
+        continue
       }
+    } else {
+      const candidate = path.resolve(rootDir, wsTarget, "package.json")
+      if (isPathInside(candidate, rootDir)) {
+        pkgJsonPath = candidate
+      } else {
+        errors.push({ path: wsTarget, error: "Access denied: target path is outside repository root" })
+        continue
+      }
+    }
+
+    if (!isPathInside(pkgJsonPath, rootDir)) {
+      errors.push({ path: pkgJsonPath, error: "Access denied: manifest path is outside repository root" })
+      continue
     }
 
     if (!fs.existsSync(pkgJsonPath)) {

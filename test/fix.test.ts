@@ -144,5 +144,22 @@ describe("fix engine", () => {
       expect(updatedPkgA.dependencies.react).toBe("^19.0.0")
       expect(updatedPkgA.dependencies.zod).toBe("^3.22.0")
     })
+
+    it("rejects path traversal attempts outside rootDir", async () => {
+      const { removeUnusedDependencies, declarePhantomDependencies } = await import("../src/scan/fix.js")
+      const resultUnused = await removeUnusedDependencies(tmpDir, [
+        { workspace: "../../../../tmp", pkg: "evil-pkg" },
+      ])
+      expect(resultUnused.ok).toBe(false)
+      expect(resultUnused.errors.length).toBeGreaterThan(0)
+      expect(resultUnused.errors[0]?.error).toContain("Access denied")
+
+      const resultPhantom = await declarePhantomDependencies(tmpDir, [
+        { workspace: "../../../../tmp", pkg: "evil-pkg", version: "^1.0.0" },
+      ])
+      expect(resultPhantom.ok).toBe(false)
+      expect(resultPhantom.errors.length).toBeGreaterThan(0)
+      expect(resultPhantom.errors[0]?.error).toContain("Access denied")
+    })
   })
 })

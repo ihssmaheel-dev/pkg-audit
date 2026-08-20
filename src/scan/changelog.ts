@@ -40,13 +40,18 @@ function extractGithubRepo(repoField: unknown): GithubRepo | null {
 async function fetchJson(url: string, timeoutMs = 8000): Promise<FetchResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "pkg-audit",
+  }
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN
+  if (token && url.includes("api.github.com")) {
+    headers["Authorization"] = `Bearer ${token}`
+  }
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "pkg-audit",
-      },
+      headers,
     })
     if (!res.ok) return { ok: false, status: res.status }
     return { ok: true, data: (await res.json()) as unknown }

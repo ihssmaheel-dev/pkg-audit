@@ -57,6 +57,38 @@ describe("parseArgs", () => {
     expect(opts.ignoreDirs.has(".cache")).toBe(true)
   })
 
+  it("parses space-separated flags (--flag value)", () => {
+    const opts = parseArgs([
+      "--top",
+      "25",
+      "--workspace",
+      "apps/web",
+      "--concurrency",
+      "16",
+      "--changelog-lines",
+      "3",
+      "--port",
+      "4321",
+      "--strategy",
+      "most-frequent",
+      "--pkg",
+      "react",
+      "--target-version",
+      "^19.0.0",
+      "--abandoned-days",
+      "365",
+    ])
+    expect(opts.top).toBe(25)
+    expect(opts.workspace).toBe("apps/web")
+    expect(opts.concurrency).toBe(16)
+    expect(opts.changelogLines).toBe(3)
+    expect(opts.port).toBe(4321)
+    expect(opts.fixStrategy).toBe("most-frequent")
+    expect(opts.fixPkg).toBe("react")
+    expect(opts.fixTargetVersion).toBe("^19.0.0")
+    expect(opts.abandonedDays).toBe(365)
+  })
+
   it("falls back to defaults for invalid numbers", () => {
     const opts = parseArgs(["--top=abc", "--concurrency=0", "--changelog-lines=-1"])
     expect(opts.top).toBe(10)

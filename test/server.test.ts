@@ -101,6 +101,25 @@ describe("server", () => {
     expect(html).toContain("mono-root")
   })
 
+  it("accepts auth via Authorization header and x-pkg-audit-token header", async () => {
+    const resAuth = await fetch(`http://127.0.0.1:${server.port}/api/recents`, {
+      headers: { Authorization: `Bearer ${server.token}` },
+    })
+    expect(resAuth.status).toBe(200)
+
+    const resCustom = await fetch(`http://127.0.0.1:${server.port}/api/recents`, {
+      headers: { "x-pkg-audit-token": server.token },
+    })
+    expect(resCustom.status).toBe(200)
+  })
+
+  it("restricts CORS origin to local host", async () => {
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+      headers: { Origin: `http://127.0.0.1:${server.port}` },
+    })
+    expect(res.headers.get("access-control-allow-origin")).toBe(`http://127.0.0.1:${server.port}`)
+  })
+
   it("rejects an export before any scan", async () => {
     const res = await fetch(api("/api/export.html"))
     expect(res.status).toBe(400)
