@@ -44,7 +44,22 @@ export function useScan() {
         setError({ message: body.error ?? `Request failed (${res.status})`, code: body.code })
         return null
       }
-      setResult(body)
+      setResult((prev) => {
+        if (!prev || prev.root !== body.root) {
+          return body
+        }
+        return {
+          ...body,
+          outdated:
+            body.outdated !== null && body.outdated !== undefined ? body.outdated : (prev.outdated ?? null),
+          security: body.security !== undefined ? body.security : prev.security,
+          deprecation:
+            body.deprecation !== null && body.deprecation !== undefined
+              ? body.deprecation
+              : (prev.deprecation ?? null),
+          dedupe: body.dedupe !== undefined ? body.dedupe : prev.dedupe,
+        }
+      })
       return body
     } catch (err) {
       setError({

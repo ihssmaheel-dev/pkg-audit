@@ -56,6 +56,20 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
 
   const security = data.security
 
+  const depNames = useMemo(
+    () => Array.from(new Set(data.workspaces.flatMap((w) => Object.keys(w.deps)))),
+    [data]
+  )
+  const [streamingIdx, setStreamingIdx] = useState(0)
+
+  useEffect(() => {
+    if (!loading) return
+    const interval = setInterval(() => {
+      setStreamingIdx((i) => (i + 1) % Math.max(1, depNames.length))
+    }, 110)
+    return () => clearInterval(interval)
+  }, [loading, depNames.length])
+
   // Auto-scan on initial visit if security data hasn't been fetched yet
   useEffect(() => {
     if (!security && !loading && onScanSecurity) {
@@ -153,6 +167,23 @@ export function SecurityView({ data, loading, notify, onScanSecurity, onFix }: S
             Cross-referencing declared dependencies across all monorepo workspaces against public CVE & GitHub
             advisories.
           </p>
+        </div>
+
+        {/* Live Streaming Package Ticker */}
+        <div class="flex items-center gap-2.5 px-4 py-2 bg-[#141414] border border-[#2e2a28] rounded-[8px] text-xs font-mono mt-2 shadow-inner max-w-[420px]">
+          <div class="w-2 h-2 rounded-full bg-[#00d992] animate-pulse shrink-0" />
+          <span class="text-[#8b949e]">Auditing</span>
+          <span class="text-[#00d992] font-semibold truncate max-w-[200px]">
+            {depNames[streamingIdx] || "dependencies"}
+          </span>
+          <span class="text-[#605c5a] shrink-0">
+            ({streamingIdx + 1}/{depNames.length})
+          </span>
+        </div>
+
+        {/* Shimmer Progress Track */}
+        <div class="w-64 h-1 bg-[#1a1a1a] rounded-full overflow-hidden relative mt-2">
+          <div class="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-[#00d992] to-transparent progress-shimmer" />
         </div>
       </div>
     )

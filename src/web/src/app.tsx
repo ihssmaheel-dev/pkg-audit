@@ -76,6 +76,7 @@ export function App() {
 
   const [scanMessage, setScanMessage] = useState("Scanning monorepo dependencies…")
   const [scanTargetDir, setScanTargetDir] = useState<string | undefined>(undefined)
+  const [isMainScan, setIsMainScan] = useState(!embedded)
 
   const data: ScanResult | null = result ?? embedded ?? null
 
@@ -86,7 +87,10 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (!embedded) void scan()
+    if (!embedded) {
+      setIsMainScan(true)
+      void scan().finally(() => setIsMainScan(false))
+    }
   }, [embedded, scan])
 
   useEffect(() => {
@@ -134,19 +138,25 @@ export function App() {
 
   const handleScan = useCallback(
     async (dir?: string, opts?: ScanUiOptions) => {
-      if (opts?.outdated) {
-        setScanMessage("Checking npm registry & release changelogs…")
-      } else if (opts?.security) {
-        setScanMessage("Scanning OSV vulnerability database…")
-      } else if (dir && dir !== data?.root) {
+      if (opts?.outdated || opts?.security) {
+        setIsMainScan(false)
+        return scan(dir, opts)
+      }
+
+      setIsMainScan(true)
+      if (dir && dir !== data?.root) {
         setScanMessage("Analyzing workspace dependencies…")
         setScanTargetDir(dir)
       } else {
         setScanMessage("Rescanning workspace dependencies…")
       }
 
-      const [res] = await Promise.all([scan(dir, opts), new Promise((r) => setTimeout(r, 450))])
-      return res
+      try {
+        const [res] = await Promise.all([scan(dir, opts), new Promise((r) => setTimeout(r, 450))])
+        return res
+      } finally {
+        setIsMainScan(false)
+      }
     },
     [data?.root, scan]
   )
@@ -229,7 +239,7 @@ export function App() {
   return (
     <div class="bg-[#101010] min-h-screen text-[#f2f2f2]">
       <SplashScreen
-        visible={loading || (!data && !error && !embedded)}
+        visible={isMainScan && (loading || (!data && !error && !embedded))}
         message={scanMessage}
         dir={scanTargetDir || data?.root}
       />

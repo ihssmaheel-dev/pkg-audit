@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks"
+import { useEffect, useMemo, useState } from "preact/hooks"
 import type { Changelog, OutdatedRecord, ScanResult } from "../../../types"
 import {
   IconCheckCircle,
@@ -56,7 +56,59 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
   const [showUpToDate, setShowUpToDate] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
 
+  const depNames = useMemo(
+    () => Array.from(new Set(data.workspaces.flatMap((w) => Object.keys(w.deps)))),
+    [data]
+  )
+  const [streamingIdx, setStreamingIdx] = useState(0)
+
+  useEffect(() => {
+    if (!loading) return
+    const interval = setInterval(() => {
+      setStreamingIdx((i) => (i + 1) % Math.max(1, depNames.length))
+    }, 110)
+    return () => clearInterval(interval)
+  }, [loading, depNames.length])
+
   const outdated = data.outdated
+
+  if (loading && !outdated) {
+    return (
+      <div class="flex flex-col items-center justify-center gap-4 py-28 text-center animate-fade-in">
+        <div class="relative flex items-center justify-center">
+          <div class="w-16 h-16 rounded-full border-2 border-[#3d3a39] border-t-[#00d992] spinner" />
+          <div class="absolute text-[#00d992]">
+            <IconPackage size={24} />
+          </div>
+        </div>
+        <div>
+          <h2 class="text-base font-semibold text-[#ffffff]">Querying npm Registry & Releases…</h2>
+          <p class="text-xs text-[#8b949e] mt-1 max-w-md">
+            Scanning upstream npm registry for latest versions and fetching GitHub changelogs across all
+            workspaces.
+          </p>
+        </div>
+
+        {/* Live Streaming Package Ticker */}
+        <div class="flex items-center gap-2.5 px-4 py-2 bg-[#141414] border border-[#2e2a28] rounded-[8px] text-xs font-mono mt-2 shadow-inner max-w-[420px]">
+          <div class="w-2 h-2 rounded-full bg-[#00d992] animate-pulse shrink-0" />
+          <span class="text-[#8b949e]">Checking</span>
+          <span class="text-[#00d992] font-semibold truncate max-w-[200px]">
+            {depNames[streamingIdx] || "package"}
+          </span>
+          <span class="text-[#605c5a] shrink-0">
+            ({streamingIdx + 1}/{depNames.length})
+          </span>
+        </div>
+
+        {/* Shimmer Progress Track */}
+        <div class="w-64 h-1 bg-[#1a1a1a] rounded-full overflow-hidden relative mt-2">
+          <div class="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-[#00d992] to-transparent progress-shimmer" />
+        </div>
+      </div>
+    )
+  }
+
   if (!outdated) {
     return (
       <div class="flex flex-col items-center justify-center gap-3.5 py-24 text-[#8b949e] text-center">
@@ -114,6 +166,19 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
         </button>
       </div>
 
+      {loading && (
+        <div class="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#00d992]/10 border border-[#00d992]/25 rounded-[8px] text-xs">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <IconRefreshCw size={13} className="spinner text-[#00d992] shrink-0" />
+            <span class="text-[#00d992] font-medium font-mono">Syncing Registry:</span>
+            <span class="font-mono text-[#f2f2f2] truncate">
+              Checking {depNames[streamingIdx]} ({streamingIdx + 1}/{depNames.length})
+            </span>
+          </div>
+          <span class="text-[11px] font-mono text-[#8b949e] shrink-0">Fetching changelogs…</span>
+        </div>
+      )}
+
       {outdated.networkErrors.length > 0 && (
         <div class="flex items-center gap-2 px-4 py-2.5 bg-[#f59e0b]/10 border border-[#f59e0b]/25 rounded-[6px] text-xs text-[#f59e0b]">
           <IconInfo size={14} />
@@ -165,8 +230,8 @@ export function Outdated({ data, onOutdated, loading }: OutdatedProps) {
         </div>
       </div>
 
-      {/* Outdated cards 4-in-a-row responsive grid */}
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+      {/* Outdated cards 3-in-a-row responsive grid */}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map((item) => (
           <div
             key={item.name}
