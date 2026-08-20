@@ -192,18 +192,20 @@ export function DedupeView({ data, loading, notify, onFix }: DedupeViewProps) {
           <div class="text-xl font-bold text-[#ffffff] mt-1">{duplicates.length}</div>
         </div>
         <div class="bg-[#121212] border border-[#2e2a28] rounded-[8px] p-3.5">
-          <div class="text-[11px] font-medium text-[#f59e0b]">Wasted Version Instances</div>
+          <div class="text-[11px] font-medium text-[#f59e0b]">Wasted Versions</div>
           <div class="text-xl font-bold text-[#f59e0b] mt-1">{dedupe.totalWastedVersions}</div>
+        </div>
+        <div class="bg-[#121212] border border-[#2e2a28] rounded-[8px] p-3.5">
+          <div class="text-[11px] font-medium text-[#38bdf8]">Est. Disk Savings</div>
+          <div class="text-xl font-bold font-mono text-[#38bdf8] mt-1">
+            {dedupe.savings ? `~${dedupe.savings.estimatedHuman}` : "—"}
+          </div>
         </div>
         <div class="bg-[#121212] border border-[#2e2a28] rounded-[8px] p-3.5">
           <div class="text-[11px] font-medium text-[#00d992]">Target Override Config</div>
           <div class="text-xl font-bold font-mono text-[#00d992] mt-1">
             {pm === "pnpm" ? "pnpm.overrides" : pm === "yarn" ? "resolutions" : "overrides"}
           </div>
-        </div>
-        <div class="bg-[#121212] border border-[#2e2a28] rounded-[8px] p-3.5">
-          <div class="text-[11px] font-medium text-[#8b949e]">Total Unique in Lockfile</div>
-          <div class="text-xl font-bold text-[#ffffff] mt-1">{dedupe.totalInstalledPackages}</div>
         </div>
       </div>
 

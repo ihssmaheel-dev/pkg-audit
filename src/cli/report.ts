@@ -402,6 +402,36 @@ function renderDeprecations(
   }
 }
 
+function renderBoundaries(boundaries: ScanResult["boundaries"], c: Colorizer, out: string[]): void {
+  if (!boundaries || boundaries.violations.length === 0) return
+  out.push(c.bold(c.red(`Architectural Boundary Violations (${boundaries.violations.length}):`)))
+  for (const v of boundaries.violations) {
+    out.push(
+      `  ${c.red("✕")} ${c.bold(v.sourceFile)} imports ${c.cyan(v.importedSpecifier)} (${c.dim(`forbidden access to ${v.targetWorkspace}`)})`
+    )
+    out.push(`    ${c.dim(v.ruleDescription)}`)
+  }
+  out.push("")
+}
+
+function renderSuppressions(suppressions: ScanResult["suppressions"], c: Colorizer, out: string[]): void {
+  if (!suppressions) return
+  if (suppressions.expired.length > 0) {
+    out.push(c.bold(c.red(`⚠️ Expired Suppressions (${suppressions.expired.length}):`)))
+    out.push(c.dim(`  These issues were previously ignored but their suppression window has ended:`))
+    for (const exp of suppressions.expired) {
+      out.push(
+        `  ${c.red("•")} ${exp.target} — expired ${exp.expiredDaysAgo} day(s) ago (${c.dim(exp.rule.reason)})`
+      )
+    }
+    out.push("")
+  }
+  if (suppressions.activeCount > 0) {
+    out.push(c.dim(`  ℹ️ ${suppressions.activeCount} active suppression(s) applied`))
+    out.push("")
+  }
+}
+
 export function renderTerminalReport(result: ScanResult, opts: CliOptions): string {
   const c = makeColorizer(opts.color)
   const out: string[] = []
@@ -413,6 +443,10 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
     out.push(c.dim(`(${result.meta.skippedGitignored} additional path(s) skipped via .gitignore)`))
   }
   out.push("")
+
+  if (result.suppressions) {
+    renderSuppressions(result.suppressions, c, out)
+  }
 
   if (opts.workspace) {
     const match = workspaces.find((w) => w.name === opts.workspace || w.relPath === opts.workspace)
@@ -432,6 +466,9 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
   renderConflicts(result.conflicts, c, out)
   if (result.graph) {
     renderCycles(result.graph.cycles, c, out)
+  }
+  if (result.boundaries) {
+    renderBoundaries(result.boundaries, c, out)
   }
   if (result.unused) {
     renderUnusedAndPhantoms(result.unused, c, out, opts.unused || opts.phantom)
@@ -474,6 +511,9 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
   if (result.graph && result.graph.hasCycles) {
     out.push(`  ${c.red(`${result.graph.cycles.length} circular dependency cycle(s) detected`)}`)
   }
+  if (result.boundaries && result.boundaries.violations.length > 0) {
+    out.push(`  ${c.red(`${result.boundaries.violations.length} architectural cross-boundary violation(s)`)}`)
+  }
   if (result.unused) {
     if (result.unused.phantoms.length > 0) {
       out.push(
@@ -490,6 +530,11 @@ export function renderTerminalReport(result: ScanResult, opts: CliOptions): stri
   out.push(
     `  ${result.hygieneIssues.length ? result.hygieneIssues.length + " hygiene issue" + (result.hygieneIssues.length === 1 ? "" : "s") : c.green("0 hygiene issues")}`
   )
+  if (result.dedupe && result.dedupe.savings && result.dedupe.totalDuplicates > 0) {
+    out.push(
+      `  ${c.cyan(`Dedupe potential: ~${result.dedupe.savings.estimatedHuman} savings across ${result.dedupe.savings.redundantInstallsCount} duplicate copies`)}`
+    )
+  }
   if (result.outdated) {
     const majorOutdated = result.outdated.outdated.filter((o) => o.status === "major").length
     out.push(

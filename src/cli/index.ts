@@ -82,14 +82,34 @@ function setupWatch(dir: string): void {
   process.on("SIGTERM", () => watcher.close())
 }
 
-function exitWithCode(result: Awaited<ReturnType<typeof scan>>, failOn: string | null): void {
-  if (!failOn) return
-  const hasConflict = result.conflicts.some((c) => {
-    if (failOn === "major") return c.severity === "major"
-    if (failOn === "range") return true
-    return false
-  })
-  if (hasConflict) process.exitCode = 2
+function exitWithCode(result: Awaited<ReturnType<typeof scan>>, merged: MergedOptions): void {
+  if (merged.failOnCopyleft && result.licenses?.prodCopyleftCount) {
+    process.exitCode = 2
+    return
+  }
+  if (merged.failOnSla && result.vulnerabilitySLAs) {
+    const breached = result.vulnerabilitySLAs.filter((s) => {
+      if (
+        merged.failOnSla!.severity &&
+        s.severity.toUpperCase() !== merged.failOnSla!.severity.toUpperCase()
+      ) {
+        return false
+      }
+      return s.ageInDays > merged.failOnSla!.maxDays
+    })
+    if (breached.length > 0) {
+      process.exitCode = 2
+      return
+    }
+  }
+  if (merged.failOn) {
+    const hasConflict = result.conflicts.some((c) => {
+      if (merged.failOn === "major") return c.severity === "major"
+      if (merged.failOn === "range") return true
+      return false
+    })
+    if (hasConflict) process.exitCode = 2
+  }
 }
 
 async function main(): Promise<void> {
@@ -130,6 +150,9 @@ async function main(): Promise<void> {
     security: merged.security,
     deprecation: merged.deprecation !== false,
     abandonedDaysThreshold: merged.abandonedDays,
+    offline: merged.offline,
+    noCache: merged.noCache,
+    boundaries: merged.boundaries,
   })
 
   if (merged.security) {
@@ -641,7 +664,7 @@ async function main(): Promise<void> {
     } else {
       console.log(json)
     }
-    exitWithCode(result, merged.failOn)
+    exitWithCode(result, merged)
     return
   }
 
@@ -650,7 +673,7 @@ async function main(): Promise<void> {
     const outPath = merged.htmlFile ?? path.join(dir, "pkg-audit-report.html")
     fs.writeFileSync(outPath, html, "utf8")
     console.log(`Wrote HTML report to ${outPath}`)
-    exitWithCode(result, merged.failOn)
+    exitWithCode(result, merged)
     return
   }
 
@@ -682,12 +705,12 @@ async function main(): Promise<void> {
       process.stdout.write(comment + "\n")
     }
 
-    exitWithCode(result, merged.failOn)
+    exitWithCode(result, merged)
     return
   }
 
   process.stdout.write(renderTerminalReport(result, merged) + "\n")
-  exitWithCode(result, merged.failOn)
+  exitWithCode(result, merged)
 }
 
 async function runUiMode(merged: MergedOptions): Promise<void> {

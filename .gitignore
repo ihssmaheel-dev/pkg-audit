@@ -9,6 +9,7 @@ Thumbs.db
 pkg-audit-report.html
 test/.tmp/
 reffs
+**/.pkg-audit/
 
 # Un-ignore test fixtures
 !test/fixtures/**

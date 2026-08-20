@@ -173,17 +173,27 @@ function getAdvisoryUrl(vuln: OsvVuln): string {
   return `https://osv.dev/vulnerability/${vuln.id}`
 }
 
+import { getScanCache } from "./cache.js"
+
 /**
  * Hydrates full vulnerability records for a list of unique vuln IDs via GET /v1/vulns/{id}.
  */
 async function hydrateVuln(id: string, timeoutMs: number): Promise<OsvVuln | null> {
+  const cache = getScanCache()
+  const cached = cache.get<OsvVuln>("osv", id)
+  if (cached) return cached
+
+  if (cache.isOfflineMode()) return null
+
   const url = `${OSV_VULN_URL}/${encodeURIComponent(id)}`
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(url, { signal: controller.signal })
     if (!res.ok) return null
-    return (await res.json()) as OsvVuln
+    const data = (await res.json()) as OsvVuln
+    cache.set("osv", id, data)
+    return data
   } catch {
     return null
   } finally {

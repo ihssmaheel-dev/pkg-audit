@@ -8,11 +8,27 @@ import type {
   RegistryResult,
 } from "../types.js"
 
+import { getScanCache } from "./cache.js"
+
 export function encodeNpmName(name: string): string {
   return name.startsWith("@") ? name.replace("/", "%2F") : name
 }
 
 export async function fetchLatestVersion(name: string, timeoutMs = 8000): Promise<RegistryResult> {
+  const cache = getScanCache()
+  const cached = cache.get<RegistryResult>("registry", name)
+  if (cached) {
+    return { ...cached, fromCache: true }
+  }
+
+  if (cache.isOfflineMode()) {
+    return {
+      name,
+      status: "network-error",
+      error: "Offline mode: package not in cache",
+    }
+  }
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -20,10 +36,14 @@ export async function fetchLatestVersion(name: string, timeoutMs = 8000): Promis
       signal: controller.signal,
     })
     if (!res.ok) {
-      return { name, status: res.status === 404 ? "not-published" : "error" }
+      const result: RegistryResult = { name, status: res.status === 404 ? "not-published" : "error" }
+      cache.set("registry", name, result)
+      return result
     }
     const data = (await res.json()) as { version?: string }
-    return { name, status: "ok", latest: data.version }
+    const result: RegistryResult = { name, status: "ok", latest: data.version }
+    cache.set("registry", name, result)
+    return result
   } catch (err) {
     return {
       name,

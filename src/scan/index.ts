@@ -20,7 +20,19 @@ import { analyzeLockfile, applyDedupeOverrides, generateOverridesDict } from "./
 import { scanMonorepoLicenses, generateNoticeText, generateSpdxJson, generateCsvReport } from "./license.js"
 import { generateMonorepoContext } from "./context.js"
 import { auditDeprecations } from "./deprecation.js"
-import type { DepType, ProgressEvent, ScanError, ScanResult, Workspace } from "../types.js"
+import { getScanCache } from "./cache.js"
+import { loadSuppressions, toSuppressionResult, isSuppressed } from "./suppressions.js"
+import { evaluateVulnerabilitySLAs } from "./sla.js"
+import { checkBoundaryViolations } from "./boundaries.js"
+import type {
+  BoundaryRule,
+  DepType,
+  ProgressEvent,
+  ScanError,
+  ScanResult,
+  SuppressionRule,
+  Workspace,
+} from "../types.js"
 
 export const DEFAULT_IGNORE_DIRS: ReadonlySet<string> = new Set([
   "node_modules",
@@ -57,6 +69,11 @@ interface ScanOptions {
   security?: boolean
   deprecation?: boolean
   abandonedDaysThreshold?: number
+  offline?: boolean
+  noCache?: boolean
+  boundaries?: boolean
+  boundaryRules?: BoundaryRule[]
+  suppressions?: SuppressionRule[]
   onProgress?: (event: ProgressEvent) => void
 }
 
@@ -168,6 +185,12 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
   const rootDir = path.resolve(dir)
   const startedAt = Date.now()
 
+  // Initialize scan cache with root directory and offline/noCache flags
+  getScanCache({ rootDir, offline: opts.offline, noCache: opts.noCache })
+
+  // Load suppressions with expiry evaluation
+  const loadedSuppressions = loadSuppressions(rootDir, opts.suppressions)
+
   const scanOpts = {
     ignoreDirs: new Set(opts.ignoreDirs ?? DEFAULT_IGNORE_DIRS),
     respectGitignore: opts.respectGitignore !== false,
@@ -184,7 +207,28 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
   const conflicts = findConflicts(depMap)
   const hygieneIssues = findHygieneIssues(workspaces)
   const graph = buildWorkspaceGraph(workspaces)
-  const unused = await scanWorkspaceDependencies(rootDir, workspaces)
+  const rawUnused = await scanWorkspaceDependencies(rootDir, workspaces)
+
+  // Filter suppressed unused & phantoms
+  const filteredUnused = {
+    ...rawUnused,
+    phantoms: rawUnused.phantoms.filter(
+      (p) =>
+        !isSuppressed(loadedSuppressions, {
+          type: "phantom",
+          pkg: p.name,
+          workspace: p.workspace,
+        }).suppressed
+    ),
+    unused: rawUnused.unused.filter(
+      (u) =>
+        !isSuppressed(loadedSuppressions, {
+          type: "unused",
+          pkg: u.name,
+          workspace: u.workspace,
+        }).suppressed
+    ),
+  }
 
   const totalDepDeclarations = workspaces.reduce((sum, w) => sum + w.depCount, 0)
 
@@ -197,25 +241,100 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
   }
 
   let security: ScanResult["security"] = null
+  let vulnerabilitySLAs: ScanResult["vulnerabilitySLAs"] = null
+
   if (opts.security) {
-    security = await checkVulnerabilities(workspaces, {
+    const rawSecurity = await checkVulnerabilities(workspaces, {
       rootDir,
       onProgress: opts.onProgress,
     })
+
+    // Filter actively suppressed CVEs
+    const activeVulns = rawSecurity.vulnerabilities.filter(
+      (v) =>
+        !isSuppressed(loadedSuppressions, {
+          type: "security",
+          id: v.id,
+          pkg: v.pkg,
+        }).suppressed
+    )
+
+    const slaEvaluation = evaluateVulnerabilitySLAs(rootDir, activeVulns)
+    vulnerabilitySLAs = slaEvaluation.slaStatuses
+
+    security = {
+      ...rawSecurity,
+      vulnerabilities: activeVulns,
+      criticalCount: activeVulns.filter((v) => v.severity === "CRITICAL").length,
+      highCount: activeVulns.filter((v) => v.severity === "HIGH").length,
+      moderateCount: activeVulns.filter((v) => v.severity === "MODERATE").length,
+      lowCount: activeVulns.filter((v) => v.severity === "LOW").length,
+      totalVulnerablePackages: new Set(activeVulns.map((v) => v.pkg)).size,
+    }
   }
 
   let deprecation: ScanResult["deprecation"] = null
   if (opts.deprecation !== false) {
-    deprecation = await auditDeprecations(depMap, {
+    const rawDeprecation = await auditDeprecations(depMap, {
       concurrency: opts.concurrency ?? 8,
       abandonedDaysThreshold: opts.abandonedDaysThreshold ?? 730,
       onProgress: opts.onProgress,
     })
+
+    const filteredPkgs = rawDeprecation.packages.filter(
+      (p) =>
+        !isSuppressed(loadedSuppressions, {
+          type: "deprecation",
+          pkg: p.name,
+        }).suppressed
+    )
+
+    deprecation = {
+      ...rawDeprecation,
+      packages: filteredPkgs,
+      totalDeprecated: filteredPkgs.filter((p) => p.deprecated).length,
+      totalAbandoned: filteredPkgs.filter((p) => p.isAbandoned).length,
+      totalZombies: filteredPkgs.filter((p) => p.isZombie).length,
+    }
   }
 
   const rootWs = workspaces.find((w) => w.isRoot)
   const dedupe = analyzeLockfile(rootDir, rootWs?.packageManager ?? null)
-  const licenses = scanMonorepoLicenses(workspaces, rootDir)
+  const rawLicenses = scanMonorepoLicenses(workspaces, rootDir)
+
+  // Filter suppressed licenses
+  const filteredLicenses = {
+    ...rawLicenses,
+    packages: rawLicenses.packages.filter(
+      (l) =>
+        !isSuppressed(loadedSuppressions, {
+          type: "license",
+          pkg: l.name,
+          id: l.spdxId,
+        }).suppressed
+    ),
+  }
+
+  // Cross-Boundary import enforcement
+  const boundaries = checkBoundaryViolations(workspaces, rootDir, opts.boundaryRules, opts.onProgress)
+
+  // Filter suppressed boundary violations
+  const filteredBoundaryViolations = boundaries.violations.filter(
+    (b) =>
+      !isSuppressed(loadedSuppressions, {
+        type: "boundary",
+        workspace: b.sourceWorkspace,
+        pkg: b.importedSpecifier,
+      }).suppressed
+  )
+
+  const boundariesResult = {
+    ...boundaries,
+    violations: filteredBoundaryViolations,
+    totalViolations: filteredBoundaryViolations.length,
+  }
+
+  const suppressionsResult = toSuppressionResult(loadedSuppressions)
 
   const tempScanData: ScanResult = {
     version: 1,
@@ -225,12 +344,15 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     conflicts,
     hygieneIssues,
     graph,
-    unused,
+    unused: filteredUnused,
     outdated,
     security,
     dedupe,
-    licenses,
+    licenses: filteredLicenses,
     deprecation,
+    boundaries: boundariesResult,
+    suppressions: suppressionsResult,
+    vulnerabilitySLAs,
     errors: stats.errors,
     meta: {
       ignoredDirs: [...scanOpts.ignoreDirs].sort(),
@@ -276,4 +398,8 @@ export {
   checkOutdated,
   fetchChangelogs,
   fetchLatestVersion,
+  getScanCache,
+  loadSuppressions,
+  evaluateVulnerabilitySLAs,
+  checkBoundaryViolations,
 }

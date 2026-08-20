@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { checkOutdated, encodeNpmName, fetchLatestVersion } from "../src/scan/registry.js"
+import { getScanCache } from "../src/scan/cache.js"
 import type { DepMap } from "../src/types.js"
 
 function stubFetch(handler: (url: string) => { status: number; body?: object }): void {
@@ -17,8 +18,13 @@ function stubFetch(handler: (url: string) => { status: number; body?: object }):
   )
 }
 
+beforeEach(() => {
+  getScanCache().clear()
+})
+
 afterEach(() => {
   vi.unstubAllGlobals()
+  getScanCache().clear()
 })
 
 describe("encodeNpmName", () => {

@@ -57,6 +57,10 @@ export interface CliOptions {
   contextFormat: "markdown" | "json" | "xml" | null
   contextTarget: "generic" | "cursor" | "claude" | null
   contextStdout: boolean
+  offline: boolean
+  noCache: boolean
+  boundaries: boolean
+  failOnSla: { severity: string; maxDays: number } | null
 }
 
 const DEFAULT_IGNORE_DIRS = new Set([
@@ -132,6 +136,10 @@ export function parseArgs(argv: string[]): CliOptions {
     contextFormat: null,
     contextTarget: null,
     contextStdout: false,
+    offline: false,
+    noCache: false,
+    boundaries: false,
+    failOnSla: null,
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -337,12 +345,28 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.workspace = arg.split("=").slice(1).join("=")
     } else if (arg === "--workspace" || arg === "-w") {
       opts.workspace = nextVal() ?? null
-    } else if (arg.startsWith("--fail-on=")) {
-      const value = arg.split("=")[1]
-      opts.failOn = value === "major" || value === "range" ? value : null
-    } else if (arg === "--fail-on") {
-      const value = nextVal()
-      opts.failOn = value === "major" || value === "range" ? value : null
+    } else if (arg === "--offline") {
+      opts.offline = true
+    } else if (arg === "--no-cache" || arg === "--fresh") {
+      opts.noCache = true
+    } else if (arg === "boundaries" || arg === "--boundaries" || arg === "--boundary") {
+      opts.boundaries = true
+    } else if (arg.startsWith("--fail-on=") || arg === "--fail-on") {
+      const rawVal = arg.startsWith("--fail-on=") ? arg.split("=").slice(1).join("=") : nextVal()
+      if (rawVal === "major" || rawVal === "range") {
+        opts.failOn = rawVal
+      } else if (rawVal === "copyleft") {
+        opts.failOnCopyleft = true
+      } else if (rawVal && rawVal.includes(":")) {
+        const [sevPart = "", agePart = ""] = rawVal.split(":")
+        const match = agePart.match(/^(\d+)(?:d|days)?$/i)
+        if (match && match[1]) {
+          const days = Number.parseInt(match[1], 10)
+          if (Number.isFinite(days)) {
+            opts.failOnSla = { severity: sevPart.toUpperCase(), maxDays: days }
+          }
+        }
+      }
     } else if (arg.startsWith("--port=")) {
       opts.port = Number(arg.split("=")[1]) || 0
     } else if (arg === "--port" || arg === "-p") {

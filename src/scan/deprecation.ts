@@ -186,7 +186,15 @@ export function calculatePopularityTier(
   return "low"
 }
 
+import { getScanCache } from "./cache.js"
+
 export async function fetchWeeklyDownloads(name: string, timeoutMs = 4000): Promise<number | undefined> {
+  const cache = getScanCache()
+  const cached = cache.get<number>("downloads", name)
+  if (cached !== null) return cached
+
+  if (cache.isOfflineMode()) return undefined
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -195,7 +203,11 @@ export async function fetchWeeklyDownloads(name: string, timeoutMs = 4000): Prom
     })
     if (!res.ok) return undefined
     const data = (await res.json()) as { downloads?: number }
-    return typeof data.downloads === "number" ? data.downloads : undefined
+    const result = typeof data.downloads === "number" ? data.downloads : undefined
+    if (result !== undefined) {
+      cache.set("downloads", name, result)
+    }
+    return result
   } catch {
     return undefined
   } finally {
@@ -203,16 +215,24 @@ export async function fetchWeeklyDownloads(name: string, timeoutMs = 4000): Prom
   }
 }
 
-export async function fetchPackageDeprecationInfo(
-  name: string,
-  timeoutMs = 8000
-): Promise<{
+export interface PackageDeprecationInfo {
   deprecated?: string
   lastPublished?: string
   repository?: string
   homepage?: string
   versionsDeprecated?: Record<string, string>
-}> {
+}
+
+export async function fetchPackageDeprecationInfo(
+  name: string,
+  timeoutMs = 8000
+): Promise<PackageDeprecationInfo> {
+  const cache = getScanCache()
+  const cached = cache.get<PackageDeprecationInfo>("deprecation", name)
+  if (cached !== null) return cached
+
+  if (cache.isOfflineMode()) return {}
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {

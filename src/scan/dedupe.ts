@@ -13,6 +13,67 @@ function cleanSemver(v: string): string {
   return v.replace(/^[\^~>=<\s]+/, "").trim()
 }
 
+function measureDirSize(dirPath: string): number {
+  let total = 0
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    for (const e of entries) {
+      if (e.name === ".git" || e.name === "node_modules") continue
+      const full = path.join(dirPath, e.name)
+      if (e.isDirectory()) {
+        total += measureDirSize(full)
+      } else if (e.isFile()) {
+        try {
+          total += fs.statSync(full).size
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return total
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+export function estimatePackageSize(rootDir: string, pkgName: string): number {
+  const candidates = [
+    path.join(rootDir, "node_modules", pkgName),
+    path.join(rootDir, "node_modules", ".pnpm"),
+  ]
+
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      if (c.endsWith(".pnpm")) {
+        try {
+          const entries = fs.readdirSync(c)
+          const cleanName = pkgName.replace("/", "+")
+          const matched = entries.find((e) => e.startsWith(cleanName))
+          if (matched) {
+            const size = measureDirSize(path.join(c, matched, "node_modules", pkgName))
+            if (size > 0) return size
+          }
+        } catch {
+          // ignore
+        }
+      } else {
+        const size = measureDirSize(c)
+        if (size > 0) return size
+      }
+    }
+  }
+
+  // Fallback estimated baseline: ~120KB per typical JS/TS package
+  return 120 * 1024
+}
+
 /**
  * Parses package-lock.json (v1, v2, v3 formats)
  */
@@ -283,6 +344,9 @@ export function analyzeLockfile(
         }
       }
 
+      const estimatedBytesPerInstance = estimatePackageSize(rootDir, pkgName)
+      const estimatedSavingsBytes = (versionsList.length - 1) * estimatedBytesPerInstance
+
       duplicates.push({
         name: pkgName,
         versions: versionsList,
@@ -290,10 +354,17 @@ export function analyzeLockfile(
         duplicateCount: versionsList.length,
         highestVersion,
         mostFrequentVersion: mostFrequent,
+        estimatedBytesPerInstance,
+        estimatedSavingsBytes,
       })
 
       totalWastedVersions += versionsList.length - 1
     }
+  }
+
+  let totalSavings = 0
+  for (const d of duplicates) {
+    totalSavings += d.estimatedSavingsBytes ?? 0
   }
 
   // Sort duplicates by highest number of duplicate versions, then package name
@@ -307,6 +378,11 @@ export function analyzeLockfile(
     totalDuplicates: duplicates.length,
     totalWastedVersions,
     totalInstalledPackages: pkgMap.size,
+    savings: {
+      estimatedBytes: totalSavings,
+      estimatedHuman: formatBytes(totalSavings),
+      redundantInstallsCount: totalWastedVersions,
+    },
   }
 }
 

@@ -401,6 +401,25 @@ const IMPORT_EXPORT_REGEX =
 const STRING_LITERAL_REGEX = /[`"'](@?[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)?)[`"']/g
 
 /**
+ * Extracts all raw import/require/export specifiers from source content.
+ */
+export function extractImportSpecifiers(content: string): Set<string> {
+  const specifiers = new Set<string>()
+  const cleanContent = stripComments(content)
+  let match: RegExpExecArray | null
+
+  IMPORT_EXPORT_REGEX.lastIndex = 0
+  while ((match = IMPORT_EXPORT_REGEX.exec(cleanContent)) !== null) {
+    const specifier = match[1]?.trim()
+    if (specifier) {
+      specifiers.add(specifier)
+    }
+  }
+
+  return specifiers
+}
+
+/**
  * Extracts all external package names imported in a source file content after stripping comments.
  */
 export function extractImportsFromContent(content: string, isAlias?: (spec: string) => boolean): Set<string> {
