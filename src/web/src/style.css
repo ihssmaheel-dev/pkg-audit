@@ -99,3 +99,54 @@ input::placeholder {
 ::-webkit-scrollbar-thumb:hover {
   background: #8b949e;
 }
+
+/* ── Splash Screen & Glow Breathing Animations ───────────────── */
+@keyframes logo-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(0, 217, 146, 0.4)) drop-shadow(0 0 20px rgba(0, 217, 146, 0.15));
+    opacity: 0.88;
+  }
+  50% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 22px rgba(0, 217, 146, 0.8)) drop-shadow(0 0 42px rgba(0, 217, 146, 0.4));
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.18;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+@keyframes progress-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.logo-glow-breathe {
+  animation: logo-breathe 2.4s ease-in-out infinite;
+}
+
+.pulse-ring-ambient {
+  animation: pulse-ring 2.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.progress-shimmer {
+  animation: progress-shimmer 1.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

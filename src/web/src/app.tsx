@@ -17,6 +17,7 @@ import { Drawer } from "./components/drawer"
 import { CommandPalette } from "./components/command-palette"
 import { Picker } from "./components/picker"
 import { Toast } from "./components/toast"
+import { SplashScreen } from "./components/splash-screen"
 import { useScan, getToken } from "./hooks/use-scan"
 import type { ScanResult } from "../../types"
 import type { DrawerState, ScanUiOptions, TabId } from "./types"
@@ -72,6 +73,9 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; variant?: "success" | "error" | "info" } | null>(null)
   const toastTimer = useRef<number | null>(null)
+
+  const [scanMessage, setScanMessage] = useState("Scanning monorepo dependencies…")
+  const [scanTargetDir, setScanTargetDir] = useState<string | undefined>(undefined)
 
   const data: ScanResult | null = result ?? embedded ?? null
 
@@ -130,9 +134,21 @@ export function App() {
 
   const handleScan = useCallback(
     async (dir?: string, opts?: ScanUiOptions) => {
-      return scan(dir, opts)
+      if (opts?.outdated) {
+        setScanMessage("Checking npm registry & release changelogs…")
+      } else if (opts?.security) {
+        setScanMessage("Scanning OSV vulnerability database…")
+      } else if (dir && dir !== data?.root) {
+        setScanMessage("Analyzing workspace dependencies…")
+        setScanTargetDir(dir)
+      } else {
+        setScanMessage("Rescanning workspace dependencies…")
+      }
+
+      const [res] = await Promise.all([scan(dir, opts), new Promise((r) => setTimeout(r, 450))])
+      return res
     },
-    [scan]
+    [data?.root, scan]
   )
 
   const handleFix = useCallback(
@@ -212,6 +228,11 @@ export function App() {
 
   return (
     <div class="bg-[#101010] min-h-screen text-[#f2f2f2]">
+      <SplashScreen
+        visible={loading || (!data && !error && !embedded)}
+        message={scanMessage}
+        dir={scanTargetDir || data?.root}
+      />
       <Shell
         dir={data?.root ?? ""}
         tab={tab}
@@ -224,12 +245,6 @@ export function App() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
       <main class="w-full px-8 py-8 max-[640px]:px-4">
-        {loading && !data && (
-          <div class="flex flex-col items-center justify-center gap-3 py-24 text-[#8b949e] text-sm">
-            <div class="w-5 h-5 rounded-full border-2 border-[#3d3a39] border-t-[#00d992] spinner" />
-            <p class="font-mono text-xs text-[#8b949e]">Scanning dependencies…</p>
-          </div>
-        )}
         {error && (
           <div class="flex items-center gap-2 mb-6 px-4 py-3 bg-[#f43f5e]/10 border border-[#f43f5e]/30 rounded-[8px] text-sm text-[#f43f5e]">
             {error.message}
