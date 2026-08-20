@@ -59,8 +59,8 @@ export function Picker({ onScan }: PickerProps) {
       <div class="w-full max-w-[540px] bg-[#101010] border border-[#3d3a39] rounded-[8px] p-8">
         {/* Brand Header */}
         <div class="flex items-center gap-3 mb-2">
-          <div class="flex items-center justify-center w-8 h-8 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] text-[#00d992]">
-            <IconLogo size={20} />
+          <div class="flex items-center justify-center w-8 h-8 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] overflow-hidden p-0.5">
+            <IconLogo size={24} />
           </div>
           <h1 class="font-mono font-bold text-xl tracking-tight text-[#ffffff]">pkg-audit</h1>
         </div>

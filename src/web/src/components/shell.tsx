@@ -215,8 +215,8 @@ export function Shell(props: ShellProps) {
       <div class="flex items-center gap-3.5 h-[54px] px-8 max-[640px]:px-4">
         {/* Brand */}
         <div class="flex items-center gap-2.5 font-mono font-bold text-[14px] tracking-tight text-[#ffffff] shrink-0">
-          <div class="flex items-center justify-center w-7 h-7 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] text-[#00d992]">
-            <IconLogo size={18} />
+          <div class="flex items-center justify-center w-7 h-7 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] overflow-hidden p-0.5">
+            <IconLogo size={22} />
           </div>
           <span>pkg-audit</span>
         </div>

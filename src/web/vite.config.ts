@@ -12,7 +12,7 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, "..", "..", "dist", "ui"),
     emptyOutDir: true,
-    assetsInlineLimit: 0,
+    assetsInlineLimit: 1024 * 1024,
     rollupOptions: {
       output: {
         entryFileNames: "assets/[name].js",
