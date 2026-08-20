@@ -261,77 +261,112 @@ export function App() {
             {error.code === "NO_DIR" && " — choose a folder below"}
           </div>
         )}
-        {data && tab === "dashboard" && (
-          <Dashboard
-            data={data}
-            loading={loading}
-            onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
-            onTabChange={setTab}
-          />
+        {data && (
+          <div class={tab === "dashboard" ? "" : "hidden"}>
+            <Dashboard
+              data={data}
+              loading={loading}
+              onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
+              onTabChange={setTab}
+            />
+          </div>
         )}
-        {data && tab === "matrix" && (
-          <Matrix
-            data={data}
-            onCellClick={setDrawer}
-            onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
-            notify={notify}
-            onCatalogMigrate={embedded ? undefined : (opts) => applyFix(opts, data.root)}
-          />
+        {data && (
+          <div class={tab === "matrix" ? "" : "hidden"}>
+            <Matrix
+              data={data}
+              onCellClick={setDrawer}
+              onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
+              notify={notify}
+              onCatalogMigrate={embedded ? undefined : (opts) => applyFix(opts, data.root)}
+            />
+          </div>
         )}
-        {data && tab === "conflicts" && (
-          <Conflicts
-            data={data}
-            notify={notify}
-            onFix={embedded ? undefined : handleFix}
-            onCatalogMigrate={embedded ? undefined : (opts) => applyFix(opts, data.root)}
-          />
+        {data && (
+          <div class={tab === "conflicts" ? "" : "hidden"}>
+            <Conflicts
+              data={data}
+              notify={notify}
+              onFix={embedded ? undefined : handleFix}
+              onCatalogMigrate={embedded ? undefined : (opts) => applyFix(opts, data.root)}
+            />
+          </div>
         )}
-        {data && tab === "graph" && (
-          <Graph
-            data={data}
-            notify={notify}
-            onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
-          />
+        {data && (
+          <div class={tab === "graph" ? "" : "hidden"}>
+            <Graph
+              data={data}
+              notify={notify}
+              onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
+            />
+          </div>
         )}
-        {data && tab === "unused" && (
-          <UnusedView data={data} notify={notify} onFix={embedded ? undefined : handleFix} />
+        {data && (
+          <div class={tab === "unused" ? "" : "hidden"}>
+            <UnusedView data={data} notify={notify} onFix={embedded ? undefined : handleFix} />
+          </div>
         )}
-        {data && tab === "security" && (
-          <SecurityView
-            data={data}
-            loading={isSecurityScanning}
-            notify={notify}
-            onScanSecurity={() => void handleScan(data.root, { security: true })}
-            onFix={embedded ? undefined : handleFix}
-          />
+        {data && (
+          <div class={tab === "security" ? "" : "hidden"}>
+            <SecurityView
+              data={data}
+              loading={isSecurityScanning}
+              notify={notify}
+              onScanSecurity={() => void handleScan(data.root, { security: true })}
+              onFix={embedded ? undefined : handleFix}
+            />
+          </div>
         )}
-        {data && tab === "dedupe" && (
-          <DedupeView
-            data={data}
-            loading={loading}
-            notify={notify}
-            onFix={embedded ? undefined : handleFix}
-          />
+        {data && (
+          <div class={tab === "dedupe" ? "" : "hidden"}>
+            <DedupeView
+              data={data}
+              loading={loading}
+              notify={notify}
+              onFix={embedded ? undefined : handleFix}
+            />
+          </div>
         )}
-        {data && tab === "licenses" && <LicensesView data={data} loading={loading} notify={notify} />}
-        {data && tab === "deprecation" && (
-          <DeprecationView
-            deprecation={data.deprecation ?? null}
-            loading={loading}
-            onRescan={() => void handleScan(data.root, { deprecation: true })}
-          />
+        {data && (
+          <div class={tab === "licenses" ? "" : "hidden"}>
+            <LicensesView data={data} loading={loading} notify={notify} />
+          </div>
         )}
-        {data && tab === "context" && <AiContextView data={data} notify={notify} />}
-        {data && tab === "outdated" && (
-          <Outdated
-            data={data}
-            loading={isOutdatedScanning}
-            onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
-          />
+        {data && (
+          <div class={tab === "deprecation" ? "" : "hidden"}>
+            <DeprecationView
+              deprecation={data.deprecation ?? null}
+              loading={loading}
+              onRescan={() => void handleScan(data.root, { deprecation: true })}
+            />
+          </div>
         )}
-        {data && tab === "hygiene" && <Hygiene data={data} />}
-        {data && tab === "workspaces" && (
-          <Workspaces data={data} onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })} />
+        {data && (
+          <div class={tab === "context" ? "" : "hidden"}>
+            <AiContextView data={data} notify={notify} />
+          </div>
+        )}
+        {data && (
+          <div class={tab === "outdated" ? "" : "hidden"}>
+            <Outdated
+              data={data}
+              loading={isOutdatedScanning}
+              onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
+            />
+          </div>
+        )}
+        {data && (
+          <div class={tab === "hygiene" ? "" : "hidden"}>
+            <Hygiene data={data} />
+          </div>
+        )}
+        {data && (
+          <div class={tab === "workspaces" ? "" : "hidden"}>
+            <Workspaces
+              data={data}
+              onWorkspaceClick={(relPath) => setDrawer({ type: "workspace", relPath })}
+            />
+          </div>
         )}
       </main>
       <Drawer
