@@ -1,0 +1,62 @@
+name: 🐛 Bug Report
+description: Report an issue or unexpected behavior in pkg-audit
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please ensure you have tested with the latest version of `pkg-audit`.
+
+  - type: input
+    id: version
+    attributes:
+      label: pkg-audit Version
+      description: What version of pkg-audit are you running? (Run `pkg-audit --version`)
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment Info
+      description: Node.js version, OS, package manager, and monorepo tool.
+      placeholder: e.g. Node 22.12.0, Windows 11 / macOS Sequoia, pnpm 9.15, Turborepo
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Clear steps or minimal repo reproduction to reproduce the issue.
+      placeholder: |
+        1. Run `pkg-audit ...`
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Log Output or Screenshots
+      description: Please copy and paste any relevant terminal output or paste screenshots here.
+      render: shell
