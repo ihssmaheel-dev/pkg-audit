@@ -44,18 +44,37 @@
       "eslint --fix"
     ]
   },
+  "author": "ihssmaheel-dev",
   "keywords": [
     "monorepo",
     "dependency",
     "audit",
     "drift",
     "workspaces",
-    "package.json"
+    "package.json",
+    "semver",
+    "conflicts",
+    "pnpm-catalog",
+    "turborepo",
+    "lerna",
+    "nx",
+    "dedupe",
+    "security-audit",
+    "license-compliance",
+    "osv",
+    "cli"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/ihssmaheel-dev/pkg-audit"
+  },
+  "homepage": "https://github.com/ihssmaheel-dev/pkg-audit#readme",
+  "bugs": {
+    "url": "https://github.com/ihssmaheel-dev/pkg-audit/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "sideEffects": false,
   "devDependencies": {
