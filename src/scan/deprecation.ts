@@ -308,7 +308,7 @@ export async function auditDeprecations(
   depMap: DepMap,
   opts: DeprecationOptions = {}
 ): Promise<DeprecationSummary> {
-  const concurrency = opts.concurrency ?? 8
+  const concurrency = opts.concurrency ?? 24
   const thresholdDays = opts.abandonedDaysThreshold ?? 730 // 2 years
   const now = Date.now()
 

@@ -20,10 +20,14 @@ export function getToken(): string | null {
 export function useScan() {
   const [result, setResult] = useState<ScanResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [isOutdatedScanning, setIsOutdatedScanning] = useState(false)
+  const [isSecurityScanning, setIsSecurityScanning] = useState(false)
   const [error, setError] = useState<ScanErrorState | null>(null)
 
   const scan = useCallback(async (dir?: string, opts: ScanUiOptions = {}): Promise<ScanResult | null> => {
     setLoading(true)
+    if (opts.outdated) setIsOutdatedScanning(true)
+    if (opts.security) setIsSecurityScanning(true)
     setError(null)
     try {
       const token = getToken()
@@ -68,6 +72,8 @@ export function useScan() {
       return null
     } finally {
       setLoading(false)
+      if (opts.outdated) setIsOutdatedScanning(false)
+      if (opts.security) setIsSecurityScanning(false)
     }
   }, [])
 
@@ -131,5 +137,5 @@ export function useScan() {
     []
   )
 
-  return { result, loading, error, scan, applyFix }
+  return { result, loading, isOutdatedScanning, isSecurityScanning, error, scan, applyFix }
 }

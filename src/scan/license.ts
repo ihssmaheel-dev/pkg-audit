@@ -167,48 +167,53 @@ interface RawPkgJson {
 }
 
 /**
- * Searches local node_modules hierarchy to extract package metadata and license.
+ * Builds a fast in-memory index of installed package manifests across root node_modules,
+ * .pnpm virtual store, and workspace-level node_modules in O(1) amortized lookup time.
  */
-function findInstalledPackageJson(
-  pkgName: string,
-  workspacePaths: string[],
-  rootDir: string
-): RawPkgJson | null {
-  const possiblePaths: string[] = []
+function buildInstalledPackageIndex(rootDir: string, workspacePaths: string[]): Map<string, RawPkgJson> {
+  const index = new Map<string, RawPkgJson>()
 
-  // Check workspace-level node_modules
-  for (const ws of workspacePaths) {
-    possiblePaths.push(path.join(ws, "node_modules", pkgName, "package.json"))
-  }
-
-  // Check root-level node_modules
-  possiblePaths.push(path.join(rootDir, "node_modules", pkgName, "package.json"))
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      try {
-        const raw = fs.readFileSync(p, "utf8")
-        return JSON.parse(raw) as RawPkgJson
-      } catch {
-        // Ignore parse error
-      }
-    }
-  }
-
-  // Check pnpm virtual store if .pnpm exists
-  const pnpmStore = path.join(rootDir, "node_modules", ".pnpm")
-  if (fs.existsSync(pnpmStore)) {
+  const loadPkgJson = (pkgPath: string): RawPkgJson | null => {
     try {
-      const pnpmEntries = fs.readdirSync(pnpmStore)
-      const encodedPkg = pkgName.replace("/", "+")
-      const matchingDir = pnpmEntries.find(
-        (dir) => dir.startsWith(`${encodedPkg}@`) || dir.startsWith(`${pkgName}@`)
-      )
-      if (matchingDir) {
-        const p = path.join(pnpmStore, matchingDir, "node_modules", pkgName, "package.json")
-        if (fs.existsSync(p)) {
-          const raw = fs.readFileSync(p, "utf8")
-          return JSON.parse(raw) as RawPkgJson
+      if (fs.existsSync(pkgPath)) {
+        const raw = fs.readFileSync(pkgPath, "utf8")
+        return JSON.parse(raw) as RawPkgJson
+      }
+    } catch {
+      // Ignore parse/read errors
+    }
+    return null
+  }
+
+  const indexNodeModulesDir = (nmDir: string) => {
+    if (!fs.existsSync(nmDir)) return
+    try {
+      const entries = fs.readdirSync(nmDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        if (entry.name.startsWith(".")) continue
+
+        if (entry.name.startsWith("@")) {
+          const scopeDir = path.join(nmDir, entry.name)
+          try {
+            const subEntries = fs.readdirSync(scopeDir, { withFileTypes: true })
+            for (const sub of subEntries) {
+              if (!sub.isDirectory()) continue
+              const pkgName = `${entry.name}/${sub.name}`
+              if (!index.has(pkgName)) {
+                const pkg = loadPkgJson(path.join(scopeDir, sub.name, "package.json"))
+                if (pkg) index.set(pkgName, pkg)
+              }
+            }
+          } catch {
+            // Ignore
+          }
+        } else {
+          const pkgName = entry.name
+          if (!index.has(pkgName)) {
+            const pkg = loadPkgJson(path.join(nmDir, entry.name, "package.json"))
+            if (pkg) index.set(pkgName, pkg)
+          }
         }
       }
     } catch {
@@ -216,7 +221,42 @@ function findInstalledPackageJson(
     }
   }
 
-  return null
+  // 1. Index root node_modules
+  const rootNm = path.join(rootDir, "node_modules")
+  indexNodeModulesDir(rootNm)
+
+  // 2. Index pnpm virtual store if .pnpm exists
+  const pnpmStore = path.join(rootNm, ".pnpm")
+  if (fs.existsSync(pnpmStore)) {
+    try {
+      const pnpmEntries = fs.readdirSync(pnpmStore, { withFileTypes: true })
+      for (const entry of pnpmEntries) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue
+        // Format is pkg@version or @scope+pkg@version or pkg@version_hash
+        const atIdx = entry.name.lastIndexOf("@")
+        if (atIdx <= 0) continue
+        const rawPkgName = entry.name.slice(0, atIdx).replace("+", "/")
+        if (!index.has(rawPkgName)) {
+          const p = path.join(pnpmStore, entry.name, "node_modules", rawPkgName, "package.json")
+          const pkg = loadPkgJson(p)
+          if (pkg) index.set(rawPkgName, pkg)
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // 3. Index workspace-level node_modules only if they exist
+  for (const ws of workspacePaths) {
+    if (ws === rootDir) continue
+    const wsNm = path.join(ws, "node_modules")
+    if (fs.existsSync(wsNm)) {
+      indexNodeModulesDir(wsNm)
+    }
+  }
+
+  return index
 }
 
 function parseAuthorString(author?: RawPkgJson["author"]): string | undefined {
@@ -289,8 +329,10 @@ export function scanMonorepoLicenses(workspaces: Workspace[], rootDir: string): 
   let unknownCount = 0
   let prodCopyleftCount = 0
 
+  const installedIndex = buildInstalledPackageIndex(rootDir, workspacePaths)
+
   for (const [pkgName, usage] of depUsageMap.entries()) {
-    const installed = findInstalledPackageJson(pkgName, workspacePaths, rootDir)
+    const installed = installedIndex.get(pkgName) ?? null
 
     let rawLicenseStr = "UNKNOWN"
     if (installed) {

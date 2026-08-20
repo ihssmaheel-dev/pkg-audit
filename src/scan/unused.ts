@@ -298,6 +298,8 @@ export function isDevToolPackage(name: string, type: DepType): boolean {
   return false
 }
 
+const TSCONFIG_ALIAS_CACHE = new Map<string, string[]>()
+
 /**
  * Loads compilerOptions.paths from tsconfig.json / jsconfig.json to dynamically match custom path aliases.
  */
@@ -305,10 +307,20 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
   const aliasPrefixes: string[] = []
 
   const checkFile = (filePath: string) => {
-    if (!fs.existsSync(filePath)) return
+    const cached = TSCONFIG_ALIAS_CACHE.get(filePath)
+    if (cached !== undefined) {
+      aliasPrefixes.push(...cached)
+      return
+    }
+
+    if (!fs.existsSync(filePath)) {
+      TSCONFIG_ALIAS_CACHE.set(filePath, [])
+      return
+    }
+
+    const prefixes: string[] = []
     try {
       const raw = fs.readFileSync(filePath, "utf8")
-      // Remove comments for JSON parsing
       const cleanJson = stripComments(raw)
       const parsed = JSON.parse(cleanJson) as {
         compilerOptions?: { paths?: Record<string, string[]> }
@@ -317,12 +329,15 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
       if (paths && typeof paths === "object") {
         for (const aliasKey of Object.keys(paths)) {
           const prefix = aliasKey.replace(/\*.*$/, "")
-          if (prefix) aliasPrefixes.push(prefix)
+          if (prefix) prefixes.push(prefix)
         }
       }
     } catch {
       // Ignore parse error
     }
+
+    TSCONFIG_ALIAS_CACHE.set(filePath, prefixes)
+    aliasPrefixes.push(...prefixes)
   }
 
   checkFile(path.join(wsDir, "tsconfig.json"))
@@ -501,14 +516,7 @@ export async function collectSourceFiles(
   visitedDirs: Set<string> = new Set(),
   results: string[] = []
 ): Promise<string[]> {
-  let realDirPath: string
-  try {
-    realDirPath = await fs.promises.realpath(dir)
-  } catch {
-    realDirPath = path.resolve(dir)
-  }
-
-  const normalizedDirPath = realDirPath.toLowerCase()
+  const normalizedDirPath = path.resolve(dir).toLowerCase()
   if (visitedDirs.has(normalizedDirPath)) {
     return results
   }
@@ -543,17 +551,8 @@ export async function collectSourceFiles(
         continue
       }
 
-      let realSubPath: string
-      try {
-        realSubPath = await fs.promises.realpath(fullPath)
-      } catch {
-        realSubPath = path.resolve(fullPath)
-      }
-
-      if (
-        childWorkspaceDirs.has(realSubPath.toLowerCase()) ||
-        childWorkspaceDirs.has(path.resolve(fullPath).toLowerCase())
-      ) {
+      const normalizedSub = path.resolve(fullPath).toLowerCase()
+      if (childWorkspaceDirs.has(normalizedSub)) {
         continue
       }
 
@@ -746,7 +745,11 @@ export async function scanWorkspaceDependencies(
     }
   }
 
-  for (const ws of workspaces) {
+  // Process workspaces concurrently using a worker pool for high performance on large monorepos
+  const WORKSPACE_CONCURRENCY = 24
+  const queue = [...workspaces]
+
+  const processWorkspace = async (ws: Workspace) => {
     const wsDir = ws.absPath ? path.dirname(ws.absPath) : path.resolve(rootDir, ws.relPath)
 
     const childWorkspaceDirs = new Set<string>()
@@ -758,7 +761,6 @@ export async function scanWorkspaceDependencies(
 
     const isAlias = loadPathAliasMatcher(wsDir, rootDir)
     const sourceFiles = await collectSourceFiles(wsDir, childWorkspaceDirs)
-    totalFilesScanned += sourceFiles.length
 
     // Map: importedPackage -> Set of relative file paths where imported
     const importedInFiles = new Map<string, Set<string>>()
@@ -783,40 +785,49 @@ export async function scanWorkspaceDependencies(
       configReferences.add(p)
     }
 
-    for (const filePath of sourceFiles) {
-      const ext = path.extname(filePath).toLowerCase()
-      if (ext) fileExtensionsPresent.add(ext)
+    // Read source files in parallel chunks
+    const FILE_CHUNK_SIZE = 32
+    for (let i = 0; i < sourceFiles.length; i += FILE_CHUNK_SIZE) {
+      const chunk = sourceFiles.slice(i, i + FILE_CHUNK_SIZE)
+      await Promise.all(
+        chunk.map(async (filePath) => {
+          const ext = path.extname(filePath).toLowerCase()
+          if (ext) fileExtensionsPresent.add(ext)
 
-      let content = ""
-      try {
-        content = await fs.promises.readFile(filePath, "utf8")
-      } catch {
-        continue
-      }
+          let content = ""
+          try {
+            content = await fs.promises.readFile(filePath, "utf8")
+          } catch {
+            return
+          }
 
-      const basename = path.basename(filePath)
-      const isConfigFile = isConfigurationFile(basename)
+          const basename = path.basename(filePath)
+          const isConfigFile = isConfigurationFile(basename)
 
-      if (isConfigFile) {
-        const configRefs = extractReferencesFromConfig(content, isAlias)
-        for (const ref of configRefs) {
-          configReferences.add(ref)
-        }
-      }
+          if (isConfigFile) {
+            const configRefs = extractReferencesFromConfig(content, isAlias)
+            for (const ref of configRefs) {
+              configReferences.add(ref)
+            }
+          }
 
-      const fileImports = extractImportsFromContent(content, isAlias)
-      const relFilePath = path.relative(rootDir, filePath).replace(/\\/g, "/")
+          const fileImports = extractImportsFromContent(content, isAlias)
+          const relFilePath = path.relative(rootDir, filePath).replace(/\\/g, "/")
 
-      for (const pkg of fileImports) {
-        if (!importedInFiles.has(pkg)) {
-          importedInFiles.set(pkg, new Set())
-        }
-        importedInFiles.get(pkg)!.add(relFilePath)
-      }
+          for (const pkg of fileImports) {
+            if (!importedInFiles.has(pkg)) {
+              importedInFiles.set(pkg, new Set())
+            }
+            importedInFiles.get(pkg)!.add(relFilePath)
+          }
+        })
+      )
     }
 
     // Combine all actively referenced packages in this workspace
     const activePackages = new Set<string>([...importedInFiles.keys(), ...configReferences])
+    const wsPhantoms: PhantomDependency[] = []
+    const wsUnused: UnusedDependency[] = []
 
     // 1. Detect Phantom (Undeclared) Dependencies
     for (const [importedPkg, fileSet] of importedInFiles.entries()) {
@@ -833,7 +844,7 @@ export async function scanWorkspaceDependencies(
         isInternalMonorepoPkg
       )
 
-      phantoms.push({
+      wsPhantoms.push({
         name: importedPkg,
         workspace: ws.relPath,
         files: Array.from(fileSet).sort(),
@@ -862,7 +873,7 @@ export async function scanWorkspaceDependencies(
 
       const isDevTool = isDevToolPackage(depName, depRecord.type)
 
-      unused.push({
+      wsUnused.push({
         name: depName,
         workspace: ws.relPath,
         version: depRecord.version,
@@ -870,7 +881,26 @@ export async function scanWorkspaceDependencies(
         isDevTool,
       })
     }
+
+    return {
+      filesCount: sourceFiles.length,
+      phantoms: wsPhantoms,
+      unused: wsUnused,
+    }
   }
+
+  const workers = Array.from({ length: WORKSPACE_CONCURRENCY }, async () => {
+    while (queue.length > 0) {
+      const ws = queue.shift()
+      if (!ws) break
+      const res = await processWorkspace(ws)
+      totalFilesScanned += res.filesCount
+      phantoms.push(...res.phantoms)
+      unused.push(...res.unused)
+    }
+  })
+
+  await Promise.all(workers)
 
   // Sort phantoms and unused for consistent, deterministic outputs
   phantoms.sort((a, b) => a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name))

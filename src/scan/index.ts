@@ -234,7 +234,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
 
   let outdated: ScanResult["outdated"] = null
   if (opts.outdated || opts.versions) {
-    outdated = await checkOutdated(depMap, opts.concurrency ?? 8, opts.onProgress)
+    outdated = await checkOutdated(depMap, opts.concurrency ?? 24, opts.onProgress)
     if (opts.changelog && outdated.outdated.length) {
       await fetchChangelogs(outdated.outdated, opts.changelogLines ?? 6)
     }
@@ -276,7 +276,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
   let deprecation: ScanResult["deprecation"] = null
   if (opts.deprecation !== false) {
     const rawDeprecation = await auditDeprecations(depMap, {
-      concurrency: opts.concurrency ?? 8,
+      concurrency: opts.concurrency ?? 24,
       abandonedDaysThreshold: opts.abandonedDaysThreshold ?? 730,
       onProgress: opts.onProgress,
     })

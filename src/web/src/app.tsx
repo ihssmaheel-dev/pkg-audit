@@ -67,7 +67,7 @@ async function copyText(text: string): Promise<void> {
 
 export function App() {
   const embedded = window.__PKG_AUDIT__
-  const { result, loading, error, scan, applyFix } = useScan()
+  const { result, loading, isOutdatedScanning, isSecurityScanning, error, scan, applyFix } = useScan()
   const [tab, setTab] = useState<TabId>("dashboard")
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -299,7 +299,7 @@ export function App() {
         {data && tab === "security" && (
           <SecurityView
             data={data}
-            loading={loading}
+            loading={isSecurityScanning}
             notify={notify}
             onScanSecurity={() => void handleScan(data.root, { security: true })}
             onFix={embedded ? undefined : handleFix}
@@ -325,7 +325,7 @@ export function App() {
         {data && tab === "outdated" && (
           <Outdated
             data={data}
-            loading={loading}
+            loading={isOutdatedScanning}
             onOutdated={() => void handleScan(data.root, { outdated: true, changelog: true })}
           />
         )}
