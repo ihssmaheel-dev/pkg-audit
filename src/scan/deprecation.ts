@@ -1,4 +1,4 @@
-import { isLinkedProtocol } from "./conflicts.js"
+import { compareTuples, isLinkedProtocol, parseVersionTuple } from "./conflicts.js"
 import { encodeNpmName, runPool } from "./registry.js"
 import type {
   DepMap,
@@ -104,6 +104,7 @@ export const KNOWN_DEPRECATIONS: Record<
   "istanbul-lib-hook": {
     reason: "Use c8 or modern v8 coverage tooling instead.",
     replacement: "c8 or vitest coverage",
+    abandoned: true,
     weeklyDownloads: 4_500_000,
   },
 }
@@ -135,12 +136,35 @@ interface NpmRegistryPackument {
   >
 }
 
-function extractReplacement(reason: string): string | undefined {
-  const match =
-    reason.match(
-      /(?:use|upgrade to|switch to|replaced by|migrated to)\s+[`"']?([@\w\s/-]+?)[`"']?(?:\s+instead|\.|,|$)/i
-    ) ?? reason.match(/(?:see|checkout)\s+(https?:\/\/[^\s]+)/i)
-  return match ? match[1]?.trim() : undefined
+/**
+ * Strips SemVer range prefixes like ^, ~, >=, <=, =, v to get the base version string.
+ */
+function cleanVersionString(v: string): string {
+  return v.replace(/^[~^<>=v\s]+/, "").trim()
+}
+
+/**
+ * Enhanced replacement parser recognizing diverse author phrasing patterns.
+ */
+export function extractReplacement(reason: string): string | undefined {
+  const patterns = [
+    /(?:use|upgrade to|switch to|replaced by|migrated to|try|recommend(?:ed)?(?: using)?|moved to|superseded by|renamed to)\s+[`"']?([@\w/.-]+?)[`"']?(?:\s+instead|\.|,|$)/i,
+    /(?:see|checkout|check out|check|refer to|visit)\s+[`"']?(https?:\/\/[^\s`"']+)/i,
+    /(https?:\/\/[^\s`"']+)/i,
+  ]
+  for (const pat of patterns) {
+    const match = reason.match(pat)
+    if (match && match[1]) {
+      const res = match[1].trim().replace(/[.,;:)>\]]+$/, "")
+      if (res.length > 0 && res.startsWith("http")) {
+        return res
+      }
+      if (res.length > 0 && !res.includes(" ") && !res.endsWith("/")) {
+        return res
+      }
+    }
+  }
+  return undefined
 }
 
 export function calculateInactivitySeverity(days: number | undefined): InactivitySeverity {
@@ -205,12 +229,13 @@ export async function fetchPackageDeprecationInfo(
     const latestInfo = latestVersion && data.versions ? data.versions[latestVersion] : undefined
     const deprecated = rootDeprecated || latestInfo?.deprecated
 
-    // Find newest publish time
+    // Find newest publish time:
+    // 1. Prioritize data.time[latestVersion] (the actual release date of what latest is)
+    // 2. If not found, sort real version release timestamps
+    // 3. Fallback to data.time.modified only if no release timestamps exist
     let lastPublished: string | undefined
     if (data.time) {
-      if (data.time.modified && data.time.modified !== data.time.created) {
-        lastPublished = data.time.modified
-      } else if (latestVersion && data.time[latestVersion]) {
+      if (latestVersion && data.time[latestVersion]) {
         lastPublished = data.time[latestVersion]
       } else {
         const dates = Object.entries(data.time)
@@ -219,6 +244,8 @@ export async function fetchPackageDeprecationInfo(
           .sort()
         if (dates.length > 0) {
           lastPublished = dates[dates.length - 1]
+        } else if (data.time.modified) {
+          lastPublished = data.time.modified
         }
       }
     }
@@ -310,11 +337,16 @@ export async function auditDeprecations(
     }> = []
     let hasProd = false
     let hasDev = false
-    let chosenVersion = ""
+
+    // Collect all declared versions and sort them deterministically:
+    // 1. Total occurrences count descending
+    // 2. Highest SemVer version
+    // 3. Alphabetical tie-break
+    const declaredVersions: Array<{ version: string; count: number }> = []
 
     for (const [v, occurrences] of versionMap.entries()) {
       if (isLinkedProtocol(v)) continue
-      if (!chosenVersion) chosenVersion = v
+      declaredVersions.push({ version: v, count: occurrences.length })
       for (const occ of occurrences) {
         usages.push({ workspace: occ.workspace, type: occ.type, rawVersion: v })
         if (occ.type === "prod") hasProd = true
@@ -324,7 +356,23 @@ export async function auditDeprecations(
 
     if (usages.length === 0) continue
 
-    // Determine deprecation status
+    declaredVersions.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count
+      const tA = parseVersionTuple(a.version)
+      const tB = parseVersionTuple(b.version)
+      if (tA && tB) {
+        const diff = compareTuples(tB, tA)
+        if (diff !== 0) return diff
+      }
+      return a.version.localeCompare(b.version)
+    })
+
+    const chosenVersion = declaredVersions[0]?.version ?? ""
+
+    // Determine deprecation status:
+    // 1. Curated known deprecation
+    // 2. Root/package-level deprecation from registry
+    // 3. Exact declared version deprecation match in regInfo.versionsDeprecated
     let isDeprecated = false
     let deprecationReason: string | undefined
 
@@ -335,11 +383,16 @@ export async function auditDeprecations(
       isDeprecated = true
       deprecationReason = regInfo.deprecated
     } else if (regInfo.versionsDeprecated && Object.keys(regInfo.versionsDeprecated).length > 0) {
-      const matched =
-        regInfo.versionsDeprecated[chosenVersion] || Object.values(regInfo.versionsDeprecated)[0]
-      if (matched) {
-        isDeprecated = true
-        deprecationReason = matched
+      // Check if any declared version in our monorepo matches a deprecated version
+      for (const { version } of declaredVersions) {
+        const exactMatch = regInfo.versionsDeprecated[version]
+        const cleanMatch = regInfo.versionsDeprecated[cleanVersionString(version)]
+        const matched = exactMatch || cleanMatch
+        if (matched) {
+          isDeprecated = true
+          deprecationReason = `Version ${version} is deprecated: ${matched}`
+          break
+        }
       }
     }
 

@@ -26,6 +26,23 @@ describe("Package Deprecation & Abandonment Audit", () => {
     expect(calculateInactivitySeverity(2000)).toBe("critical") // >5 years
   })
 
+  it("extracts replacement packages and links accurately across various author phrasings", async () => {
+    const { extractReplacement } = await import("../src/scan/deprecation.js")
+    expect(extractReplacement("This package is deprecated. Please use @scope/modern-lib instead.")).toBe(
+      "@scope/modern-lib"
+    )
+    expect(extractReplacement("No longer maintained, try undici instead")).toBe("undici")
+    expect(extractReplacement("Deprecated in favor of c8. See https://github.com/bcoe/c8")).toBe(
+      "https://github.com/bcoe/c8"
+    )
+    expect(extractReplacement("Moved to @babel/eslint-parser, please upgrade")).toBe("@babel/eslint-parser")
+    expect(extractReplacement("Superseded by vite. Check https://vite.dev")).toBe("vite")
+    expect(extractReplacement("This library has retired. Check https://vite.dev for replacements")).toBe(
+      "https://vite.dev"
+    )
+    expect(extractReplacement("Recommend using native-fetch")).toBe("native-fetch")
+  })
+
   it("calculates popularity and zombie tiers correctly", () => {
     expect(calculatePopularityTier(15_000_000, true)).toBe("zombie")
     expect(calculatePopularityTier(500_000, false)).toBe("high")
