@@ -22,19 +22,23 @@ import type { ScanResult } from "../../types"
 import type { DrawerState, ScanUiOptions, TabId } from "./types"
 
 const TAB_IDS: TabId[] = [
+  // Overview & Architecture
   "dashboard",
   "matrix",
-  "conflicts",
   "graph",
-  "unused",
-  "security",
+  "workspaces",
+  // Dependencies & Hygiene
+  "conflicts",
   "dedupe",
-  "licenses",
-  "deprecation",
-  "context",
+  "unused",
   "outdated",
   "hygiene",
-  "workspaces",
+  // Risk & Governance
+  "security",
+  "deprecation",
+  "licenses",
+  // AI Tools
+  "context",
 ]
 
 function conflictsAsMarkdown(data: ScanResult): string {

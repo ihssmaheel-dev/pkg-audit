@@ -6,12 +6,17 @@ import {
   IconCopy,
   IconDownload,
   IconFolder,
+  IconGhost,
   IconLayers,
   IconPackage,
   IconRefreshCw,
+  IconScale,
+  IconScissors,
   IconSearch,
+  IconShield,
   IconStar,
   IconWrench,
+  IconXCircle,
   type IconComponent,
 } from "./icons"
 
@@ -70,13 +75,46 @@ export function CommandPalette({ data, onSelect, onClose }: CommandPaletteProps)
       { label: "Copy Version Conflicts as Markdown", icon: IconCopy, action: "copy-conflicts" },
     ]
     const goto: Command[] = [
-      { label: "Go to Dashboard", icon: IconStar, action: "goto", payload: "dashboard" },
-      { label: "Go to Matrix Grid", icon: IconLayers, action: "goto", payload: "matrix" },
-      { label: "Go to Conflicts", icon: IconAlertTriangle, action: "goto", payload: "conflicts" },
-      { label: "Go to Outdated", icon: IconPackage, action: "goto", payload: "outdated" },
-      { label: "Go to Hygiene", icon: IconWrench, action: "goto", payload: "hygiene" },
-      { label: "Go to AI Context", icon: IconBrain, action: "goto", payload: "context" },
-      { label: "Go to Workspaces", icon: IconFolder, action: "goto", payload: "workspaces" },
+      // Overview & Architecture
+      { label: "Overview: Dashboard", icon: IconStar, action: "goto", payload: "dashboard" },
+      { label: "Overview: Dependency Matrix", icon: IconLayers, action: "goto", payload: "matrix" },
+      { label: "Overview: Dependency Graph & Cycles", icon: IconLayers, action: "goto", payload: "graph" },
+      { label: "Overview: Workspaces", icon: IconFolder, action: "goto", payload: "workspaces" },
+
+      // Dependencies & Hygiene
+      {
+        label: "Dependencies: Version Conflicts",
+        icon: IconAlertTriangle,
+        action: "goto",
+        payload: "conflicts",
+      },
+      { label: "Dependencies: Lockfile Dedupe", icon: IconScissors, action: "goto", payload: "dedupe" },
+      { label: "Dependencies: Unused & Phantoms", icon: IconGhost, action: "goto", payload: "unused" },
+      { label: "Dependencies: Outdated Releases", icon: IconPackage, action: "goto", payload: "outdated" },
+      { label: "Dependencies: Manifest Hygiene", icon: IconWrench, action: "goto", payload: "hygiene" },
+
+      // Risk & Governance
+      {
+        label: "Risk & Security: Vulnerability Advisories",
+        icon: IconShield,
+        action: "goto",
+        payload: "security",
+      },
+      {
+        label: "Risk & Health: Deprecation & Zombies",
+        icon: IconXCircle,
+        action: "goto",
+        payload: "deprecation",
+      },
+      { label: "Risk & Legal: License Compliance", icon: IconScale, action: "goto", payload: "licenses" },
+
+      // AI Tools
+      {
+        label: "AI Tools: Context & Architecture Exporter",
+        icon: IconBrain,
+        action: "goto",
+        payload: "context",
+      },
     ]
     const result: Array<{ label: string; items: Command[] }> = [
       { label: "ACTIONS", items: actions },

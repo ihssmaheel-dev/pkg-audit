@@ -13,6 +13,8 @@ export type TabId =
   | "hygiene"
   | "workspaces"
 
+export type NavGroupId = "overview" | "dependencies" | "risk" | "context"
+
 export type Theme = "dark" | "light"
 
 export type DrawerState =

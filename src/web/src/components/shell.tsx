@@ -1,64 +1,153 @@
-import { useRef, useState } from "preact/hooks"
+import { useMemo, useRef, useState } from "preact/hooks"
 import type { ScanResult } from "../../../types"
-import type { TabId } from "../types"
-import { IconDownload, IconGithub, IconLogo, IconRefreshCw, IconSearch } from "./icons"
+import type { NavGroupId, TabId } from "../types"
+import {
+  IconBrain,
+  IconDownload,
+  IconGithub,
+  IconLayers,
+  IconLogo,
+  IconRefreshCw,
+  IconSearch,
+  IconShield,
+  IconZap,
+  type IconComponent,
+} from "./icons"
 
-interface TabDef {
+export interface SubTabDef {
   id: TabId
   label: string
+  shortLabel?: string
   count?: (data: ScanResult) => number
   warn?: boolean
 }
 
-const TABS: TabDef[] = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "matrix", label: "Matrix" },
-  { id: "conflicts", label: "Conflicts", warn: true, count: (d) => d.conflicts.length },
+export interface NavGroupDef {
+  id: NavGroupId
+  label: string
+  icon: IconComponent
+  defaultTab: TabId
+  tabs: SubTabDef[]
+}
+
+export const NAV_GROUPS: NavGroupDef[] = [
   {
-    id: "graph",
-    label: "Graph",
-    warn: true,
-    count: (d) => d.graph?.cycles.length ?? 0,
+    id: "overview",
+    label: "Overview & Graph",
+    icon: IconLayers,
+    defaultTab: "dashboard",
+    tabs: [
+      { id: "dashboard", label: "Dashboard", shortLabel: "Dashboard" },
+      { id: "matrix", label: "Matrix Grid", shortLabel: "Matrix" },
+      {
+        id: "graph",
+        label: "Dependency Graph",
+        shortLabel: "Graph",
+        warn: true,
+        count: (d) => d.graph?.cycles.length ?? 0,
+      },
+      {
+        id: "workspaces",
+        label: "Workspaces",
+        shortLabel: "Workspaces",
+        count: (d) => d.workspaces.length,
+      },
+    ],
   },
   {
-    id: "unused",
-    label: "Unused & Phantom",
-    warn: true,
-    count: (d) =>
-      (d.unused?.phantoms.length ?? 0) + (d.unused?.unused.filter((u) => u.type === "prod").length ?? 0),
+    id: "dependencies",
+    label: "Dependencies & Hygiene",
+    icon: IconZap,
+    defaultTab: "conflicts",
+    tabs: [
+      {
+        id: "conflicts",
+        label: "Version Conflicts",
+        shortLabel: "Conflicts",
+        warn: true,
+        count: (d) => d.conflicts.length,
+      },
+      {
+        id: "dedupe",
+        label: "Lockfile Dedupe",
+        shortLabel: "Dedupe",
+        warn: true,
+        count: (d) => d.dedupe?.totalDuplicates ?? 0,
+      },
+      {
+        id: "unused",
+        label: "Unused & Phantoms",
+        shortLabel: "Unused & Phantoms",
+        warn: true,
+        count: (d) =>
+          (d.unused?.phantoms.length ?? 0) + (d.unused?.unused.filter((u) => u.type === "prod").length ?? 0),
+      },
+      {
+        id: "outdated",
+        label: "Outdated Releases",
+        shortLabel: "Outdated",
+        count: (d) => d.outdated?.outdated.length ?? 0,
+      },
+      {
+        id: "hygiene",
+        label: "Manifest Hygiene",
+        shortLabel: "Hygiene",
+        count: (d) => d.hygieneIssues.length,
+      },
+    ],
   },
   {
-    id: "security",
-    label: "Security",
-    warn: true,
-    count: (d) => (d.security?.criticalCount ?? 0) + (d.security?.highCount ?? 0),
-  },
-  {
-    id: "dedupe",
-    label: "Dedupe",
-    warn: true,
-    count: (d) => d.dedupe?.totalDuplicates ?? 0,
-  },
-  {
-    id: "licenses",
-    label: "Licenses",
-    warn: true,
-    count: (d) => d.licenses?.prodCopyleftCount ?? 0,
-  },
-  {
-    id: "deprecation",
-    label: "Deprecation",
-    warn: true,
-    count: (d) => d.deprecation?.totalDeprecated ?? 0,
+    id: "risk",
+    label: "Risk & Governance",
+    icon: IconShield,
+    defaultTab: "security",
+    tabs: [
+      {
+        id: "security",
+        label: "Security Advisories",
+        shortLabel: "Security",
+        warn: true,
+        count: (d) => (d.security?.criticalCount ?? 0) + (d.security?.highCount ?? 0),
+      },
+      {
+        id: "deprecation",
+        label: "Deprecation & Zombies",
+        shortLabel: "Deprecation",
+        warn: true,
+        count: (d) => (d.deprecation?.totalDeprecated ?? 0) + (d.deprecation?.totalZombies ?? 0),
+      },
+      {
+        id: "licenses",
+        label: "License Compliance",
+        shortLabel: "Licenses",
+        warn: true,
+        count: (d) => d.licenses?.prodCopyleftCount ?? 0,
+      },
+    ],
   },
   {
     id: "context",
     label: "AI Context",
+    icon: IconBrain,
+    defaultTab: "context",
+    tabs: [
+      {
+        id: "context",
+        label: "AI Agent Exporter",
+        shortLabel: "Exporter",
+      },
+    ],
   },
-  { id: "outdated", label: "Outdated", count: (d) => d.outdated?.outdated.length ?? 0 },
-  { id: "hygiene", label: "Hygiene", count: (d) => d.hygieneIssues.length },
-  { id: "workspaces", label: "Workspaces", count: (d) => d.workspaces.length },
 ]
+
+export function findNavGroupForTab(tab: TabId): NavGroupDef {
+  for (const group of NAV_GROUPS) {
+    if (group.tabs.some((t) => t.id === tab)) {
+      return group
+    }
+  }
+  return NAV_GROUPS[0]!
+}
 
 function rootLabel(dir: string): string {
   const parts = dir.split(/[\\//]/).filter(Boolean)
@@ -86,14 +175,43 @@ export function Shell(props: ShellProps) {
   const rootWs = data?.workspaces.find((w) => w.isRoot)
   const pm = rootWs?.packageManager ?? null
 
+  const activeGroup = useMemo(() => findNavGroupForTab(tab), [tab])
+
   const handleSubmit = () => {
     if (dirValue.trim()) onScanDir(dirValue.trim())
     setDirEditing(false)
   }
 
+  // Calculate aggregated warning & issue counts for each top-level group
+  const groupStats = useMemo<Record<NavGroupId, { total: number; hasWarn: boolean }>>(() => {
+    const stats: Record<NavGroupId, { total: number; hasWarn: boolean }> = {
+      overview: { total: 0, hasWarn: false },
+      dependencies: { total: 0, hasWarn: false },
+      risk: { total: 0, hasWarn: false },
+      context: { total: 0, hasWarn: false },
+    }
+    if (!data) return stats
+
+    for (const group of NAV_GROUPS) {
+      let count = 0
+      let warn = false
+      for (const t of group.tabs) {
+        if (t.count) {
+          const n = t.count(data)
+          if (n > 0) {
+            count += n
+            if (t.warn) warn = true
+          }
+        }
+      }
+      stats[group.id] = { total: count, hasWarn: warn }
+    }
+    return stats
+  }, [data])
+
   return (
     <header class="sticky top-0 z-50 bg-[#101010] border-b border-[#3d3a39]">
-      {/* Top row */}
+      {/* Top Header Row: Branding, Directory input, Search & Actions */}
       <div class="flex items-center gap-3.5 h-[54px] px-8 max-[640px]:px-4">
         {/* Brand */}
         <div class="flex items-center gap-2.5 font-mono font-bold text-[14px] tracking-tight text-[#ffffff] shrink-0">
@@ -225,29 +343,75 @@ export function Shell(props: ShellProps) {
         </div>
       </div>
 
-      {/* Tabs navigation row */}
-      <nav class="flex items-center gap-1 h-10 px-8 max-[640px]:px-4 border-t border-[#3d3a39]/70 bg-[#101010] overflow-x-auto">
-        {TABS.map((t) => {
-          const count = data && t.count ? t.count(data) : undefined
-          const active = tab === t.id
+      {/* Tier 1: Primary Functional Domain Tabs */}
+      <div class="flex items-center gap-1 h-10 px-8 max-[640px]:px-4 border-t border-[#262423] bg-[#0c0c0c] overflow-x-auto">
+        {NAV_GROUPS.map((group) => {
+          const isActiveGroup = activeGroup.id === group.id
+          const GroupIcon = group.icon
+          const stat = groupStats[group.id]
+          const showBadge = stat && stat.total > 0
+
           return (
             <button
-              key={t.id}
-              class={`relative inline-flex items-center gap-2 h-8 px-3 rounded-[6px] text-[13px] font-medium transition-colors ${
-                active
-                  ? "bg-[#1a1a1a] text-[#ffffff] border border-[#3d3a39]"
-                  : "text-[#8b949e] hover:text-[#f2f2f2] hover:bg-[#1a1a1a]/50"
+              key={group.id}
+              onClick={() => {
+                // If this group is already active, do nothing; otherwise jump to its default tab or first tab
+                if (!isActiveGroup) {
+                  onTabChange(group.defaultTab)
+                }
+              }}
+              class={`relative inline-flex items-center gap-2 h-8 px-3.5 rounded-[6px] text-[13px] font-medium transition-all duration-150 ${
+                isActiveGroup
+                  ? "bg-[#181818] text-[#ffffff] border border-[#383432] shadow-sm"
+                  : "text-[#8b949e] hover:text-[#e6e6e6] hover:bg-[#141414]"
               }`}
-              onClick={() => onTabChange(t.id)}
             >
-              {active && <span class="w-1.5 h-1.5 rounded-full bg-[#00d992] shrink-0" />}
-              <span>{t.label}</span>
-              {typeof count === "number" && count > 0 && (
+              <GroupIcon size={14} className={isActiveGroup ? "text-[#00d992]" : "text-[#8b949e]"} />
+              <span class="font-medium tracking-tight">{group.label}</span>
+              {showBadge && (
                 <span
                   class={`inline-flex items-center justify-center min-w-[18px] h-4 px-1.5 rounded-full text-[10px] font-bold font-mono ${
-                    t.warn
+                    stat.hasWarn
                       ? "bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30"
-                      : "bg-[#1a1a1a] text-[#8b949e] border border-[#3d3a39]"
+                      : "bg-[#1f1f1f] text-[#a0a0a0] border border-[#33302e]"
+                  }`}
+                >
+                  {stat.total}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tier 2: Contextual Sub-Nav Bar (Clean Segmented Sub-Pills) */}
+      <nav class="flex items-center gap-1.5 h-9 px-8 max-[640px]:px-4 border-t border-[#1e1c1b] bg-[#121212] overflow-x-auto">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-[#605c5a] mr-2 shrink-0 hidden md:inline-block">
+          {activeGroup.label}:
+        </span>
+
+        {activeGroup.tabs.map((subTab) => {
+          const isActive = tab === subTab.id
+          const count = data && subTab.count ? subTab.count(data) : undefined
+
+          return (
+            <button
+              key={subTab.id}
+              onClick={() => onTabChange(subTab.id)}
+              class={`relative inline-flex items-center gap-1.5 h-6 px-2.5 rounded-[4px] text-[12px] transition-colors shrink-0 ${
+                isActive
+                  ? "bg-[#22201f] text-[#ffffff] border border-[#403c3a] font-medium"
+                  : "text-[#8b949e] hover:text-[#f2f2f2] hover:bg-[#181818]"
+              }`}
+            >
+              {isActive && <span class="w-1.5 h-1.5 rounded-full bg-[#00d992] shrink-0" />}
+              <span>{subTab.label}</span>
+              {typeof count === "number" && count > 0 && (
+                <span
+                  class={`inline-flex items-center justify-center min-w-[16px] h-3.5 px-1 rounded-full text-[9.5px] font-mono font-bold ${
+                    subTab.warn
+                      ? "bg-[#f43f5e]/15 text-[#f43f5e] border border-[#f43f5e]/30"
+                      : "bg-[#181818] text-[#8b949e] border border-[#2b2726]"
                   }`}
                 >
                   {count}
