@@ -256,6 +256,62 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
     })
   }
 
+  // Virtualized Viewport Frustum Culling for large monorepo graphs (600+ workspaces)
+  const renderedNodes = useMemo(() => {
+    // For small graphs (<= 45 nodes), render everything directly
+    if (layout.nodes.length <= 45) return layout.nodes
+
+    const containerW = containerRef.current?.clientWidth || 1000
+    const containerH = containerRef.current?.clientHeight || 650
+    const buffer = 240 // viewport safety boundary in graph units
+
+    const minX = -pan.x / zoom - buffer
+    const maxX = (-pan.x + containerW) / zoom + buffer
+    const minY = -pan.y / zoom - buffer
+    const maxY = (-pan.y + containerH) / zoom + buffer
+
+    return layout.nodes.filter((node) => {
+      // Always keep active/selected/hovered/searching/cycle nodes rendered
+      if (
+        selectedNode === node.relPath ||
+        hoveredNode === node.relPath ||
+        activeRelations?.outgoing.has(node.relPath) ||
+        activeRelations?.incoming.has(node.relPath) ||
+        focusedCycle?.cycleNodeNames.has(node.name) ||
+        focusedCycle?.cycleNodeNames.has(node.relPath)
+      ) {
+        return true
+      }
+
+      if (
+        search &&
+        (node.name.toLowerCase().includes(search.toLowerCase()) ||
+          node.relPath.toLowerCase().includes(search.toLowerCase()))
+      ) {
+        return true
+      }
+
+      // Check viewport bounding box intersection
+      return node.x + node.width >= minX && node.x <= maxX && node.y + node.height >= minY && node.y <= maxY
+    })
+  }, [layout.nodes, pan.x, pan.y, zoom, selectedNode, hoveredNode, activeRelations, focusedCycle, search])
+
+  const renderedNodePaths = useMemo(() => new Set(renderedNodes.map((n) => n.relPath)), [renderedNodes])
+
+  const renderedEdges = useMemo(() => {
+    if (graph.edges.length <= 45) return graph.edges
+
+    return graph.edges.filter((edge) => {
+      const edgeKey = `${edge.from}->${edge.to}`
+      // If edge is part of active selection or cycle, always render
+      if (activeRelations?.activeEdges.has(edgeKey) || focusedCycle?.cycleEdges.has(edgeKey)) {
+        return true
+      }
+      // If either connected node is in visible viewport, render edge
+      return renderedNodePaths.has(edge.from) || renderedNodePaths.has(edge.to)
+    })
+  }, [graph.edges, renderedNodePaths, activeRelations, focusedCycle])
+
   const copyCycleAsText = (path: string[]) => {
     const text = path.join(" -> ")
     navigator.clipboard?.writeText(text).catch(() => {})
@@ -481,8 +537,9 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
           <svg
             class="w-full h-full overflow-visible"
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
               transformOrigin: "0 0",
+              willChange: isPanning ? "transform" : "auto",
             }}
           >
             <defs>
@@ -538,7 +595,7 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
 
             {/* Render Connectors / Edges */}
             <g>
-              {graph.edges.map((edge) => {
+              {renderedEdges.map((edge) => {
                 const fromNode = layout.nodeMap.get(edge.from)
                 const toNode = layout.nodeMap.get(edge.to)
                 if (!fromNode || !toNode) return null
@@ -611,7 +668,7 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
 
             {/* Render Workspace Node Cards (Using ForeignObject for Pixel-Perfect Typography & Layout) */}
             <g>
-              {layout.nodes.map((node) => {
+              {renderedNodes.map((node) => {
                 const isSelected = selectedNode === node.relPath
                 const isHovered = hoveredNode === node.relPath
                 const isSearching =
