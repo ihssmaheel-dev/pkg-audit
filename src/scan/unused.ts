@@ -113,29 +113,27 @@ export function stripComments(code: string): string {
   let inSingleLineComment = false
   let inMultiLineComment = false
   let inHtmlComment = false
-  let inString: "'" | '"' | "`" | null = null
+  let inString: "'" | '"' | "`" | "`_simple" | null = null
   let inRegex = false
   let inRegexCharClass = false
   let isEscaped = false
   let lastNonWsChar = ""
+  const templateInterpStack: number[] = []
 
   // Characters after which a '/' introduces a regular expression literal rather than division
   const REGEX_PRECEDING_CHARS = new Set([
     "(",
-    "[",
-    "{",
-    ";",
     ",",
-    ":",
     "=",
+    ":",
+    "[",
     "!",
-    "?",
     "&",
     "|",
-    "^",
-    "~",
+    "?",
     "+",
     "-",
+    "~",
     "*",
     "%",
     "<",
@@ -171,7 +169,8 @@ export function stripComments(code: string): string {
       continue
     }
 
-    if (inString !== null) {
+    // Standard string literal ('...' or "...")
+    if (inString === "'" || inString === '"') {
       result += char
       if (isEscaped) {
         isEscaped = false
@@ -181,6 +180,75 @@ export function stripComments(code: string): string {
         inString = null
         lastNonWsChar = char
       }
+      continue
+    }
+
+    // Simple single-token backtick specifier (e.g. `chalk` or `@scope/foo`)
+    if (inString === "`_simple") {
+      result += char
+      if (isEscaped) {
+        isEscaped = false
+      } else if (char === "\\") {
+        isEscaped = true
+      } else if (char === "`") {
+        inString = null
+        lastNonWsChar = "`"
+      }
+      continue
+    }
+
+    // Template literal (`...`)
+    if (inString === "`") {
+      if (isEscaped) {
+        isEscaped = false
+        result += " "
+        continue
+      }
+
+      if (char === "\\") {
+        isEscaped = true
+        result += " "
+        continue
+      }
+
+      // Check for interpolation start ${...}
+      if (templateInterpStack.length === 0 && char === "$" && next === "{") {
+        templateInterpStack.push(1)
+        result += "${"
+        i++ // skip '{'
+        continue
+      }
+
+      // If currently inside an interpolation ${ ... }
+      if (templateInterpStack.length > 0) {
+        if (char === "{") {
+          templateInterpStack[templateInterpStack.length - 1]!++
+          result += char
+        } else if (char === "}") {
+          templateInterpStack[templateInterpStack.length - 1]!--
+          if (templateInterpStack[templateInterpStack.length - 1]! <= 0) {
+            templateInterpStack.pop()
+          }
+          result += char
+        } else if (char === '"' || char === "'") {
+          inString = char
+          result += char
+        } else {
+          result += char
+        }
+        continue
+      }
+
+      // Closing backtick of template literal
+      if (char === "`") {
+        inString = null
+        result += "`"
+        lastNonWsChar = "`"
+        continue
+      }
+
+      // Inside template string body (outside interpolation) - blank out text to avoid false AST matches in docs/templates
+      result += char === "\n" || char === "\r" ? char : " "
       continue
     }
 
@@ -234,7 +302,39 @@ export function stripComments(code: string): string {
       continue
     }
 
-    if (char === '"' || char === "'" || char === "`") {
+    if (char === "`") {
+      // Check if this is a simple single-line specifier like `chalk` or `@scope/foo` without newlines, spaces, or statements
+      let isSimpleSpecifier = false
+      let endBacktick = -1
+      for (let j = i + 1; j < code.length && j < i + 120; j++) {
+        if (code[j] === "\n" || code[j] === "\r" || code[j] === ";" || code[j] === "{" || code[j] === "}") {
+          break
+        }
+        if (code[j] === "`" && code[j - 1] !== "\\") {
+          endBacktick = j
+          break
+        }
+      }
+
+      if (endBacktick !== -1) {
+        const inner = code.slice(i + 1, endBacktick).trim()
+        if (/^@?[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)?$/.test(inner)) {
+          isSimpleSpecifier = true
+        }
+      }
+
+      if (isSimpleSpecifier) {
+        inString = "`_simple"
+        result += "`"
+        continue
+      }
+
+      inString = "`"
+      result += "`"
+      continue
+    }
+
+    if (char === '"' || char === "'") {
       inString = char
       result += char
       continue

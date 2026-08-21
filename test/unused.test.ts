@@ -145,6 +145,35 @@ describe("unused & phantom dependency scanner", () => {
       expect(imports).not.toContain("node:fs")
       expect(imports).not.toContain("./local/helper")
     })
+
+    it("ignores code examples and template strings in documentation components without falsely extracting phantom dependencies", () => {
+      const docCode = `
+        import { createInstallation } from 'scenes/onboarding/shared/OnboardingDocsContentWrapper'
+        import { StepDefinition } from '../steps'
+
+        export const getVercelAISteps = (ctx: any) => {
+          return [
+            {
+              title: 'Install dependencies',
+              content: (
+                <CodeBlock
+                  code={dedent\`
+                    import { OpenTelemetry } from '@ai-sdk/otel'
+                    import { NodeSDK } from '@opentelemetry/sdk-node'
+                    import { resourceFromAttributes } from '@opentelemetry/resources'
+                  \`}
+                />
+              )
+            }
+          ]
+        }
+      `
+
+      const imports = extractImportsFromContent(docCode)
+      expect(imports).not.toContain("@ai-sdk/otel")
+      expect(imports).not.toContain("@opentelemetry/sdk-node")
+      expect(imports).not.toContain("@opentelemetry/resources")
+    })
   })
 
   describe("extractPackagesFromScripts", () => {
