@@ -92,6 +92,38 @@ export function App() {
     }
   }, [embedded, scan])
 
+  // Update browser document.title dynamically with scanning state and workspace context
+  useEffect(() => {
+    const isScanning = loading || isMainScan || isOutdatedScanning || isSecurityScanning
+    if (isScanning) {
+      let status = "Scanning…"
+      if (loading || isMainScan) {
+        status = "Scanning monorepo…"
+      } else if (isOutdatedScanning && isSecurityScanning) {
+        status = "Auditing outdated & security…"
+      } else if (isOutdatedScanning) {
+        status = "Checking outdated…"
+      } else if (isSecurityScanning) {
+        status = "Auditing security…"
+      }
+      document.title = `⟳ ${status} · pkg-audit`
+    } else if (data) {
+      const parts = data.root.split(/[\\//]/).filter(Boolean)
+      const rootName = parts[parts.length - 1] || "monorepo"
+      const cycleCount = data.graph?.cycles.length ?? 0
+      const conflictCount = data.conflicts.length
+      const alertBadge =
+        cycleCount > 0
+          ? `(${cycleCount} cycle${cycleCount > 1 ? "s" : ""}) `
+          : conflictCount > 0
+            ? `(${conflictCount} conflict${conflictCount > 1 ? "s" : ""}) `
+            : ""
+      document.title = `${alertBadge}${rootName} · pkg-audit`
+    } else {
+      document.title = "pkg-audit · Monorepo Dependency Auditor"
+    }
+  }, [loading, isMainScan, isOutdatedScanning, isSecurityScanning, data])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -247,6 +279,8 @@ export function App() {
         tab={tab}
         onTabChange={setTab}
         loading={loading}
+        isOutdatedScanning={isOutdatedScanning}
+        isSecurityScanning={isSecurityScanning}
         data={data}
         onScan={() => void handleScan(data?.root)}
         onScanDir={(dir) => void handleScan(dir)}

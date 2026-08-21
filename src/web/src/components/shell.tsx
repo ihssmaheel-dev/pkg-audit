@@ -159,6 +159,8 @@ interface ShellProps {
   tab: TabId
   onTabChange: (tab: TabId) => void
   loading: boolean
+  isOutdatedScanning?: boolean
+  isSecurityScanning?: boolean
   data: ScanResult | null
   onScan: () => void
   onScanDir: (dir: string) => void
@@ -167,7 +169,30 @@ interface ShellProps {
 }
 
 export function Shell(props: ShellProps) {
-  const { dir, tab, onTabChange, loading, data, onScan, onScanDir, onExportHtml, onOpenPalette } = props
+  const {
+    dir,
+    tab,
+    onTabChange,
+    loading,
+    isOutdatedScanning,
+    isSecurityScanning,
+    data,
+    onScan,
+    onScanDir,
+    onExportHtml,
+    onOpenPalette,
+  } = props
+
+  const isScanningActive = loading || Boolean(isOutdatedScanning) || Boolean(isSecurityScanning)
+  const scanStatusText = loading
+    ? "Scanning…"
+    : isOutdatedScanning && isSecurityScanning
+      ? "Outdated & Security…"
+      : isOutdatedScanning
+        ? "Outdated…"
+        : isSecurityScanning
+          ? "Security…"
+          : "Scanning…"
 
   const [dirEditing, setDirEditing] = useState(false)
   const [dirValue, setDirValue] = useState(dir)
@@ -217,8 +242,11 @@ export function Shell(props: ShellProps) {
       <div class="flex items-center gap-3.5 h-[54px] px-8 max-[640px]:px-4">
         {/* Brand */}
         <div class="flex items-center gap-2.5 font-mono font-bold text-[14px] tracking-tight text-[#ffffff] shrink-0">
-          <div class="flex items-center justify-center w-7 h-7 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] text-[#00d992]">
+          <div class="relative flex items-center justify-center w-7 h-7 rounded-[6px] bg-[#1a1a1a] border border-[#3d3a39] text-[#00d992]">
             <IconLogo size={18} />
+            {isScanningActive && (
+              <span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#00d992] animate-ping" />
+            )}
           </div>
           <span>pkg-audit</span>
         </div>
@@ -288,6 +316,12 @@ export function Shell(props: ShellProps) {
                   ) : null}
                   <span>·</span>
                   <span>{data.scannedMs}ms</span>
+                </span>
+              )}
+              {isScanningActive && (
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] bg-[#00d992]/10 border border-[#00d992]/30 text-[#00d992] text-[11px] font-mono shrink-0 animate-pulse">
+                  <IconRefreshCw size={11} className="animate-spin text-[#00d992]" />
+                  <span>{scanStatusText}</span>
                 </span>
               )}
             </div>
