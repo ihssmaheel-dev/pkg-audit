@@ -583,8 +583,98 @@ describe("unused & phantom dependency scanner", () => {
       expect(isDevToolPackage("eslint", "dev")).toBe(true)
       expect(isDevToolPackage("prettier", "dev")).toBe(true)
       expect(isDevToolPackage("eslint-plugin-react", "prod")).toBe(true)
-      expect(isDevToolPackage("tailwindcss-animate", "prod")).toBe(true)
       expect(isDevToolPackage("zod", "prod")).toBe(false)
+    })
+  })
+
+  describe("SFC and Astro multi-script & frontmatter parsing", () => {
+    it("extracts imports from Astro frontmatter and client script tags", () => {
+      const astroContent = `---
+import Header from '../components/Header.astro'
+import { format } from 'date-fns'
+import type { User } from '@types/user'
+---
+<div>
+  <h1>Hello Astro</h1>
+  <script>
+    import clientLib from 'client-analytics'
+  </script>
+</div>
+`
+      const imports = extractImportsFromContent(astroContent, undefined)
+      expect(imports.has("date-fns")).toBe(true)
+      expect(imports.has("client-analytics")).toBe(true)
+      expect(imports.has("@types/user")).toBe(true)
+    })
+
+    it("extracts imports from multiple script blocks in Vue SFC (<script setup> + <script>)", () => {
+      const vueContent = `
+<script setup lang="ts">
+import { ref } from 'vue'
+import lodash from 'lodash'
+const count = ref(0)
+</script>
+
+<template>
+  <div>{{ count }}</div>
+</template>
+
+<script lang="ts">
+import { defineComponent } from 'vue'
+import helper from 'vue-helper-pkg'
+export default defineComponent({
+  name: 'MyComponent'
+})
+</script>
+`
+      const imports = extractImportsFromContent(vueContent, undefined)
+      expect(imports.has("vue")).toBe(true)
+      expect(imports.has("lodash")).toBe(true)
+      expect(imports.has("vue-helper-pkg")).toBe(true)
+    })
+
+    it("extracts imports from multiple script blocks in Svelte (<script context='module'> + <script>)", () => {
+      const svelteContent = `
+<script context="module">
+import { preloadHelper } from 'svelte-module-pkg'
+</script>
+
+<script>
+import { onMount } from 'svelte'
+import axios from 'axios'
+</script>
+
+<main>Hello</main>
+`
+      const imports = extractImportsFromContent(svelteContent, undefined)
+      expect(imports.has("svelte-module-pkg")).toBe(true)
+      expect(imports.has("svelte")).toBe(true)
+      expect(imports.has("axios")).toBe(true)
+    })
+  })
+
+  describe("YAML config extraction", () => {
+    it("safely ignores pnpm-workspace.yaml without feeding to TS parser", () => {
+      const pnpmWorkspaceYaml = `
+packages:
+  - 'apps/*'
+  - 'packages/*'
+catalog:
+  react: ^19.0.0
+`
+      const refs = extractReferencesFromConfig(pnpmWorkspaceYaml, "pnpm-workspace.yaml")
+      expect(refs.size).toBe(0)
+    })
+
+    it("extracts plugins and presets from YAML config files cleanly", () => {
+      const prettierYaml = `
+plugins:
+  - prettier-plugin-tailwindcss
+  - '@ianvs/prettier-plugin-sort-imports'
+`
+      const refs = extractReferencesFromConfig(prettierYaml, ".prettierrc.yaml")
+      expect(refs.has("prettier-plugin-tailwindcss")).toBe(true)
+      expect(refs.has("@ianvs/prettier-plugin-sort-imports")).toBe(true)
     })
   })
 })

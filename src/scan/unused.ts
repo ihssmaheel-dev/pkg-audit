@@ -353,14 +353,39 @@ export function extractPackageName(specifier: string, isAlias?: (spec: string) =
 
 function extractScriptBlock(content: string, ext: string): string {
   if (!SCRIPT_BLOCK_EXTENSIONS.has(ext)) return content
+
+  const chunks: string[] = []
+
+  // 1. Astro frontmatter extraction: --- ... --- at top of file
+  if (ext === ".astro") {
+    const trimmed = content.trimStart()
+    if (trimmed.startsWith("---")) {
+      const secondFence = trimmed.indexOf("---", 3)
+      if (secondFence !== -1) {
+        chunks.push(trimmed.slice(3, secondFence))
+      }
+    }
+  }
+
+  // 2. Multi-<script> block extraction for Vue, Svelte, and Astro
   const lower = content.toLowerCase()
-  const scriptStart = lower.indexOf("<script")
-  if (scriptStart === -1) return ""
-  const tagEnd = lower.indexOf(">", scriptStart)
-  if (tagEnd === -1) return ""
-  const scriptEnd = lower.indexOf("</script>", tagEnd)
-  if (scriptEnd === -1) return ""
-  return content.slice(tagEnd + 1, scriptEnd)
+  let searchIdx = 0
+
+  while (searchIdx < lower.length) {
+    const scriptStart = lower.indexOf("<script", searchIdx)
+    if (scriptStart === -1) break
+
+    const tagEnd = lower.indexOf(">", scriptStart)
+    if (tagEnd === -1) break
+
+    const scriptEnd = lower.indexOf("</script>", tagEnd)
+    if (scriptEnd === -1) break
+
+    chunks.push(content.slice(tagEnd + 1, scriptEnd))
+    searchIdx = scriptEnd + 9 // length of "</script>"
+  }
+
+  return chunks.join("\n")
 }
 
 function getScriptKind(ext: string): ts.ScriptKind {
@@ -609,7 +634,9 @@ export function stripComments(code: string): string {
  */
 export function extractImportSpecifiers(content: string, filePath = "unknown.ts"): Set<string> {
   const specifiers = new Set<string>()
-  const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
+  const ext = path.extname(filePath).toLowerCase()
+  const source = extractScriptBlock(content, ext)
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, getScriptKind(ext))
 
   function visit(node: ts.Node): void {
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
@@ -676,9 +703,60 @@ function collectJsonConfigReferences(
   }
 }
 
+const YAML_CONFIG_EXTENSIONS = new Set([".yaml", ".yml"])
+
 /**
- * Extracts config-style package references from either a JSON config file
- * or a JS/TS config file. Structurally scoped (see CONFIG_REFERENCE_KEYS)
+ * Line-based extraction of package references from YAML configuration files
+ * under known risk keys (e.g. plugins, extends, presets).
+ */
+function collectYamlConfigReferences(
+  content: string,
+  refs: Set<string>,
+  isAlias?: (spec: string) => boolean
+): void {
+  const lines = content.split(/\r?\n/)
+  let underRiskKey = false
+  let riskKeyIndent = 0
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith("#")) continue
+
+    const indent = line.search(/\S/)
+    const colonIdx = line.indexOf(":")
+
+    if (colonIdx !== -1) {
+      const key = line.slice(indent, colonIdx).trim()
+      if (CONFIG_REFERENCE_KEYS.has(key)) {
+        underRiskKey = true
+        riskKeyIndent = indent
+        const rest = line.slice(colonIdx + 1).trim()
+        if (rest && !rest.startsWith("[") && !rest.startsWith("{")) {
+          const pkg = extractPackageName(rest.replace(/^['"]|['"]$/g, ""), isAlias)
+          if (pkg) refs.add(pkg)
+        }
+        continue
+      } else if (indent <= riskKeyIndent) {
+        underRiskKey = false
+      }
+    }
+
+    if (underRiskKey && indent > riskKeyIndent) {
+      if (trimmed.startsWith("-")) {
+        const item = trimmed
+          .slice(1)
+          .trim()
+          .replace(/^['"]|['"]$/g, "")
+        const pkg = extractPackageName(item, isAlias)
+        if (pkg) refs.add(pkg)
+      }
+    }
+  }
+}
+
+/**
+ * Extracts config-style package references from either a JSON config file,
+ * YAML config file, or a JS/TS config file. Structurally scoped (see CONFIG_REFERENCE_KEYS)
  * rather than matching any quoted string in the file.
  */
 export function extractReferencesFromConfig(
@@ -687,6 +765,15 @@ export function extractReferencesFromConfig(
   isAlias?: (spec: string) => boolean
 ): Set<string> {
   const ext = path.extname(filePath).toLowerCase()
+
+  if (YAML_CONFIG_EXTENSIONS.has(ext)) {
+    if (path.basename(filePath).toLowerCase() === "pnpm-workspace.yaml") {
+      return new Set()
+    }
+    const refs = new Set<string>()
+    collectYamlConfigReferences(content, refs, isAlias)
+    return refs
+  }
 
   if (JSON_CONFIG_EXTENSIONS.has(ext) || path.basename(filePath).toLowerCase().startsWith(".eslintrc")) {
     let config: unknown
