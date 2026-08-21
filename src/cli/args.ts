@@ -11,6 +11,9 @@ export interface CliOptions {
   top: number
   onlyConflicts: boolean
   full: boolean
+  fast: boolean
+  skipUnused: boolean
+  skipBoundaries: boolean
   outdated: boolean
   versions: boolean
   changelog: boolean
@@ -90,6 +93,9 @@ export function parseArgs(argv: string[]): CliOptions {
     top: 10,
     onlyConflicts: false,
     full: false,
+    fast: false,
+    skipUnused: false,
+    skipBoundaries: false,
     outdated: false,
     versions: false,
     changelog: false,
@@ -260,6 +266,16 @@ export function parseArgs(argv: string[]): CliOptions {
     } else if (arg === "audit:fix" || arg === "--fix-security" || arg === "--security-fix") {
       opts.security = true
       opts.securityFix = true
+    } else if (arg === "--fast" || arg === "fast") {
+      opts.fast = true
+    } else if (arg === "--skip-unused" || arg === "--no-unused") {
+      opts.skipUnused = true
+      opts.unused = false
+    } else if (arg === "--skip-boundaries" || arg === "--no-boundaries") {
+      opts.skipBoundaries = true
+      opts.boundaries = false
+    } else if (arg === "--skip-security" || arg === "--no-security") {
+      opts.security = false
     } else if (arg === "--fix" || arg === "fix") {
       opts.fix = true
     } else if (arg === "--unused" || arg === "unused") {
@@ -461,6 +477,10 @@ Options:
   --base-json=file       Compare with base branch JSON audit to compute delta
   --ui                   Open local dashboard in browser
   --workspace=<name>     Full dependency detail for one workspace (name or path)
+  --fast                 Fast mode: instant audit of conflicts, graph, and hygiene only (<200ms)
+  --skip-unused          Skip source file unused & phantom dependency analysis
+  --skip-boundaries      Skip architecture boundary rules check
+  --skip-security        Skip OSV vulnerability network check
   --full                 Full dependency matrix for every workspace
   --outdated             Check versions against the npm registry (needs internet)
   --versions             Show EVERY dependency with current vs latest npm version

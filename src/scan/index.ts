@@ -61,6 +61,10 @@ export const TOOL_VERSION = "0.1.0"
 interface ScanOptions {
   ignoreDirs?: Iterable<string>
   respectGitignore?: boolean
+  fast?: boolean
+  unused?: boolean
+  skipUnused?: boolean
+  skipBoundaries?: boolean
   outdated?: boolean
   versions?: boolean
   changelog?: boolean
@@ -203,11 +207,21 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     .filter((w): w is Workspace => w !== null)
     .sort((a, b) => (a.isRoot === b.isRoot ? a.relPath.localeCompare(b.relPath) : a.isRoot ? -1 : 1))
 
+  const isFast = Boolean(opts.fast)
+  const shouldScanUnused = !isFast && opts.unused !== false && !opts.skipUnused
+  const shouldScanBoundaries = !isFast && opts.boundaries !== false && !opts.skipBoundaries
+  const shouldScanSecurity = !isFast && Boolean(opts.security)
+  const shouldScanDeprecation = !isFast && opts.deprecation !== false
+  const shouldScanOutdated = !isFast && Boolean(opts.outdated || opts.versions)
+
   const depMap = buildDependencyMap(workspaces)
   const conflicts = findConflicts(depMap)
   const hygieneIssues = findHygieneIssues(workspaces)
   const graph = buildWorkspaceGraph(workspaces)
-  const rawUnused = await scanWorkspaceDependencies(rootDir, workspaces)
+
+  const rawUnused = shouldScanUnused
+    ? await scanWorkspaceDependencies(rootDir, workspaces)
+    : { phantoms: [], unused: [], scannedFilesCount: 0 }
 
   // Filter suppressed unused & phantoms
   const filteredUnused = {
@@ -235,7 +249,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
   // Run network phases (outdated, security, deprecation) concurrently for 40-60% wall-clock reduction
   const [outdatedRes, securityRes, deprecationRes] = await Promise.all([
     (async (): Promise<ScanResult["outdated"]> => {
-      if (!opts.outdated && !opts.versions) return null
+      if (!shouldScanOutdated) return null
       const res = await checkOutdated(depMap, opts.concurrency ?? 24, opts.onProgress)
       if (opts.changelog && res.outdated.length) {
         await fetchChangelogs(res.outdated, opts.changelogLines ?? 6)
@@ -244,7 +258,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     })(),
 
     (async () => {
-      if (!opts.security) return { security: null, vulnerabilitySLAs: null }
+      if (!shouldScanSecurity) return { security: null, vulnerabilitySLAs: null }
       const rawSecurity = await checkVulnerabilities(workspaces, {
         rootDir,
         onProgress: opts.onProgress,
@@ -276,7 +290,7 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     })(),
 
     (async (): Promise<ScanResult["deprecation"]> => {
-      if (opts.deprecation === false) return null
+      if (!shouldScanDeprecation) return null
       const rawDeprecation = await auditDeprecations(depMap, {
         concurrency: opts.concurrency ?? 24,
         abandonedDaysThreshold: opts.abandonedDaysThreshold ?? 730,
@@ -323,8 +337,16 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
     ),
   }
 
-  // Cross-Boundary import enforcement
-  const boundaries = checkBoundaryViolations(workspaces, rootDir, opts.boundaryRules, opts.onProgress)
+  // Cross-Boundary import enforcement (uses preloaded imports from unused scan if available)
+  const boundaries = shouldScanBoundaries
+    ? checkBoundaryViolations(
+        workspaces,
+        rootDir,
+        opts.boundaryRules,
+        opts.onProgress,
+        rawUnused.rawFileImports
+      )
+    : { violations: [], totalViolations: 0, rulesEvaluatedCount: 0 }
 
   // Filter suppressed boundary violations
   const filteredBoundaryViolations = boundaries.violations.filter(

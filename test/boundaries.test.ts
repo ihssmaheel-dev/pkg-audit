@@ -74,4 +74,59 @@ describe("Boundary Enforcement Engine", () => {
     expect(result.violations[0]?.targetWorkspace).toBe("@mono/web")
     expect(result.violations[0]?.importedSpecifier).toBe("@mono/web")
   })
+
+  it("evaluates boundary violations instantly with preloadedImports without reading disk", () => {
+    const workspaces: Workspace[] = [
+      {
+        name: "@mono/ui",
+        relPath: "packages/ui",
+        absPath: path.join(tmpDir, "packages/ui/package.json"),
+        version: "1.0.0",
+        private: false,
+        isRoot: false,
+        packageManager: "pnpm",
+        enginesNode: null,
+        deps: {},
+        depCount: 0,
+        devCount: 0,
+      },
+      {
+        name: "@mono/web",
+        relPath: "apps/web",
+        absPath: path.join(tmpDir, "apps/web/package.json"),
+        version: "1.0.0",
+        private: true,
+        isRoot: false,
+        packageManager: "pnpm",
+        enginesNode: null,
+        deps: {},
+        depCount: 0,
+        devCount: 0,
+      },
+    ]
+
+    const preloaded = new Map<string, Array<{ filePath: string; specifiers: string[] }>>()
+    preloaded.set("packages/ui", [
+      { filePath: path.join(tmpDir, "packages/ui/button.tsx"), specifiers: ["@mono/web/utils"] },
+    ])
+
+    const result = checkBoundaryViolations(
+      workspaces,
+      tmpDir,
+      [
+        {
+          from: "packages/**",
+          disallow: ["apps/**"],
+          reason: "Packages must not import from apps",
+        },
+      ],
+      undefined,
+      preloaded
+    )
+
+    expect(result.violations).toHaveLength(1)
+    expect(result.violations[0]?.sourceWorkspace).toBe("@mono/ui")
+    expect(result.violations[0]?.targetWorkspace).toBe("@mono/web")
+    expect(result.violations[0]?.importedSpecifier).toBe("@mono/web/utils")
+  })
 })

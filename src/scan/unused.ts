@@ -1,8 +1,11 @@
 import * as fs from "node:fs"
+import * as os from "node:os"
 import * as path from "node:path"
 import ts from "typescript"
 import type { DepType, PhantomDependency, UnusedDependency, UnusedScanResult, Workspace } from "../types.js"
 import { compareSemver } from "./fix.js"
+
+const MAX_PARSE_FILE_SIZE = 1_500_000 // 1.5MB size guard to prevent AST memory spikes
 
 const IGNORED_DIR_NAMES = new Set([
   "node_modules",
@@ -544,28 +547,32 @@ export function parseSourceFile(
   content: string,
   filePath: string,
   isAlias?: (spec: string) => boolean
-): { imports: Set<string>; configRefs: Set<string> } {
+): { imports: Set<string>; configRefs: Set<string>; rawSpecifiers: Set<string> } {
   const imports = new Set<string>()
   const configRefs = new Set<string>()
+  const rawSpecifiers = new Set<string>()
 
   const ext = path.extname(filePath).toLowerCase()
   const source = extractScriptBlock(content, ext)
-  if (!source.trim()) return { imports, configRefs }
+  if (!source.trim() || source.length > MAX_PARSE_FILE_SIZE) {
+    return { imports, configRefs, rawSpecifiers }
+  }
 
   // Fast pre-filter: skip expensive TS AST generation on files with no imports/requires/exports
   if (!/(?:import|require|export)\s*[({'"\w]|plugins|extends|presets|type\s+reference/i.test(source)) {
-    return { imports, configRefs }
+    return { imports, configRefs, rawSpecifiers }
   }
 
   let sourceFile: ts.SourceFile
   try {
     sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, false, getScriptKind(ext))
   } catch {
-    return { imports, configRefs }
+    return { imports, configRefs, rawSpecifiers }
   }
 
   const addImport = (raw: string | undefined) => {
     if (!raw) return
+    rawSpecifiers.add(raw)
     const pkg = extractPackageName(raw, isAlias)
     if (pkg) imports.add(pkg)
   }
@@ -626,7 +633,7 @@ export function parseSourceFile(
     addImport(ref.fileName)
   }
 
-  return { imports, configRefs }
+  return { imports, configRefs, rawSpecifiers }
 }
 
 /**
@@ -1104,6 +1111,50 @@ function getSuggestedVersion(
   }
 }
 
+export interface FileImportCacheEntry {
+  mtimeMs: number
+  size: number
+  imports: string[]
+  configRefs: string[]
+  rawSpecifiers: string[]
+}
+
+async function loadImportCache(rootDir: string): Promise<Map<string, FileImportCacheEntry>> {
+  const cachePath = path.join(rootDir, ".pkg-audit", "cache", "import-cache.json")
+  const map = new Map<string, FileImportCacheEntry>()
+  try {
+    if (fs.existsSync(cachePath)) {
+      const raw = await fs.promises.readFile(cachePath, "utf8")
+      const parsed = JSON.parse(raw) as Record<string, FileImportCacheEntry>
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v && typeof v === "object" && typeof v.mtimeMs === "number") {
+          map.set(k, v)
+        }
+      }
+    }
+  } catch {
+    // Ignore cache load errors
+  }
+  return map
+}
+
+async function saveImportCache(rootDir: string, map: Map<string, FileImportCacheEntry>): Promise<void> {
+  const cacheDir = path.join(rootDir, ".pkg-audit", "cache")
+  const cachePath = path.join(cacheDir, "import-cache.json")
+  try {
+    if (!fs.existsSync(cacheDir)) {
+      await fs.promises.mkdir(cacheDir, { recursive: true })
+    }
+    const obj: Record<string, FileImportCacheEntry> = {}
+    for (const [k, v] of map.entries()) {
+      obj[k] = v
+    }
+    await fs.promises.writeFile(cachePath, JSON.stringify(obj), "utf8")
+  } catch {
+    // Ignore cache write errors
+  }
+}
+
 /**
  * Scans all workspaces in the monorepo for Phantom (undeclared) and Unused (dead) dependencies.
  */
@@ -1135,8 +1186,14 @@ export async function scanWorkspaceDependencies(
   const rootWs = workspaces.find((w) => w.isRoot || w.relPath === ".")
   const rootDeps = rootWs ? rootWs.deps : {}
 
-  const WORKSPACE_CONCURRENCY = 24
+  const CPU_COUNT =
+    typeof os.availableParallelism === "function" ? os.availableParallelism() : os.cpus().length
+  const WORKSPACE_CONCURRENCY = Math.max(4, Math.min(32, CPU_COUNT * 2))
   const queue = [...workspaces]
+
+  const rawFileImports = new Map<string, Array<{ filePath: string; specifiers: string[] }>>()
+  const importCache = await loadImportCache(rootDir)
+  let cacheDirty = false
 
   const processWorkspace = async (ws: Workspace) => {
     const wsDir = ws.absPath ? path.dirname(ws.absPath) : path.resolve(rootDir, ws.relPath)
@@ -1152,6 +1209,7 @@ export async function scanWorkspaceDependencies(
     const importedInFiles = new Map<string, Set<string>>()
     const configReferences = new Set<string>()
     const fileExtensionsPresent = new Set<string>()
+    const wsRawImports: Array<{ filePath: string; specifiers: string[] }> = []
 
     let pkgJsonScripts: Record<string, string> | undefined
     try {
@@ -1175,41 +1233,81 @@ export async function scanWorkspaceDependencies(
           const ext = path.extname(filePath).toLowerCase()
           if (ext) fileExtensionsPresent.add(ext)
 
-          let content = ""
+          let stat: fs.Stats | undefined
           try {
-            content = await fs.promises.readFile(filePath, "utf8")
+            stat = await fs.promises.stat(filePath)
           } catch {
             return
           }
 
-          const basename = path.basename(filePath)
-          const isConfigFile = isConfigurationFile(basename)
+          const relKey = path.relative(rootDir, filePath).replace(/\\/g, "/")
+          const cached = importCache.get(relKey)
 
-          if (isConfigFile) {
-            // Config files only contribute tool/preset/plugin references
-            // (never treated as runtime module imports for phantom/unused
-            // purposes) — but JS/TS config files' real `import` statements
-            // ARE genuine tool usages, so those still count.
-            for (const ref of extractReferencesFromConfig(content, filePath, isAlias)) {
-              configReferences.add(ref)
+          let fileImports: string[] = []
+          let fileConfigRefs: string[] = []
+          let fileRawSpecifiers: string[] = []
+
+          if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+            fileImports = cached.imports
+            fileConfigRefs = cached.configRefs
+            fileRawSpecifiers = cached.rawSpecifiers
+          } else {
+            let content = ""
+            try {
+              content = await fs.promises.readFile(filePath, "utf8")
+            } catch {
+              return
             }
-            if (/\.(?:[mc]?[jt]sx?)$/i.test(basename)) {
-              for (const pkg of parseSourceFile(content, filePath, isAlias).imports) {
-                configReferences.add(pkg)
+
+            const basename = path.basename(filePath)
+            const isConfigFile = isConfigurationFile(basename)
+
+            if (isConfigFile) {
+              for (const ref of extractReferencesFromConfig(content, filePath, isAlias)) {
+                fileConfigRefs.push(ref)
               }
+              if (/\.(?:[mc]?[jt]sx?)$/i.test(basename)) {
+                for (const pkg of parseSourceFile(content, filePath, isAlias).imports) {
+                  fileConfigRefs.push(pkg)
+                }
+              }
+            } else {
+              const parsed = parseSourceFile(content, filePath, isAlias)
+              fileImports = Array.from(parsed.imports)
+              fileConfigRefs = Array.from(parsed.configRefs)
+              fileRawSpecifiers = Array.from(parsed.rawSpecifiers)
             }
-            return
+
+            importCache.set(relKey, {
+              mtimeMs: stat.mtimeMs,
+              size: stat.size,
+              imports: fileImports,
+              configRefs: fileConfigRefs,
+              rawSpecifiers: fileRawSpecifiers,
+            })
+            cacheDirty = true
           }
 
-          const fileImports = parseSourceFile(content, filePath, isAlias).imports
-          const relFilePath = path.relative(rootDir, filePath).replace(/\\/g, "/")
+          for (const ref of fileConfigRefs) configReferences.add(ref)
 
+          if (fileRawSpecifiers.length > 0) {
+            wsRawImports.push({
+              filePath,
+              specifiers: fileRawSpecifiers,
+            })
+          }
+
+          const relFilePath = relKey
           for (const pkg of fileImports) {
             if (!importedInFiles.has(pkg)) importedInFiles.set(pkg, new Set())
             importedInFiles.get(pkg)!.add(relFilePath)
           }
         })
       )
+    }
+
+    if (wsRawImports.length > 0) {
+      rawFileImports.set(ws.relPath, wsRawImports)
     }
 
     return {
@@ -1318,8 +1416,6 @@ export async function scanWorkspaceDependencies(
     }
   }
 
-  await Promise.all(workers)
-
   phantoms.sort((a, b) => a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name))
   unused.sort((a, b) => {
     if (a.type === "prod" && b.type !== "prod") return -1
@@ -1327,5 +1423,9 @@ export async function scanWorkspaceDependencies(
     return a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name)
   })
 
-  return { phantoms, unused, scannedFilesCount: totalFilesScanned }
+  if (cacheDirty) {
+    saveImportCache(rootDir, importCache).catch(() => {})
+  }
+
+  return { phantoms, unused, scannedFilesCount: totalFilesScanned, rawFileImports }
 }

@@ -689,4 +689,67 @@ plugins:
       expect(extractPackageName("torph/react", isAlias)).toBe("torph")
     })
   })
+
+  describe("Persistent Import Cache", () => {
+    it("persists file import extraction cache to .pkg-audit/cache/import-cache.json and reuses it", async () => {
+      const testDir = fs.mkdtempSync(path.join(os.tmpdir(), "pkg-audit-cache-test-"))
+      try {
+        const appDir = path.join(testDir, "apps", "cached-app")
+        fs.mkdirSync(appDir, { recursive: true })
+
+        const pkgJson = {
+          name: "@mono/cached-app",
+          dependencies: {
+            lodash: "^4.17.21",
+          },
+        }
+        fs.writeFileSync(path.join(appDir, "package.json"), JSON.stringify(pkgJson, null, 2))
+        fs.writeFileSync(
+          path.join(appDir, "index.ts"),
+          `import _ from "lodash";\nconsole.log(_.capitalize("hello"));`
+        )
+
+        const workspaces: Workspace[] = [
+          {
+            name: "@mono/cached-app",
+            relPath: "apps/cached-app",
+            absPath: path.join(appDir, "package.json"),
+            version: "1.0.0",
+            private: false,
+            isRoot: false,
+            packageManager: "pnpm",
+            enginesNode: null,
+            deps: { lodash: { version: "^4.17.21", type: "prod" } },
+            depCount: 1,
+            devCount: 0,
+          },
+        ]
+
+        // Cold scan
+        const res1 = await scanWorkspaceDependencies(testDir, workspaces)
+        expect(res1.unused).toHaveLength(0)
+        expect(res1.phantoms).toHaveLength(0)
+
+        // Wait 50ms for background cache write
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const cachePath = path.join(testDir, ".pkg-audit", "cache", "import-cache.json")
+        expect(fs.existsSync(cachePath)).toBe(true)
+
+        const cacheContent = JSON.parse(fs.readFileSync(cachePath, "utf8")) as Record<string, unknown>
+        expect(Object.keys(cacheContent).length).toBeGreaterThan(0)
+
+        // Warm scan
+        const res2 = await scanWorkspaceDependencies(testDir, workspaces)
+        expect(res2.unused).toHaveLength(0)
+        expect(res2.phantoms).toHaveLength(0)
+      } finally {
+        try {
+          fs.rmSync(testDir, { recursive: true, force: true })
+        } catch {
+          // Ignore
+        }
+      }
+    })
+  })
 })

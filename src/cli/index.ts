@@ -142,6 +142,10 @@ async function main(): Promise<void> {
   const result = await scan(dir, {
     ignoreDirs: merged.ignoreDirs,
     respectGitignore: merged.respectGitignore,
+    fast: merged.fast,
+    unused: merged.unused,
+    skipUnused: merged.skipUnused,
+    skipBoundaries: merged.skipBoundaries,
     outdated: merged.outdated,
     versions: merged.versions,
     changelog: merged.changelog,

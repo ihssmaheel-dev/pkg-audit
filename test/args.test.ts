@@ -153,11 +153,25 @@ describe("parseArgs", () => {
     expect(parseArgs(["context", "--stdout"]).contextStdout).toBe(true)
   })
 
+  it("parses fast and skip flags", () => {
+    expect(parseArgs(["--fast"]).fast).toBe(true)
+    expect(parseArgs(["fast"]).fast).toBe(true)
+    expect(parseArgs(["--skip-unused"]).skipUnused).toBe(true)
+    expect(parseArgs(["--no-unused"]).skipUnused).toBe(true)
+    expect(parseArgs(["--skip-boundaries"]).skipBoundaries).toBe(true)
+    expect(parseArgs(["--no-boundaries"]).skipBoundaries).toBe(true)
+    expect(parseArgs(["--skip-security"]).security).toBe(false)
+    expect(parseArgs(["--no-security"]).security).toBe(false)
+  })
+
   it("defaults are sane", () => {
     const opts = parseArgs([])
     expect(opts.target).toBeNull()
     expect(opts.top).toBe(10)
     expect(opts.respectGitignore).toBe(true)
+    expect(opts.fast).toBe(false)
+    expect(opts.skipUnused).toBe(false)
+    expect(opts.skipBoundaries).toBe(false)
     expect(opts.port).toBe(0)
     expect(opts.prComment).toBe(false)
     expect(opts.postPrComment).toBe(false)

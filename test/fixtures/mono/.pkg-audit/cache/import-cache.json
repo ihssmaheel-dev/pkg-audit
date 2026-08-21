@@ -1,0 +1,79 @@
+{
+  "apps/api/package.json": {
+    "mtimeMs": 1787029121902.8984,
+    "size": 194,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "apps/mobile/package.json": {
+    "mtimeMs": 1787113864143.6494,
+    "size": 148,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "apps/web/package.json": {
+    "mtimeMs": 1787029121922.8914,
+    "size": 196,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "named-dup/a/package.json": {
+    "mtimeMs": 1787029121950.8723,
+    "size": 47,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "named-dup/b/package.json": {
+    "mtimeMs": 1787029121958.8684,
+    "size": 47,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "packages/helpers/package.json": {
+    "mtimeMs": 1787029121976.857,
+    "size": 102,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "packages/ui-kit/package.json": {
+    "mtimeMs": 1787029121984.8525,
+    "size": 157,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "unnamed/package.json": {
+    "mtimeMs": 1787029121994.8462,
+    "size": 75,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "package.json": {
+    "mtimeMs": 1787029121963.864,
+    "size": 246,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "bad-json/package.json": {
+    "mtimeMs": 1787028163182.0244,
+    "size": 90,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  },
+  "ignored-dir/package.json": {
+    "mtimeMs": 1787029121939.8794,
+    "size": 52,
+    "imports": [],
+    "configRefs": [],
+    "rawSpecifiers": []
+  }
+}

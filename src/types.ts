@@ -143,6 +143,7 @@ export interface UnusedScanResult {
   phantoms: PhantomDependency[]
   unused: UnusedDependency[]
   scannedFilesCount: number
+  rawFileImports?: Map<string, Array<{ filePath: string; specifiers: string[] }>>
 }
 
 export interface CatalogEntry {

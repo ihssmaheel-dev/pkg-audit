@@ -92,7 +92,8 @@ export function checkBoundaryViolations(
   workspaces: Workspace[],
   rootDir: string,
   rules: BoundaryRule[] = DEFAULT_BOUNDARY_RULES,
-  onProgress?: (event: ProgressEvent) => void
+  onProgress?: (event: ProgressEvent) => void,
+  preloadedImports?: Map<string, Array<{ filePath: string; specifiers: string[] }>>
 ): BoundariesResult {
   const violations: BoundaryViolation[] = []
   if (workspaces.length === 0 || rules.length === 0) {
@@ -125,18 +126,34 @@ export function checkBoundaryViolations(
   }
 
   let totalFiles = 0
-  const wsFilesMap = new Map<Workspace, string[]>()
+  const wsDataMap = new Map<Workspace, Array<{ filePath: string; specifiers: string[] }>>()
 
   for (const item of wsDirs) {
     if (item.ws.isRoot) continue
-    const files = walkFiles(item.absDir)
-    wsFilesMap.set(item.ws, files)
-    totalFiles += files.length
+
+    if (preloadedImports && preloadedImports.has(item.ws.relPath)) {
+      const files = preloadedImports.get(item.ws.relPath)!
+      wsDataMap.set(item.ws, files)
+      totalFiles += files.length
+    } else if (!preloadedImports) {
+      const filePaths = walkFiles(item.absDir)
+      const list: Array<{ filePath: string; specifiers: string[] }> = []
+      for (const fp of filePaths) {
+        try {
+          const content = fs.readFileSync(fp, "utf8")
+          list.push({ filePath: fp, specifiers: Array.from(extractImportSpecifiers(content)) })
+        } catch {
+          // Ignore
+        }
+      }
+      wsDataMap.set(item.ws, list)
+      totalFiles += list.length
+    }
   }
 
   let filesDone = 0
 
-  for (const [ws, files] of wsFilesMap.entries()) {
+  for (const [ws, fileItems] of wsDataMap.entries()) {
     const wsRel = ws.relPath.replace(/\\/g, "/")
     const matchingRules: BoundaryRule[] = []
 
@@ -147,24 +164,16 @@ export function checkBoundaryViolations(
     }
 
     if (matchingRules.length === 0) {
-      filesDone += files.length
+      filesDone += fileItems.length
       continue
     }
 
-    for (const filePath of files) {
+    for (const item of fileItems) {
+      const { filePath, specifiers } = item
       filesDone++
       if (onProgress && totalFiles > 0 && filesDone % 20 === 0) {
         onProgress({ phase: "boundaries", done: filesDone, total: totalFiles })
       }
-
-      let content: string
-      try {
-        content = fs.readFileSync(filePath, "utf8")
-      } catch {
-        continue
-      }
-
-      const specifiers = extractImportSpecifiers(content)
 
       for (const spec of specifiers) {
         let targetWs: Workspace | undefined
