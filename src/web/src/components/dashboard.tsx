@@ -436,11 +436,19 @@ function DashCard({
 export function Dashboard({ data, onOutdated, onTabChange, loading }: DashboardProps) {
   const statuses = useMemo(() => buildStatuses(data), [data])
 
-  const aligned = useMemo(() => statuses.filter((d) => d.status === "aligned").length, [statuses])
-  const range = useMemo(() => statuses.filter((d) => d.status === "range").length, [statuses])
-  const major = useMemo(() => statuses.filter((d) => d.status === "major").length, [statuses])
-  const linked = useMemo(() => statuses.filter((d) => d.status === "linked").length, [statuses])
-  const total = aligned + range + major + linked
+  const { aligned, range, major, linked, total } = useMemo(() => {
+    let aligned = 0
+    let range = 0
+    let major = 0
+    let linked = 0
+    for (const d of statuses) {
+      if (d.status === "aligned") aligned++
+      else if (d.status === "range") range++
+      else if (d.status === "major") major++
+      else if (d.status === "linked") linked++
+    }
+    return { aligned, range, major, linked, total: aligned + range + major + linked }
+  }, [statuses])
 
   const typeCounts = useMemo(() => {
     let prod = 0

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks"
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { Shell } from "./components/shell"
 import { Dashboard } from "./components/dashboard"
 import { Matrix } from "./components/matrix"
@@ -77,8 +77,7 @@ export function App() {
   const [scanMessage, setScanMessage] = useState("Scanning monorepo dependencies…")
   const [scanTargetDir, setScanTargetDir] = useState<string | undefined>(undefined)
   const [isMainScan, setIsMainScan] = useState(!embedded)
-
-  const data: ScanResult | null = result ?? embedded ?? null
+  const data: ScanResult | null = useMemo(() => result ?? embedded ?? null, [result, embedded])
 
   const notify = useCallback((message: string, variant?: "success" | "error" | "info") => {
     setToast({ message, variant })

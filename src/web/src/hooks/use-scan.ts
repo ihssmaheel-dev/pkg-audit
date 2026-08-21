@@ -7,14 +7,21 @@ export interface ScanErrorState {
   code?: string
 }
 
+let cachedToken: string | null | undefined = undefined
+
 export function getToken(): string | null {
+  if (cachedToken !== undefined) return cachedToken
   const metaToken = document.querySelector('meta[name="pkg-audit-token"]')?.getAttribute("content")
-  if (metaToken) return metaToken
-  try {
-    return new URLSearchParams(window.location.search).get("token") ?? null
-  } catch {
-    return null
+  if (metaToken) {
+    cachedToken = metaToken
+    return metaToken
   }
+  try {
+    cachedToken = new URLSearchParams(window.location.search).get("token") ?? null
+  } catch {
+    cachedToken = null
+  }
+  return cachedToken
 }
 
 export function useScan() {

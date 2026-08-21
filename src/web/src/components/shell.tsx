@@ -172,7 +172,7 @@ export function Shell(props: ShellProps) {
   const [dirEditing, setDirEditing] = useState(false)
   const [dirValue, setDirValue] = useState(dir)
   const submitRef = useRef(false)
-  const rootWs = data?.workspaces.find((w) => w.isRoot)
+  const rootWs = useMemo(() => data?.workspaces.find((w) => w.isRoot), [data])
   const pm = rootWs?.packageManager ?? null
 
   const activeGroup = useMemo(() => findNavGroupForTab(tab), [tab])
@@ -182,15 +182,16 @@ export function Shell(props: ShellProps) {
     setDirEditing(false)
   }
 
-  // Calculate aggregated warning & issue counts for each top-level group
-  const groupStats = useMemo<Record<NavGroupId, { total: number; hasWarn: boolean }>>(() => {
+  // Calculate aggregated warning & issue counts for each top-level group and individual tabs
+  const { groupStats, subTabCounts } = useMemo(() => {
     const stats: Record<NavGroupId, { total: number; hasWarn: boolean }> = {
       overview: { total: 0, hasWarn: false },
       dependencies: { total: 0, hasWarn: false },
       risk: { total: 0, hasWarn: false },
       context: { total: 0, hasWarn: false },
     }
-    if (!data) return stats
+    const tabCounts = new Map<TabId, number>()
+    if (!data) return { groupStats: stats, subTabCounts: tabCounts }
 
     for (const group of NAV_GROUPS) {
       let count = 0
@@ -198,6 +199,7 @@ export function Shell(props: ShellProps) {
       for (const t of group.tabs) {
         if (t.count) {
           const n = t.count(data)
+          tabCounts.set(t.id, n)
           if (n > 0) {
             count += n
             if (t.warn) warn = true
@@ -206,7 +208,7 @@ export function Shell(props: ShellProps) {
       }
       stats[group.id] = { total: count, hasWarn: warn }
     }
-    return stats
+    return { groupStats: stats, subTabCounts: tabCounts }
   }, [data])
 
   return (
@@ -392,7 +394,7 @@ export function Shell(props: ShellProps) {
 
         {activeGroup.tabs.map((subTab) => {
           const isActive = tab === subTab.id
-          const count = data && subTab.count ? subTab.count(data) : undefined
+          const count = subTabCounts.get(subTab.id)
 
           return (
             <button
