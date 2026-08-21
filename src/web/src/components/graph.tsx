@@ -217,6 +217,8 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
     return { cycleNodeNames, cycleEdges }
   }, [selectedCycleIdx, graph.cycles, data.workspaces])
 
+  const rafId = useRef<number | null>(null)
+
   // Pan and Zoom handlers
   const handleMouseDown = (e: MouseEvent) => {
     if (e.button !== 0) return
@@ -226,10 +228,19 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isPanning) return
-    setPan({ x: e.clientX - startPan.x, y: e.clientY - startPan.y })
+    const nextX = e.clientX - startPan.x
+    const nextY = e.clientY - startPan.y
+    if (rafId.current) cancelAnimationFrame(rafId.current)
+    rafId.current = requestAnimationFrame(() => {
+      setPan({ x: nextX, y: nextY })
+    })
   }
 
   const handleMouseUp = () => {
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current)
+      rafId.current = null
+    }
     setIsPanning(false)
   }
 
@@ -660,7 +671,6 @@ export function Graph({ data, onWorkspaceClick, notify }: GraphProps) {
                     strokeDasharray={isCircular ? "5,3" : undefined}
                     markerEnd={markerEnd}
                     opacity={opacity}
-                    class="transition-opacity duration-200"
                   />
                 )
               })}

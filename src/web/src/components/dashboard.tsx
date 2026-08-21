@@ -116,7 +116,11 @@ function DonutChart({
 
   useEffect(() => {
     if (!canvasRef.current) return
-    chartRef.current?.destroy()
+    if (chartRef.current) {
+      chartRef.current.data.datasets[0]!.data = [aligned, range, major, linked]
+      chartRef.current.update("none")
+      return
+    }
     chartRef.current = new Chart(canvasRef.current, {
       type: "doughnut",
       data: {
@@ -150,6 +154,7 @@ function DonutChart({
     })
     return () => {
       chartRef.current?.destroy()
+      chartRef.current = null
     }
   }, [aligned, range, major, linked])
 
@@ -202,7 +207,11 @@ function TypeDoughnutChart({
 
   useEffect(() => {
     if (!canvasRef.current) return
-    chartRef.current?.destroy()
+    if (chartRef.current) {
+      chartRef.current.data.datasets[0]!.data = [prod, dev, peer, optional]
+      chartRef.current.update("none")
+      return
+    }
     chartRef.current = new Chart(canvasRef.current, {
       type: "doughnut",
       data: {
@@ -236,6 +245,7 @@ function TypeDoughnutChart({
     })
     return () => {
       chartRef.current?.destroy()
+      chartRef.current = null
     }
   }, [prod, dev, peer, optional])
 
@@ -282,7 +292,13 @@ function HBarChart({
 
   useEffect(() => {
     if (!canvasRef.current) return
-    chartRef.current?.destroy()
+    if (chartRef.current) {
+      chartRef.current.data.labels = rows.map((r) => r.label)
+      chartRef.current.data.datasets[0]!.data = rows.map((r) => r.value)
+      chartRef.current.data.datasets[0]!.backgroundColor = rows.map((r) => r.color ?? color)
+      chartRef.current.update("none")
+      return
+    }
     chartRef.current = new Chart(canvasRef.current, {
       type: "bar",
       data: {
@@ -334,6 +350,7 @@ function HBarChart({
     })
     return () => {
       chartRef.current?.destroy()
+      chartRef.current = null
     }
   }, [rows, color])
 
@@ -350,7 +367,13 @@ function VBarChart({ rows }: { rows: { label: string; value: number; color: stri
 
   useEffect(() => {
     if (!canvasRef.current) return
-    chartRef.current?.destroy()
+    if (chartRef.current) {
+      chartRef.current.data.labels = rows.map((r) => r.label)
+      chartRef.current.data.datasets[0]!.data = rows.map((r) => r.value)
+      chartRef.current.data.datasets[0]!.backgroundColor = rows.map((r) => r.color)
+      chartRef.current.update("none")
+      return
+    }
     chartRef.current = new Chart(canvasRef.current, {
       type: "bar",
       data: {
@@ -394,6 +417,7 @@ function VBarChart({ rows }: { rows: { label: string; value: number; color: stri
     })
     return () => {
       chartRef.current?.destroy()
+      chartRef.current = null
     }
   }, [rows])
 

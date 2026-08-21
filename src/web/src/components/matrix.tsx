@@ -10,6 +10,7 @@ interface MatrixRow {
   wsCount: number
   types: Set<string>
   versions: Array<[string, Array<{ workspace: string; type: string }>]>
+  wsVersionMap: Map<string, string>
 }
 
 function buildRows(depMap: DepMap): MatrixRow[] {
@@ -29,13 +30,22 @@ function buildRows(depMap: DepMap): MatrixRow[] {
     }
     const wsSet = new Set<string>()
     const types = new Set<string>()
-    for (const [, occurrences] of versions) {
+    const wsVersionMap = new Map<string, string>()
+    for (const [version, occurrences] of versions) {
       for (const occ of occurrences) {
         wsSet.add(occ.workspace)
         types.add(occ.type)
+        wsVersionMap.set(occ.workspace, version)
       }
     }
-    rows.push({ name, cellClass, wsCount: wsSet.size, types, versions: [...versions.entries()] })
+    rows.push({
+      name,
+      cellClass,
+      wsCount: wsSet.size,
+      types,
+      versions: [...versions.entries()],
+      wsVersionMap,
+    })
   }
   return rows
 }
@@ -250,8 +260,8 @@ export function Matrix({ data, onCellClick, onWorkspaceClick, notify, onCatalogM
                   </div>
                 </th>
                 {wsNames.map((ws) => {
-                  const hit = row.versions.filter(([, occs]) => occs.some((o) => o.workspace === ws))
-                  if (!hit.length) {
+                  const version = row.wsVersionMap.get(ws)
+                  if (!version) {
                     return (
                       <td
                         key={ws}
@@ -261,7 +271,6 @@ export function Matrix({ data, onCellClick, onWorkspaceClick, notify, onCatalogM
                       </td>
                     )
                   }
-                  const version = hit[0][0]
                   const isLinked =
                     version.startsWith("workspace:") ||
                     version.startsWith("catalog:") ||
