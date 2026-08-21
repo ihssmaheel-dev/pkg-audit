@@ -130,10 +130,10 @@ function findPackageJsonFiles(
   return results
 }
 
-function loadWorkspace(filePath: string, rootDir: string, stats: ScanStats): Workspace | null {
+async function loadWorkspace(filePath: string, rootDir: string, stats: ScanStats): Promise<Workspace | null> {
   let raw: string
   try {
-    raw = fs.readFileSync(filePath, "utf8")
+    raw = await fs.promises.readFile(filePath, "utf8")
   } catch (err) {
     stats.errors.push({
       path: filePath,
@@ -198,8 +198,8 @@ export async function scan(dir: string, opts: ScanOptions = {}): Promise<ScanRes
 
   const stats: ScanStats = { errors: [], skippedGitignored: 0 }
   const files = findPackageJsonFiles(rootDir, scanOpts, stats)
-  const workspaces = files
-    .map((f) => loadWorkspace(f, rootDir, stats))
+  const loadedWorkspaces = await Promise.all(files.map((f) => loadWorkspace(f, rootDir, stats)))
+  const workspaces = loadedWorkspaces
     .filter((w): w is Workspace => w !== null)
     .sort((a, b) => (a.isRoot === b.isRoot ? a.relPath.localeCompare(b.relPath) : a.isRoot ? -1 : 1))
 

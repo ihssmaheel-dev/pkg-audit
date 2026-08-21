@@ -13,7 +13,11 @@ function cleanSemver(v: string): string {
   return v.replace(/^[\^~>=<\s]+/, "").trim()
 }
 
+const dirSizeCache = new Map<string, number>()
+const pnpmEntriesCache = new Map<string, string[]>()
+
 function measureDirSize(dirPath: string): number {
+  if (dirSizeCache.has(dirPath)) return dirSizeCache.get(dirPath)!
   let total = 0
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true })
@@ -33,6 +37,7 @@ function measureDirSize(dirPath: string): number {
   } catch {
     // ignore
   }
+  dirSizeCache.set(dirPath, total)
   return total
 }
 
@@ -43,7 +48,14 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
+const packageEstimatedSizeCache = new Map<string, number>()
+
 export function estimatePackageSize(rootDir: string, pkgName: string): number {
+  const cacheKey = `${rootDir}::${pkgName}`
+  if (packageEstimatedSizeCache.has(cacheKey)) {
+    return packageEstimatedSizeCache.get(cacheKey)!
+  }
+
   const candidates = [
     path.join(rootDir, "node_modules", pkgName),
     path.join(rootDir, "node_modules", ".pnpm"),
@@ -53,25 +65,37 @@ export function estimatePackageSize(rootDir: string, pkgName: string): number {
     if (fs.existsSync(c)) {
       if (c.endsWith(".pnpm")) {
         try {
-          const entries = fs.readdirSync(c)
+          let entries = pnpmEntriesCache.get(c)
+          if (!entries) {
+            entries = fs.readdirSync(c)
+            pnpmEntriesCache.set(c, entries)
+          }
           const cleanName = pkgName.replace("/", "+")
           const matched = entries.find((e) => e.startsWith(cleanName))
           if (matched) {
             const size = measureDirSize(path.join(c, matched, "node_modules", pkgName))
-            if (size > 0) return size
+            if (size > 0) {
+              packageEstimatedSizeCache.set(cacheKey, size)
+              return size
+            }
           }
         } catch {
           // ignore
         }
       } else {
         const size = measureDirSize(c)
-        if (size > 0) return size
+        if (size > 0) {
+          packageEstimatedSizeCache.set(cacheKey, size)
+          return size
+        }
       }
     }
   }
 
   // Fallback estimated baseline: ~120KB per typical JS/TS package
-  return 120 * 1024
+  const fallback = 120 * 1024
+  packageEstimatedSizeCache.set(cacheKey, fallback)
+  return fallback
 }
 
 /**

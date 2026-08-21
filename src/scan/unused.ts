@@ -353,8 +353,14 @@ export function extractPackageName(specifier: string, isAlias?: (spec: string) =
 
 function extractScriptBlock(content: string, ext: string): string {
   if (!SCRIPT_BLOCK_EXTENSIONS.has(ext)) return content
-  const match = content.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i)
-  return match?.[1] ?? ""
+  const lower = content.toLowerCase()
+  const scriptStart = lower.indexOf("<script")
+  if (scriptStart === -1) return ""
+  const tagEnd = lower.indexOf(">", scriptStart)
+  if (tagEnd === -1) return ""
+  const scriptEnd = lower.indexOf("</script>", tagEnd)
+  if (scriptEnd === -1) return ""
+  return content.slice(tagEnd + 1, scriptEnd)
 }
 
 function getScriptKind(ext: string): ts.ScriptKind {
@@ -748,6 +754,7 @@ export async function collectSourceFiles(
     return results
   }
 
+  const subDirs: string[] = []
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
     let isDir = entry.isDirectory()
@@ -767,13 +774,17 @@ export async function collectSourceFiles(
       if (IGNORED_DIR_NAMES.has(entry.name) || entry.name.startsWith(".")) continue
       const normalizedSub = path.resolve(fullPath).toLowerCase()
       if (childWorkspaceDirs.has(normalizedSub)) continue
-      await collectSourceFiles(fullPath, childWorkspaceDirs, visitedDirs, results)
+      subDirs.push(fullPath)
     } else if (isFile) {
       const ext = path.extname(entry.name).toLowerCase()
       if (SOURCE_EXTENSIONS.has(ext) || isConfigurationFile(entry.name)) {
         results.push(fullPath)
       }
     }
+  }
+
+  if (subDirs.length > 0) {
+    await Promise.all(subDirs.map((sub) => collectSourceFiles(sub, childWorkspaceDirs, visitedDirs, results)))
   }
 
   return results
@@ -789,6 +800,8 @@ export function isConnectedEcosystemPackage(
   sourceFileExtensions: Set<string>
 ): boolean {
   const lowerDep = depName.toLowerCase()
+
+  if (activePackages.has(depName) || activePackages.has(lowerDep)) return true
 
   if (lowerDep.startsWith("@")) {
     const scope = lowerDep.split("/")[0]!
