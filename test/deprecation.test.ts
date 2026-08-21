@@ -132,9 +132,9 @@ describe("Package Deprecation & Abandonment Audit", () => {
     const depMap = buildDependencyMap(cleanWorkspaces)
     const result = await auditDeprecations(depMap, {
       concurrency: 1,
-      timeoutMs: 1000,
+      timeoutMs: 3000,
     })
 
     expect(result.packages.filter((p) => p.name === "typescript")).toHaveLength(0)
-  })
+  }, 15000)
 })

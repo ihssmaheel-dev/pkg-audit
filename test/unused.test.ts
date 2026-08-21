@@ -200,15 +200,20 @@ describe("unused & phantom dependency scanner", () => {
   })
 
   describe("extractReferencesFromConfig and isConfigurationFile", () => {
-    it("identifies config files generically", () => {
+    it("identifies config files generically and rejects non-JS files", () => {
       expect(isConfigurationFile("package.json")).toBe(true)
       expect(isConfigurationFile("tsconfig.build.json")).toBe(true)
       expect(isConfigurationFile("tailwind.config.ts")).toBe(true)
       expect(isConfigurationFile("vite.config.mjs")).toBe(true)
       expect(isConfigurationFile(".eslintrc.cjs")).toBe(true)
       expect(isConfigurationFile(".prettierrc")).toBe(true)
+      expect(isConfigurationFile(".oxlintrc.json")).toBe(true)
       expect(isConfigurationFile("turbo.json")).toBe(true)
 
+      // Must never treat non-JS language files (like Go/Python/Rust) or normal source files as config files
+      expect(isConfigurationFile("config.go")).toBe(false)
+      expect(isConfigurationFile("config.py")).toBe(false)
+      expect(isConfigurationFile("config.rs")).toBe(false)
       expect(isConfigurationFile("app.tsx")).toBe(false)
       expect(isConfigurationFile("index.ts")).toBe(false)
     })
@@ -480,6 +485,95 @@ describe("unused & phantom dependency scanner", () => {
         { workspace: "apps/web", pkg: "zod", type: "prod" },
       ])
       expect(removeRes.ok).toBe(true)
+    })
+
+    it("does not flag root-hoisted test dependencies in test files or rules in .oxlintrc.json", async () => {
+      const rootDir = tmpDir
+      const appDir = path.join(rootDir, "frontend")
+      fs.mkdirSync(appDir, { recursive: true })
+      fs.mkdirSync(path.join(appDir, "src", "test"), { recursive: true })
+
+      // .oxlintrc.json with restricted import rules
+      fs.writeFileSync(
+        path.join(rootDir, ".oxlintrc.json"),
+        JSON.stringify({
+          rules: {
+            "no-restricted-imports": [
+              "error",
+              { paths: [{ name: "@posthog/brand/hoggies", message: "Do not import" }] },
+            ],
+          },
+        })
+      )
+
+      // Test file importing @playwright/test
+      fs.writeFileSync(
+        path.join(appDir, "src", "test", "quarantine.test.ts"),
+        `
+          import { test, expect } from '@playwright/test'
+          test('smoke', () => { expect(1).toBe(1) })
+        `
+      )
+
+      // Non-JS file (Go file) with import
+      fs.mkdirSync(path.join(rootDir, "livestream", "tui", "config"), { recursive: true })
+      fs.writeFileSync(
+        path.join(rootDir, "livestream", "tui", "config", "config.go"),
+        `
+          package config
+          import (
+            "encoding/json"
+            "os"
+          )
+        `
+      )
+
+      const workspaces: Workspace[] = [
+        {
+          name: "root",
+          version: "1.0.0",
+          relPath: ".",
+          absPath: path.join(rootDir, "package.json"),
+          isRoot: true,
+          private: true,
+          packageManager: null,
+          enginesNode: null,
+          depCount: 0,
+          devCount: 1,
+          deps: {
+            "@playwright/test": { version: "^1.50.0", type: "dev" },
+          },
+        },
+        {
+          name: "frontend",
+          version: "1.0.0",
+          relPath: "frontend",
+          absPath: path.join(appDir, "package.json"),
+          isRoot: false,
+          private: true,
+          packageManager: null,
+          enginesNode: null,
+          depCount: 1,
+          devCount: 0,
+          deps: {
+            react: { version: "^19.0.0", type: "prod" },
+          },
+        },
+      ]
+
+      const scanRes = await scanWorkspaceDependencies(rootDir, workspaces)
+
+      // 1. @posthog/brand from .oxlintrc.json must NOT be a phantom dependency
+      const posthogPhantom = scanRes.phantoms.find((p) => p.name.includes("posthog"))
+      expect(posthogPhantom).toBeUndefined()
+
+      // 2. encoding from config.go must NOT be a phantom dependency
+      const encodingPhantom = scanRes.phantoms.find((p) => p.name === "encoding")
+      expect(encodingPhantom).toBeUndefined()
+
+      // 3. @playwright/test in frontend's test file is declared in root devDeps -> NOT a phantom!
+      const playwrightPhantom = scanRes.phantoms.find((p) => p.name === "@playwright/test")
+      expect(playwrightPhantom).toBeUndefined()
     })
   })
 

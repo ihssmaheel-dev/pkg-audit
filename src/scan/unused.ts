@@ -34,7 +34,6 @@ const SOURCE_EXTENSIONS = new Set([
   ".vue",
   ".svelte",
   ".astro",
-  ".json",
 ])
 
 const NODE_BUILTINS = new Set([
@@ -120,7 +119,6 @@ export function stripComments(code: string): string {
   let lastNonWsChar = ""
   const templateInterpStack: number[] = []
 
-  // Characters after which a '/' introduces a regular expression literal rather than division
   const REGEX_PRECEDING_CHARS = new Set([
     "(",
     ",",
@@ -350,17 +348,63 @@ export function stripComments(code: string): string {
 }
 
 /**
- * Determines whether a file is a project configuration file based on specific naming patterns.
+ * Determines whether a file is a JS/TS project configuration file.
+ * Strictly limited to JS, TS, JSON, and YAML configuration formats (never non-JS languages like Go or Rust).
  */
 export function isConfigurationFile(filename: string): boolean {
   const lower = filename.toLowerCase()
-  if (lower === "package.json" || lower === "turbo.json" || lower === "nx.json" || lower === "biome.json") {
+  if (
+    lower === "package.json" ||
+    lower === "turbo.json" ||
+    lower === "nx.json" ||
+    lower === "biome.json" ||
+    lower === "lerna.json" ||
+    lower === "pnpm-workspace.yaml"
+  ) {
     return true
   }
   if (lower.startsWith("tsconfig") && lower.endsWith(".json")) return true
   if (lower.startsWith("jsconfig") && lower.endsWith(".json")) return true
-  if (/(?:^|\.)config\.[a-z0-9]+$/i.test(lower)) return true
-  if (lower.startsWith(".") && (lower.endsWith("rc") || lower.includes("rc."))) return true
+  if (
+    lower.startsWith(".oxlintrc") ||
+    lower.startsWith(".eslintrc") ||
+    lower.startsWith(".prettierrc") ||
+    lower.startsWith(".stylelintrc") ||
+    lower.startsWith(".swcrc") ||
+    lower.startsWith(".babelrc")
+  ) {
+    return true
+  }
+  // Configuration files must end in JS/TS/JSON/YAML extensions
+  if (/(?:^|\.)(?:config|rc)\.(?:[mc]?[jt]sx?|json|ya?ml|cjs|mjs)$/i.test(lower)) return true
+  return false
+}
+
+/**
+ * Determines if a file is a test, fixture, mock, or documentation file.
+ */
+export function isTestOrDocumentationFile(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/").toLowerCase()
+  if (
+    normalized.includes("/__tests__/") ||
+    normalized.includes("/__mocks__/") ||
+    normalized.includes("/test/") ||
+    normalized.includes("/tests/") ||
+    normalized.includes("/e2e/") ||
+    normalized.includes("/playwright/") ||
+    normalized.includes("/cypress/") ||
+    /\.(?:test|spec|cy|e2e)\.[mc]?[jt]sx?$/i.test(normalized)
+  ) {
+    return true
+  }
+  if (
+    normalized.includes("/docs/") ||
+    normalized.includes("/documentation/") ||
+    normalized.includes("/stories/") ||
+    /\.(?:stories|story)\.[mc]?[jt]sx?$/i.test(normalized)
+  ) {
+    return true
+  }
   return false
 }
 
@@ -845,6 +889,10 @@ export async function scanWorkspaceDependencies(
     }
   }
 
+  // Index root workspace dependencies for monorepo test tool hoisting checks
+  const rootWs = workspaces.find((w) => w.isRoot || w.relPath === ".")
+  const rootDeps = rootWs ? rootWs.deps : {}
+
   // Process workspaces concurrently using a worker pool for high performance on large monorepos
   const WORKSPACE_CONCURRENCY = 24
   const queue = [...workspaces]
@@ -905,10 +953,13 @@ export async function scanWorkspaceDependencies(
           const isConfigFile = isConfigurationFile(basename)
 
           if (isConfigFile) {
+            // Configuration files ONLY contribute tool/preset/plugin references to avoid marking tools as unused.
+            // They MUST NEVER be treated as runtime module imports!
             const configRefs = extractReferencesFromConfig(content, isAlias)
             for (const ref of configRefs) {
               configReferences.add(ref)
             }
+            return
           }
 
           const fileImports = extractImportsFromContent(content, isAlias)
@@ -936,6 +987,13 @@ export async function scanWorkspaceDependencies(
 
       // Valid if self-reference (workspace imports its own package name)
       if (ws.name && ws.name === importedPkg) continue
+
+      // If all files importing this package are test / fixture / documentation files,
+      // and it's declared in root package.json, it's a hoisted dev/test tool (e.g. @playwright/test, vitest)
+      const isOnlyInTestOrDocs = [...fileSet].every((f) => isTestOrDocumentationFile(f))
+      if (isOnlyInTestOrDocs && rootDeps[importedPkg]) {
+        continue
+      }
 
       const isInternalMonorepoPkg = monorepoPackageNames.has(importedPkg)
       const { suggestedVersion, hoistedFrom } = getSuggestedVersion(
