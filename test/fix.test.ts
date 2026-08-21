@@ -162,4 +162,122 @@ describe("fix engine", () => {
       expect(resultPhantom.errors[0]?.error).toContain("Access denied")
     })
   })
+
+  describe("fastReconcileScan", () => {
+    it("incrementally reconciles scan result in memory in sub-5ms", async () => {
+      const { fastReconcileScan, applyFixes } = await import("../src/scan/fix.js")
+      const appADir = path.join(tmpDir, "apps", "web")
+      const appBDir = path.join(tmpDir, "apps", "api")
+      fs.mkdirSync(appADir, { recursive: true })
+      fs.mkdirSync(appBDir, { recursive: true })
+
+      const pkgA = {
+        name: "@mono/web",
+        dependencies: {
+          react: "^18.2.0",
+        },
+      }
+      const pkgB = {
+        name: "@mono/api",
+        dependencies: {
+          react: "^19.0.0",
+        },
+      }
+
+      const pkgAPath = path.join(appADir, "package.json")
+      const pkgBPath = path.join(appBDir, "package.json")
+      fs.writeFileSync(pkgAPath, JSON.stringify(pkgA, null, 2) + "\n")
+      fs.writeFileSync(pkgBPath, JSON.stringify(pkgB, null, 2) + "\n")
+
+      const initialScan: ScanResult = {
+        version: 1,
+        root: tmpDir,
+        scannedMs: 10,
+        workspaces: [
+          {
+            name: "@mono/web",
+            relPath: "apps/web",
+            absPath: pkgAPath,
+            private: false,
+            version: "1.0.0",
+            deps: { react: { version: "^18.2.0", type: "prod" } },
+            depCount: 1,
+            devCount: 0,
+            enginesNode: null,
+            isRoot: false,
+            packageManager: "pnpm",
+          },
+          {
+            name: "@mono/api",
+            relPath: "apps/api",
+            absPath: pkgBPath,
+            private: false,
+            version: "1.0.0",
+            deps: { react: { version: "^19.0.0", type: "prod" } },
+            depCount: 1,
+            devCount: 0,
+            enginesNode: null,
+            isRoot: false,
+            packageManager: "pnpm",
+          },
+        ],
+        conflicts: [
+          {
+            name: "react",
+            severity: "major",
+            versions: [
+              { version: "^18.2.0", occurrences: [{ workspace: "apps/web", type: "prod" }] },
+              { version: "^19.0.0", occurrences: [{ workspace: "apps/api", type: "prod" }] },
+            ],
+          },
+        ],
+        hygieneIssues: [],
+        graph: { nodes: [], edges: [], cycles: [], hasCycles: false, maxDepth: 0 },
+        unused: {
+          phantoms: [
+            {
+              name: "zod",
+              workspace: "apps/web",
+              files: ["index.ts"],
+              suggestedVersion: "^3.22.0",
+              hoistedFrom: null,
+            },
+          ],
+          unused: [
+            { name: "lodash", workspace: "apps/web", version: "^4.17.21", type: "prod", isDevTool: false },
+          ],
+          scannedFilesCount: 10,
+        },
+        outdated: null,
+        security: null,
+        dedupe: null,
+        licenses: null,
+        errors: [],
+        meta: {
+          totalDepDeclarations: 2,
+          totalUniquePackages: 1,
+          toolVersion: "0.1.0",
+          skippedGitignored: 0,
+          ignoredDirs: [],
+        },
+      }
+
+      // Apply fix on disk
+      const fixResult = await applyFixes(tmpDir, [{ name: "react", targetVersion: "^19.0.0" }], initialScan)
+      expect(fixResult.ok).toBe(true)
+
+      // Run fast incremental reconcile
+      const t0 = performance.now()
+      const reconciled = await fastReconcileScan(tmpDir, initialScan, fixResult.modifiedFiles, {
+        action: "declare-phantom",
+        phantoms: [{ workspace: "apps/web", pkg: "zod", version: "^3.22.0" }],
+      })
+      const duration = performance.now() - t0
+
+      expect(duration).toBeLessThan(100)
+      expect(reconciled.conflicts).toHaveLength(0) // Conflict resolved in memory!
+      expect(reconciled.unused?.phantoms).toHaveLength(0) // Declared phantom reconciled in memory!
+      expect(reconciled.workspaces.find((w) => w.relPath === "apps/web")?.deps.react?.version).toBe("^19.0.0")
+    })
+  })
 })

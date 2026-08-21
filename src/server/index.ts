@@ -371,7 +371,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
         }
         const validatedDir = validation.path
 
-        const { applyFixes, removeUnusedDependencies, declarePhantomDependencies } =
+        const { applyFixes, removeUnusedDependencies, declarePhantomDependencies, fastReconcileScan } =
           await import("../scan/fix.js")
 
         let fixResult: {
@@ -391,7 +391,10 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
         const action = typeof rawBody.action === "string" ? rawBody.action : "align"
 
         // Fast authoritative scan data for workspace allowlist validation
-        const currentScan = await scan(validatedDir, { offline: true, security: action === "security-fix" })
+        const currentScan = await scan(validatedDir, {
+          offline: true,
+          security: action === "security-fix",
+        })
 
         if (action === "remove-unused") {
           if (!Array.isArray(rawBody.unused) || rawBody.unused.length === 0) {
@@ -406,6 +409,23 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
               typeof (u as { pkg?: unknown }).pkg === "string"
           )
           fixResult = await removeUnusedDependencies(validatedDir, items, currentScan)
+          const updatedScan = await fastReconcileScan(validatedDir, currentScan, fixResult.modifiedFiles, {
+            action,
+            unused: items,
+          })
+          json(
+            res,
+            {
+              ok: fixResult.ok,
+              changes: fixResult.changes,
+              modifiedFiles: fixResult.modifiedFiles,
+              errors: fixResult.errors,
+              result: updatedScan,
+            },
+            200,
+            allowedOrigin
+          )
+          return
         } else if (action === "declare-phantom") {
           if (!Array.isArray(rawBody.phantoms) || rawBody.phantoms.length === 0) {
             json(res, { error: "No phantom dependencies provided" }, 400, allowedOrigin)
@@ -420,11 +440,30 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
               typeof (p as { version?: unknown }).version === "string"
           )
           fixResult = await declarePhantomDependencies(validatedDir, items, currentScan)
+          const updatedScan = await fastReconcileScan(validatedDir, currentScan, fixResult.modifiedFiles, {
+            action,
+            phantoms: items,
+          })
+          json(
+            res,
+            {
+              ok: fixResult.ok,
+              changes: fixResult.changes,
+              modifiedFiles: fixResult.modifiedFiles,
+              errors: fixResult.errors,
+              result: updatedScan,
+            },
+            200,
+            allowedOrigin
+          )
+          return
         } else if (action === "security-fix") {
           const { applySecurityFixes } = await import("../scan/security.js")
           const vulns = currentScan.security?.vulnerabilities ?? []
           fixResult = await applySecurityFixes(validatedDir, vulns, currentScan.workspaces)
-          const updatedScan = await scan(validatedDir, { offline: true, security: true })
+          const updatedScan = await fastReconcileScan(validatedDir, currentScan, fixResult.modifiedFiles, {
+            action,
+          })
           json(
             res,
             {
@@ -445,7 +484,9 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
             allPackages: Boolean(rawBody.catalogAll),
           })
           const catalogRes = await applyCatalogPlan(validatedDir, plan, currentScan)
-          const updatedScan = await scan(validatedDir, { offline: true })
+          const updatedScan = await fastReconcileScan(validatedDir, currentScan, catalogRes.modifiedFiles, {
+            action,
+          })
           json(
             res,
             {
@@ -483,7 +524,9 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
               ? (rawBody.overrides as Record<string, string>)
               : generateOverridesDict(dedupeResult.duplicates, strategy)
           fixResult = applyDedupeOverrides(validatedDir, overrides, dedupeResult.packageManager)
-          const updatedScan = await scan(validatedDir, { offline: true })
+          const updatedScan = await fastReconcileScan(validatedDir, currentScan, fixResult.modifiedFiles, {
+            action,
+          })
           json(
             res,
             {
@@ -510,22 +553,24 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
               typeof (f as { targetVersion?: unknown }).targetVersion === "string"
           )
           fixResult = await applyFixes(validatedDir, fixes, currentScan)
+          const updatedScan = await fastReconcileScan(validatedDir, currentScan, fixResult.modifiedFiles, {
+            action,
+            fixes,
+          })
+          json(
+            res,
+            {
+              ok: fixResult.ok,
+              changes: fixResult.changes,
+              modifiedFiles: fixResult.modifiedFiles,
+              errors: fixResult.errors,
+              result: updatedScan,
+            },
+            200,
+            allowedOrigin
+          )
+          return
         }
-
-        const updatedScan = await scan(validatedDir, { offline: true })
-        json(
-          res,
-          {
-            ok: fixResult.ok,
-            changes: fixResult.changes,
-            modifiedFiles: fixResult.modifiedFiles,
-            errors: fixResult.errors,
-            result: updatedScan,
-          },
-          200,
-          allowedOrigin
-        )
-        return
       }
 
       if (url.pathname === "/api/export.html" && req.method === "GET") {
