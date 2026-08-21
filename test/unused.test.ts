@@ -677,4 +677,16 @@ plugins:
       expect(refs.has("@ianvs/prettier-plugin-sort-imports")).toBe(true)
     })
   })
+
+  describe("BaseUrl and local directory module imports", () => {
+    it("recognizes src/* and local folder imports as internal paths rather than phantoms", () => {
+      const isAlias = loadPathAliasMatcher(process.cwd(), process.cwd())
+      expect(extractPackageName("src/queries/schema/schema-general", isAlias)).toBeNull()
+      expect(extractPackageName("lib/components/ActivityLog/SentenceList", isAlias)).toBeNull()
+      expect(extractPackageName("scenes/urls", isAlias)).toBeNull()
+      expect(extractPackageName("types/common", isAlias)).toBeNull()
+      expect(extractPackageName("react", isAlias)).toBe("react")
+      expect(extractPackageName("torph/react", isAlias)).toBe("torph")
+    })
+  })
 })

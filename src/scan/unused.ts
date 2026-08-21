@@ -245,9 +245,7 @@ const TSCONFIG_ALIAS_CACHE = new Map<string, string[]>()
 
 /**
  * Parses a JSON/JSONC config file (tsconfig.json-style: comments and
- * trailing commas allowed) using TypeScript's own tolerant JSON parser
- * instead of a hand-rolled comment stripper. This is the exact same
- * function `tsc` uses internally to read tsconfig.json.
+ * trailing commas allowed) using TypeScript's own tolerant JSON parser.
  */
 function parseJsoncFile(filePath: string): unknown {
   if (!fs.existsSync(filePath)) return undefined
@@ -262,23 +260,84 @@ function parseJsoncFile(filePath: string): unknown {
   return config
 }
 
+const COMMON_SOURCE_DIRS = new Set([
+  "src",
+  "lib",
+  "scenes",
+  "components",
+  "queries",
+  "utils",
+  "types",
+  "pages",
+  "app",
+  "apps",
+  "packages",
+  "common",
+  "hooks",
+  "helpers",
+  "services",
+  "modules",
+  "core",
+  "shared",
+  "config",
+  "assets",
+  "models",
+  "routes",
+  "stores",
+  "styles",
+  "views",
+  "products",
+])
+
 /**
- * Loads compilerOptions.paths from tsconfig.json / jsconfig.json to dynamically match custom path aliases.
+ * Loads compilerOptions.paths, baseUrl, and extends inheritance chain
+ * from tsconfig.json / jsconfig.json to dynamically match custom path aliases
+ * and local baseUrl module imports (e.g. `src/queries/...`, `lib/components/...`).
  */
 export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier: string) => boolean {
-  const aliasPrefixes: string[] = []
+  const aliasPrefixes = new Set<string>()
 
-  const checkFile = (filePath: string) => {
-    const cached = TSCONFIG_ALIAS_CACHE.get(filePath)
+  const checkFile = (filePath: string, visited = new Set<string>()) => {
+    const normalized = path.resolve(filePath).toLowerCase()
+    if (visited.has(normalized)) return
+    visited.add(normalized)
+
+    const cached = TSCONFIG_ALIAS_CACHE.get(normalized)
     if (cached !== undefined) {
-      aliasPrefixes.push(...cached)
+      for (const p of cached) aliasPrefixes.add(p)
       return
     }
 
     const prefixes: string[] = []
     const parsed = parseJsoncFile(filePath) as
-      { compilerOptions?: { paths?: Record<string, string[]> } } | undefined
-    const paths = parsed?.compilerOptions?.paths
+      | {
+          extends?: string | string[]
+          compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> }
+        }
+      | undefined
+
+    if (!parsed) {
+      TSCONFIG_ALIAS_CACHE.set(normalized, [])
+      return
+    }
+
+    // 1. Follow `extends` chain
+    if (parsed.extends) {
+      const extendsList = Array.isArray(parsed.extends) ? parsed.extends : [parsed.extends]
+      const dir = path.dirname(filePath)
+      for (const extPath of extendsList) {
+        let resolved = path.resolve(dir, extPath)
+        if (!fs.existsSync(resolved) && !resolved.endsWith(".json")) {
+          resolved = `${resolved}.json`
+        }
+        if (fs.existsSync(resolved)) {
+          checkFile(resolved, visited)
+        }
+      }
+    }
+
+    // 2. Extract compilerOptions.paths
+    const paths = parsed.compilerOptions?.paths
     if (paths && typeof paths === "object") {
       for (const aliasKey of Object.keys(paths)) {
         const prefix = aliasKey.replace(/\*.*$/, "")
@@ -286,8 +345,25 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
       }
     }
 
-    TSCONFIG_ALIAS_CACHE.set(filePath, prefixes)
-    aliasPrefixes.push(...prefixes)
+    // 3. Extract compilerOptions.baseUrl folder structure
+    if (parsed.compilerOptions?.baseUrl) {
+      const baseDir = path.resolve(path.dirname(filePath), parsed.compilerOptions.baseUrl)
+      try {
+        if (fs.existsSync(baseDir)) {
+          const entries = fs.readdirSync(baseDir, { withFileTypes: true })
+          for (const e of entries) {
+            if (e.isDirectory() && !IGNORED_DIR_NAMES.has(e.name) && !e.name.startsWith(".")) {
+              prefixes.push(`${e.name}/`)
+            }
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    TSCONFIG_ALIAS_CACHE.set(normalized, prefixes)
+    for (const p of prefixes) aliasPrefixes.add(p)
   }
 
   checkFile(path.join(wsDir, "tsconfig.json"))
@@ -296,6 +372,32 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
     checkFile(path.join(rootDir, "tsconfig.json"))
     checkFile(path.join(rootDir, "jsconfig.json"))
   }
+
+  // Also collect local directory names present in wsDir and rootDir
+  const localDirs = new Set<string>()
+  const inspectDirForLocalFolders = (dir: string) => {
+    try {
+      if (!fs.existsSync(dir)) return
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      for (const e of entries) {
+        if (e.isDirectory() && !IGNORED_DIR_NAMES.has(e.name) && !e.name.startsWith(".")) {
+          localDirs.add(e.name.toLowerCase())
+          aliasPrefixes.add(`${e.name}/`)
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  inspectDirForLocalFolders(wsDir)
+  inspectDirForLocalFolders(path.join(wsDir, "src"))
+  if (wsDir !== rootDir) {
+    inspectDirForLocalFolders(rootDir)
+    inspectDirForLocalFolders(path.join(rootDir, "src"))
+  }
+
+  const prefixList = Array.from(aliasPrefixes)
 
   return (specifier: string): boolean => {
     if (
@@ -307,7 +409,16 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
     ) {
       return true
     }
-    return aliasPrefixes.some((prefix) => specifier.startsWith(prefix))
+
+    const firstSegment = specifier.split("/")[0]?.toLowerCase()
+    if (
+      firstSegment &&
+      (localDirs.has(firstSegment) || (COMMON_SOURCE_DIRS.has(firstSegment) && specifier.includes("/")))
+    ) {
+      return true
+    }
+
+    return prefixList.some((prefix) => specifier.startsWith(prefix))
   }
 }
 
@@ -440,6 +551,11 @@ export function parseSourceFile(
   const ext = path.extname(filePath).toLowerCase()
   const source = extractScriptBlock(content, ext)
   if (!source.trim()) return { imports, configRefs }
+
+  // Fast pre-filter: skip expensive TS AST generation on files with no imports/requires/exports
+  if (!/(?:import|require|export)\s*[({'"\w]|plugins|extends|presets|type\s+reference/i.test(source)) {
+    return { imports, configRefs }
+  }
 
   let sourceFile: ts.SourceFile
   try {
@@ -1096,16 +1212,63 @@ export async function scanWorkspaceDependencies(
       )
     }
 
-    const activePackages = new Set<string>([...importedInFiles.keys(), ...configReferences])
-    const wsPhantoms: PhantomDependency[] = []
-    const wsUnused: UnusedDependency[] = []
+    return {
+      ws,
+      sourceFilesCount: sourceFiles.length,
+      importedInFiles,
+      configReferences,
+      fileExtensionsPresent,
+    }
+  }
 
+  interface WsScanData {
+    ws: Workspace
+    sourceFilesCount: number
+    importedInFiles: Map<string, Set<string>>
+    configReferences: Set<string>
+    fileExtensionsPresent: Set<string>
+  }
+
+  const wsScanDataList: WsScanData[] = []
+
+  const workers = Array.from({ length: WORKSPACE_CONCURRENCY }, async () => {
+    while (queue.length > 0) {
+      const ws = queue.shift()
+      if (!ws) break
+      const res = await processWorkspace(ws)
+      totalFilesScanned += res.sourceFilesCount
+      wsScanDataList.push(res)
+    }
+  })
+
+  await Promise.all(workers)
+
+  // Pass 2: Evaluate Phantoms & Unused with complete cross-workspace awareness
+  for (const data of wsScanDataList) {
+    const { ws, importedInFiles, configReferences, fileExtensionsPresent } = data
+    const activePackages = new Set<string>([...importedInFiles.keys(), ...configReferences])
+
+    // 1. Phantoms
     for (const [importedPkg, fileSet] of importedInFiles.entries()) {
       if (ws.deps[importedPkg]) continue
       if (ws.name && ws.name === importedPkg) continue
 
-      const isOnlyInTestOrDocs = [...fileSet].every((f) => isTestOrDocumentationFile(f))
-      if (isOnlyInTestOrDocs && rootDeps[importedPkg]) continue
+      // Hoisted: if declared in root dependencies or in an enclosing parent workspace
+      if (rootDeps[importedPkg]) continue
+
+      let parentDeclares = false
+      for (const otherData of wsScanDataList) {
+        if (
+          otherData.ws.relPath !== ws.relPath &&
+          (ws.relPath.startsWith(`${otherData.ws.relPath}/`) || otherData.ws.isRoot)
+        ) {
+          if (otherData.ws.deps[importedPkg]) {
+            parentDeclares = true
+            break
+          }
+        }
+      }
+      if (parentDeclares) continue
 
       const isInternalMonorepoPkg = monorepoPackageNames.has(importedPkg)
       const { suggestedVersion, hoistedFrom } = getSuggestedVersion(
@@ -1114,7 +1277,7 @@ export async function scanWorkspaceDependencies(
         isInternalMonorepoPkg
       )
 
-      wsPhantoms.push({
+      phantoms.push({
         name: importedPkg,
         workspace: ws.relPath,
         files: Array.from(fileSet).sort(),
@@ -1123,13 +1286,29 @@ export async function scanWorkspaceDependencies(
       })
     }
 
+    // 2. Unused
     for (const [depName, depRecord] of Object.entries(ws.deps)) {
       if (depRecord.type === "peer" || depRecord.type === "optional") continue
       if (importedInFiles.has(depName)) continue
       if (configReferences.has(depName)) continue
       if (isConnectedEcosystemPackage(depName, activePackages, fileExtensionsPresent)) continue
 
-      wsUnused.push({
+      // Check if imported by any child/sub-feature workspace under this workspace's directory
+      let usedInChildWorkspace = false
+      for (const otherData of wsScanDataList) {
+        if (
+          otherData.ws.relPath !== ws.relPath &&
+          (ws.isRoot || otherData.ws.relPath.startsWith(`${ws.relPath}/`))
+        ) {
+          if (otherData.importedInFiles.has(depName) || otherData.configReferences.has(depName)) {
+            usedInChildWorkspace = true
+            break
+          }
+        }
+      }
+      if (usedInChildWorkspace) continue
+
+      unused.push({
         name: depName,
         workspace: ws.relPath,
         version: depRecord.version,
@@ -1137,20 +1316,7 @@ export async function scanWorkspaceDependencies(
         isDevTool: isDevToolPackage(depName, depRecord.type),
       })
     }
-
-    return { filesCount: sourceFiles.length, phantoms: wsPhantoms, unused: wsUnused }
   }
-
-  const workers = Array.from({ length: WORKSPACE_CONCURRENCY }, async () => {
-    while (queue.length > 0) {
-      const ws = queue.shift()
-      if (!ws) break
-      const res = await processWorkspace(ws)
-      totalFilesScanned += res.filesCount
-      phantoms.push(...res.phantoms)
-      unused.push(...res.unused)
-    }
-  })
 
   await Promise.all(workers)
 

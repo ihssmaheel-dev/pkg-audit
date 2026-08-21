@@ -390,8 +390,8 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
 
         const action = typeof rawBody.action === "string" ? rawBody.action : "align"
 
-        // Load authoritative scan data for workspace allowlist validation
-        const currentScan = await scan(validatedDir, { security: action === "security-fix" })
+        // Fast authoritative scan data for workspace allowlist validation
+        const currentScan = await scan(validatedDir, { offline: true, security: action === "security-fix" })
 
         if (action === "remove-unused") {
           if (!Array.isArray(rawBody.unused) || rawBody.unused.length === 0) {
@@ -424,7 +424,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
           const { applySecurityFixes } = await import("../scan/security.js")
           const vulns = currentScan.security?.vulnerabilities ?? []
           fixResult = await applySecurityFixes(validatedDir, vulns, currentScan.workspaces)
-          const updatedScan = await scan(validatedDir, { security: true })
+          const updatedScan = await scan(validatedDir, { offline: true, security: true })
           json(
             res,
             {
@@ -445,7 +445,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
             allPackages: Boolean(rawBody.catalogAll),
           })
           const catalogRes = await applyCatalogPlan(validatedDir, plan, currentScan)
-          const updatedScan = await scan(validatedDir, {})
+          const updatedScan = await scan(validatedDir, { offline: true })
           json(
             res,
             {
@@ -483,7 +483,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
               ? (rawBody.overrides as Record<string, string>)
               : generateOverridesDict(dedupeResult.duplicates, strategy)
           fixResult = applyDedupeOverrides(validatedDir, overrides, dedupeResult.packageManager)
-          const updatedScan = await scan(validatedDir, {})
+          const updatedScan = await scan(validatedDir, { offline: true })
           json(
             res,
             {
@@ -512,7 +512,7 @@ export async function startServer(dir: string | null, opts: ServerOptions = {}):
           fixResult = await applyFixes(validatedDir, fixes, currentScan)
         }
 
-        const updatedScan = await scan(validatedDir, {})
+        const updatedScan = await scan(validatedDir, { offline: true })
         json(
           res,
           {

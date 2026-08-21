@@ -106,7 +106,6 @@ export function useScan() {
           },
       dir?: string
     ): Promise<{ ok: boolean; count: number; result: ScanResult | null }> => {
-      setLoading(true)
       setError(null)
       try {
         const token = getToken()
@@ -130,15 +129,22 @@ export function useScan() {
           setError({ message: body.error ?? `Fix request failed (${res.status})` })
           return { ok: false, count: 0, result: null }
         }
-        setResult(body.result)
+        setResult((prev) => {
+          if (!prev || !body.result) return body.result ?? null
+          return {
+            ...body.result,
+            outdated: body.result.outdated ?? prev.outdated ?? null,
+            security: body.result.security ?? prev.security,
+            deprecation: body.result.deprecation ?? prev.deprecation ?? null,
+            dedupe: body.result.dedupe ?? prev.dedupe,
+          }
+        })
         return { ok: true, count: body.changes?.length ?? 0, result: body.result }
       } catch (err) {
         setError({
           message: err instanceof Error ? err.message : "Fix request network error",
         })
         return { ok: false, count: 0, result: null }
-      } finally {
-        setLoading(false)
       }
     },
     []
