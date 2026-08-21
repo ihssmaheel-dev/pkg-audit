@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import ts from "typescript"
 import type { DepType, PhantomDependency, UnusedDependency, UnusedScanResult, Workspace } from "../types.js"
 import { compareSemver } from "./fix.js"
 
@@ -35,6 +36,16 @@ const SOURCE_EXTENSIONS = new Set([
   ".svelte",
   ".astro",
 ])
+
+// Extensions that get their <script> block extracted before AST parsing.
+// This is the same idea as Knip's per-framework "compiler" plugins: pull
+// out the region that's actually valid JS/TS instead of writing a second
+// text-matching engine per framework.
+const SCRIPT_BLOCK_EXTENSIONS = new Set([".vue", ".svelte", ".astro"])
+
+// Extensions that are JSON (or JSON-with-comments/trailing-commas), parsed
+// structurally rather than as JS.
+const JSON_CONFIG_EXTENSIONS = new Set([".json"])
 
 const NODE_BUILTINS = new Set([
   "assert",
@@ -104,252 +115,42 @@ const KNOWN_CLI_ALIASES: Record<string, string> = {
 }
 
 /**
- * Strips single-line, multi-line, and HTML comments from code while preserving string literals.
- * Prevents commented-out imports from masking real dead dependencies.
+ * Object/property keys under which a bare string in a JS/TS or JSON config
+ * file is treated as a package reference (e.g. `plugins: ["tailwindcss-animate"]`,
+ * `"extends": "eslint-config-airbnb"`). Deliberately narrow — this is the
+ * direct fix for the old STRING_LITERAL_REGEX matching arbitrary quoted
+ * strings anywhere in a config file.
  */
-export function stripComments(code: string): string {
-  let result = ""
-  let inSingleLineComment = false
-  let inMultiLineComment = false
-  let inHtmlComment = false
-  let inString: "'" | '"' | "`" | "`_simple" | null = null
-  let inRegex = false
-  let inRegexCharClass = false
-  let isEscaped = false
-  let lastNonWsChar = ""
-  const templateInterpStack: number[] = []
-
-  const REGEX_PRECEDING_CHARS = new Set([
-    "(",
-    ",",
-    "=",
-    ":",
-    "[",
-    "!",
-    "&",
-    "|",
-    "?",
-    "+",
-    "-",
-    "~",
-    "*",
-    "%",
-    "<",
-    ">",
-    "/",
-  ])
-
-  for (let i = 0; i < code.length; i++) {
-    const char = code[i]!
-    const next = code[i + 1]
-
-    if (inSingleLineComment) {
-      if (char === "\n" || char === "\r") {
-        inSingleLineComment = false
-        result += char
-      }
-      continue
-    }
-
-    if (inMultiLineComment) {
-      if (char === "*" && next === "/") {
-        inMultiLineComment = false
-        i++ // skip '/'
-      }
-      continue
-    }
-
-    if (inHtmlComment) {
-      if (char === "-" && next === "-" && code[i + 2] === ">") {
-        inHtmlComment = false
-        i += 2 // skip '->'
-      }
-      continue
-    }
-
-    // Standard string literal ('...' or "...")
-    if (inString === "'" || inString === '"') {
-      result += char
-      if (isEscaped) {
-        isEscaped = false
-      } else if (char === "\\") {
-        isEscaped = true
-      } else if (char === inString) {
-        inString = null
-        lastNonWsChar = char
-      }
-      continue
-    }
-
-    // Simple single-token backtick specifier (e.g. `chalk` or `@scope/foo`)
-    if (inString === "`_simple") {
-      result += char
-      if (isEscaped) {
-        isEscaped = false
-      } else if (char === "\\") {
-        isEscaped = true
-      } else if (char === "`") {
-        inString = null
-        lastNonWsChar = "`"
-      }
-      continue
-    }
-
-    // Template literal (`...`)
-    if (inString === "`") {
-      if (isEscaped) {
-        isEscaped = false
-        result += " "
-        continue
-      }
-
-      if (char === "\\") {
-        isEscaped = true
-        result += " "
-        continue
-      }
-
-      // Check for interpolation start ${...}
-      if (templateInterpStack.length === 0 && char === "$" && next === "{") {
-        templateInterpStack.push(1)
-        result += "${"
-        i++ // skip '{'
-        continue
-      }
-
-      // If currently inside an interpolation ${ ... }
-      if (templateInterpStack.length > 0) {
-        if (char === "{") {
-          templateInterpStack[templateInterpStack.length - 1]!++
-          result += char
-        } else if (char === "}") {
-          templateInterpStack[templateInterpStack.length - 1]!--
-          if (templateInterpStack[templateInterpStack.length - 1]! <= 0) {
-            templateInterpStack.pop()
-          }
-          result += char
-        } else if (char === '"' || char === "'") {
-          inString = char
-          result += char
-        } else {
-          result += char
-        }
-        continue
-      }
-
-      // Closing backtick of template literal
-      if (char === "`") {
-        inString = null
-        result += "`"
-        lastNonWsChar = "`"
-        continue
-      }
-
-      // Inside template string body (outside interpolation) - blank out text to avoid false AST matches in docs/templates
-      result += char === "\n" || char === "\r" ? char : " "
-      continue
-    }
-
-    if (inRegex) {
-      result += char
-      if (isEscaped) {
-        isEscaped = false
-      } else if (char === "\\") {
-        isEscaped = true
-      } else if (char === "[" && !inRegexCharClass) {
-        inRegexCharClass = true
-      } else if (char === "]" && inRegexCharClass) {
-        inRegexCharClass = false
-      } else if (char === "/" && !inRegexCharClass) {
-        inRegex = false
-        lastNonWsChar = "/"
-      } else if (char === "\n" || char === "\r") {
-        inRegex = false // regex literals cannot span lines in JS
-      }
-      continue
-    }
-
-    // Check for comment starts
-    if (char === "/" && next === "/") {
-      inSingleLineComment = true
-      i++ // skip next '/'
-      continue
-    }
-
-    if (char === "/" && next === "*") {
-      inMultiLineComment = true
-      i++ // skip next '*'
-      continue
-    }
-
-    // Check for regex literal start vs division operator
-    if (char === "/") {
-      const canStartRegex = lastNonWsChar === "" || REGEX_PRECEDING_CHARS.has(lastNonWsChar)
-      if (canStartRegex) {
-        inRegex = true
-        inRegexCharClass = false
-        isEscaped = false
-        result += char
-        continue
-      }
-    }
-
-    if (char === "<" && next === "!" && code[i + 2] === "-" && code[i + 3] === "-") {
-      inHtmlComment = true
-      i += 3 // skip '!--'
-      continue
-    }
-
-    if (char === "`") {
-      // Check if this is a simple single-line specifier like `chalk` or `@scope/foo` without newlines, spaces, or statements
-      let isSimpleSpecifier = false
-      let endBacktick = -1
-      for (let j = i + 1; j < code.length && j < i + 120; j++) {
-        if (code[j] === "\n" || code[j] === "\r" || code[j] === ";" || code[j] === "{" || code[j] === "}") {
-          break
-        }
-        if (code[j] === "`" && code[j - 1] !== "\\") {
-          endBacktick = j
-          break
-        }
-      }
-
-      if (endBacktick !== -1) {
-        const inner = code.slice(i + 1, endBacktick).trim()
-        if (/^@?[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)?$/.test(inner)) {
-          isSimpleSpecifier = true
-        }
-      }
-
-      if (isSimpleSpecifier) {
-        inString = "`_simple"
-        result += "`"
-        continue
-      }
-
-      inString = "`"
-      result += "`"
-      continue
-    }
-
-    if (char === '"' || char === "'") {
-      inString = char
-      result += char
-      continue
-    }
-
-    result += char
-    if (!/\s/.test(char)) {
-      lastNonWsChar = char
-    }
-  }
-
-  return result
-}
+const CONFIG_REFERENCE_KEYS = new Set([
+  "plugins",
+  "presets",
+  "extends",
+  "extend",
+  "parser",
+  "processor",
+  "reporter",
+  "reporters",
+  "transform",
+  "preprocessor",
+  "preprocessors",
+  "compiler",
+  "compilers",
+  "loader",
+  "loaders",
+  "transport",
+  "transports",
+  "target",
+  "targets",
+  "adapter",
+  "adapters",
+  "driver",
+  "drivers",
+  "runner",
+  "runners",
+])
 
 /**
  * Determines whether a file is a JS/TS project configuration file.
- * Strictly limited to JS, TS, JSON, and YAML configuration formats (never non-JS languages like Go or Rust).
  */
 export function isConfigurationFile(filename: string): boolean {
   const lower = filename.toLowerCase()
@@ -375,7 +176,6 @@ export function isConfigurationFile(filename: string): boolean {
   ) {
     return true
   }
-  // Configuration files must end in JS/TS/JSON/YAML extensions
   if (/(?:^|\.)(?:config|rc)\.(?:[mc]?[jt]sx?|json|ya?ml|cjs|mjs)$/i.test(lower)) return true
   return false
 }
@@ -415,7 +215,6 @@ export function isDevToolPackage(name: string, type: DepType): boolean {
   if (type === "dev" || type === "peer") return true
   const lower = name.toLowerCase()
 
-  // Types, linters, bundlers, testing tools, and compilers
   if (
     lower.startsWith("@types/") ||
     lower.startsWith("@typescript-eslint/") ||
@@ -445,6 +244,25 @@ export function isDevToolPackage(name: string, type: DepType): boolean {
 const TSCONFIG_ALIAS_CACHE = new Map<string, string[]>()
 
 /**
+ * Parses a JSON/JSONC config file (tsconfig.json-style: comments and
+ * trailing commas allowed) using TypeScript's own tolerant JSON parser
+ * instead of a hand-rolled comment stripper. This is the exact same
+ * function `tsc` uses internally to read tsconfig.json.
+ */
+function parseJsoncFile(filePath: string): unknown {
+  if (!fs.existsSync(filePath)) return undefined
+  let raw: string
+  try {
+    raw = fs.readFileSync(filePath, "utf8")
+  } catch {
+    return undefined
+  }
+  const { config, error } = ts.parseConfigFileTextToJson(filePath, raw)
+  if (error) return undefined
+  return config
+}
+
+/**
  * Loads compilerOptions.paths from tsconfig.json / jsconfig.json to dynamically match custom path aliases.
  */
 export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier: string) => boolean {
@@ -457,27 +275,15 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
       return
     }
 
-    if (!fs.existsSync(filePath)) {
-      TSCONFIG_ALIAS_CACHE.set(filePath, [])
-      return
-    }
-
     const prefixes: string[] = []
-    try {
-      const raw = fs.readFileSync(filePath, "utf8")
-      const cleanJson = stripComments(raw)
-      const parsed = JSON.parse(cleanJson) as {
-        compilerOptions?: { paths?: Record<string, string[]> }
+    const parsed = parseJsoncFile(filePath) as
+      { compilerOptions?: { paths?: Record<string, string[]> } } | undefined
+    const paths = parsed?.compilerOptions?.paths
+    if (paths && typeof paths === "object") {
+      for (const aliasKey of Object.keys(paths)) {
+        const prefix = aliasKey.replace(/\*.*$/, "")
+        if (prefix) prefixes.push(prefix)
       }
-      const paths = parsed.compilerOptions?.paths
-      if (paths && typeof paths === "object") {
-        for (const aliasKey of Object.keys(paths)) {
-          const prefix = aliasKey.replace(/\*.*$/, "")
-          if (prefix) prefixes.push(prefix)
-        }
-      }
-    } catch {
-      // Ignore parse error
     }
 
     TSCONFIG_ALIAS_CACHE.set(filePath, prefixes)
@@ -501,7 +307,6 @@ export function loadPathAliasMatcher(wsDir: string, rootDir: string): (specifier
     ) {
       return true
     }
-
     return aliasPrefixes.some((prefix) => specifier.startsWith(prefix))
   }
 }
@@ -523,104 +328,378 @@ export function extractPackageName(specifier: string, isAlias?: (spec: string) =
     return null
   }
 
-  if (isAlias && isAlias(trimmed)) {
-    return null
-  }
-
-  if (trimmed.startsWith("node:") || trimmed.startsWith("bun:") || trimmed.startsWith("deno:")) {
-    return null
-  }
-
-  if (NODE_BUILTINS.has(trimmed)) {
-    return null
-  }
+  if (isAlias && isAlias(trimmed)) return null
+  if (trimmed.startsWith("node:") || trimmed.startsWith("bun:") || trimmed.startsWith("deno:")) return null
+  if (NODE_BUILTINS.has(trimmed)) return null
 
   if (trimmed.startsWith("@")) {
     if (trimmed.startsWith("@/")) return null
     const parts = trimmed.split("/")
-    if (parts.length >= 2) {
-      return `${parts[0]}/${parts[1]}`
-    }
+    if (parts.length >= 2) return `${parts[0]}/${parts[1]}`
     return null
   }
 
   const firstSlash = trimmed.indexOf("/")
-  if (firstSlash !== -1) {
-    return trimmed.slice(0, firstSlash)
-  }
-
+  if (firstSlash !== -1) return trimmed.slice(0, firstSlash)
   return trimmed
 }
 
-// Regex patterns to capture import/require/export specifiers across ES/CJS/CSS/Frameworks (including backticks)
-const IMPORT_EXPORT_REGEX =
-  /(?:import\s+(?:type\s+)?(?:[\s\w*$,{}]+from\s+)?|export\s+(?:[\s\w*$,{}]+from\s+)?|import\s*\(\s*|require\s*\(\s*|require\.resolve\s*\(\s*|import\s+[`"']|@import\s+[`"'])[`"']([^`"'$]+)[`"']/g
+// ---------------------------------------------------------------------------
+// AST-based extraction. Replaces the old stripComments() + regex lexer.
+// Comments, string contents, and regex literals structurally cannot be
+// mistaken for import specifiers here, because we only ever look at real
+// syntax nodes the parser produced.
+// ---------------------------------------------------------------------------
 
-// Regex to capture string literals inside configuration files and dynamic transports
-const STRING_LITERAL_REGEX = /[`"'](@?[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)?)[`"']/g
+function extractScriptBlock(content: string, ext: string): string {
+  if (!SCRIPT_BLOCK_EXTENSIONS.has(ext)) return content
+  const match = content.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i)
+  return match?.[1] ?? ""
+}
+
+function getScriptKind(ext: string): ts.ScriptKind {
+  switch (ext) {
+    case ".tsx":
+      return ts.ScriptKind.TSX
+    case ".ts":
+    case ".mts":
+    case ".cts":
+      return ts.ScriptKind.TS
+    case ".jsx":
+      return ts.ScriptKind.JSX
+    case ".js":
+    case ".mjs":
+    case ".cjs":
+      return ts.ScriptKind.JS
+    // .vue/.svelte/.astro <script> blocks: TSX is permissive enough to
+    // parse both plain JS and TS content without inspecting lang="...".
+    case ".vue":
+    case ".svelte":
+    case ".astro":
+      return ts.ScriptKind.TSX
+    default:
+      return ts.ScriptKind.TS
+  }
+}
+
+function collectStringLiteralsFromExpr(expr: ts.Expression, out: string[]): void {
+  if (ts.isStringLiteralLike(expr)) {
+    out.push(expr.text)
+  } else if (ts.isArrayLiteralExpression(expr)) {
+    for (const el of expr.elements) collectStringLiteralsFromExpr(el, out)
+  }
+  // Nested calls like babel-style `["plugin-name", { options }]` are
+  // handled by the array branch above; the options object itself is not
+  // walked, so option values never get mistaken for package refs.
+}
 
 /**
- * Extracts all raw import/require/export specifiers from source content.
+ * Single AST walk that extracts BOTH real import/require specifiers AND
+ * config-style bare-string references (only under known risk keys like
+ * `plugins`/`extends`/`presets`), for one JS/TS/JSX/TSX/Vue/Svelte/Astro file.
  */
-export function extractImportSpecifiers(content: string): Set<string> {
-  const specifiers = new Set<string>()
-  const cleanContent = stripComments(content)
-  let match: RegExpExecArray | null
+export function parseSourceFile(
+  content: string,
+  filePath: string,
+  isAlias?: (spec: string) => boolean
+): { imports: Set<string>; configRefs: Set<string> } {
+  const imports = new Set<string>()
+  const configRefs = new Set<string>()
 
-  IMPORT_EXPORT_REGEX.lastIndex = 0
-  while ((match = IMPORT_EXPORT_REGEX.exec(cleanContent)) !== null) {
-    const specifier = match[1]?.trim()
-    if (specifier) {
-      specifiers.add(specifier)
+  const ext = path.extname(filePath).toLowerCase()
+  const source = extractScriptBlock(content, ext)
+  if (!source.trim()) return { imports, configRefs }
+
+  let sourceFile: ts.SourceFile
+  try {
+    sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, false, getScriptKind(ext))
+  } catch {
+    return { imports, configRefs }
+  }
+
+  const addImport = (raw: string | undefined) => {
+    if (!raw) return
+    const pkg = extractPackageName(raw, isAlias)
+    if (pkg) imports.add(pkg)
+  }
+
+  const addConfigRefs = (raws: string[]) => {
+    for (const raw of raws) {
+      const pkg = extractPackageName(raw, isAlias)
+      if (pkg) configRefs.add(pkg)
     }
   }
 
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node)) {
+      if (ts.isStringLiteralLike(node.moduleSpecifier)) addImport(node.moduleSpecifier.text)
+    } else if (ts.isImportEqualsDeclaration(node)) {
+      const ref = node.moduleReference
+      if (ts.isExternalModuleReference(ref) && ts.isStringLiteralLike(ref.expression)) {
+        addImport(ref.expression.text)
+      }
+    } else if (ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) {
+        addImport(node.moduleSpecifier.text)
+      }
+    } else if (ts.isCallExpression(node)) {
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword
+      const expr = node.expression
+      const isRequireCall = ts.isIdentifier(expr) && expr.text === "require"
+      const isRequireResolve =
+        ts.isPropertyAccessExpression(expr) &&
+        ts.isIdentifier(expr.expression) &&
+        expr.expression.text === "require" &&
+        expr.name.text === "resolve"
+
+      if ((isDynamicImport || isRequireCall || isRequireResolve) && node.arguments.length > 0) {
+        const arg = node.arguments[0]
+        if (arg && ts.isStringLiteralLike(arg)) addImport(arg.text)
+      }
+    } else if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
+      // Config-style: `plugins: ["a", "b"]`, `extends: "eslint-config-x"`
+      const keyName = ts.isIdentifier(node.name)
+        ? node.name.text
+        : ts.isStringLiteralLike(node.name)
+          ? node.name.text
+          : null
+      if (keyName && CONFIG_REFERENCE_KEYS.has(keyName) && ts.isPropertyAssignment(node)) {
+        const collected: string[] = []
+        collectStringLiteralsFromExpr(node.initializer, collected)
+        addConfigRefs(collected)
+      }
+    }
+
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+
+  for (const ref of sourceFile.typeReferenceDirectives ?? []) {
+    addImport(ref.fileName)
+  }
+
+  return { imports, configRefs }
+}
+
+/**
+ * Strips single-line, multi-line, and HTML comments from code while preserving string literals.
+ */
+export function stripComments(code: string): string {
+  let result = ""
+  let inSingle = false
+  let inMulti = false
+  let inStr: string | null = null
+  let inRegex = false
+  let inRegexClass = false
+  let isEsc = false
+  let lastNonWs = ""
+
+  const REGEX_PRECEDING = new Set([
+    "(",
+    ",",
+    "=",
+    ":",
+    "[",
+    "!",
+    "&",
+    "|",
+    "?",
+    "+",
+    "-",
+    "~",
+    "*",
+    "%",
+    "<",
+    ">",
+    "/",
+  ])
+
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i]!
+    const next = code[i + 1]
+
+    if (inSingle) {
+      if (ch === "\n" || ch === "\r") {
+        inSingle = false
+        result += ch
+      }
+      continue
+    }
+    if (inMulti) {
+      if (ch === "*" && next === "/") {
+        inMulti = false
+        i++
+      }
+      continue
+    }
+    if (inStr) {
+      result += ch
+      if (isEsc) {
+        isEsc = false
+      } else if (ch === "\\") {
+        isEsc = true
+      } else if (ch === inStr) {
+        inStr = null
+        lastNonWs = ch
+      }
+      continue
+    }
+    if (inRegex) {
+      result += ch
+      if (isEsc) {
+        isEsc = false
+      } else if (ch === "\\") {
+        isEsc = true
+      } else if (ch === "[" && !inRegexClass) {
+        inRegexClass = true
+      } else if (ch === "]" && inRegexClass) {
+        inRegexClass = false
+      } else if (ch === "/" && !inRegexClass) {
+        inRegex = false
+        lastNonWs = "/"
+      } else if (ch === "\n" || ch === "\r") {
+        inRegex = false
+      }
+      continue
+    }
+
+    if (ch === "/" && next === "/") {
+      inSingle = true
+      i++
+      continue
+    }
+    if (ch === "/" && next === "*") {
+      inMulti = true
+      i++
+      continue
+    }
+    if (ch === "/") {
+      const canBeRegex = lastNonWs === "" || REGEX_PRECEDING.has(lastNonWs)
+      if (canBeRegex) {
+        inRegex = true
+        inRegexClass = false
+        isEsc = false
+        result += ch
+        continue
+      }
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      inStr = ch
+      result += ch
+      continue
+    }
+
+    result += ch
+    if (!/\s/.test(ch)) {
+      lastNonWs = ch
+    }
+  }
+  return result
+}
+
+/**
+ * Extracts raw import specifiers from source content.
+ */
+export function extractImportSpecifiers(content: string, filePath = "unknown.ts"): Set<string> {
+  const specifiers = new Set<string>()
+  const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
+
+  function visit(node: ts.Node): void {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) {
+        specifiers.add(node.moduleSpecifier.text)
+      }
+    } else if (ts.isCallExpression(node)) {
+      const expr = node.expression
+      const isDynamicImport = expr.kind === ts.SyntaxKind.ImportKeyword
+      const isRequireCall = ts.isIdentifier(expr) && expr.text === "require"
+      const isRequireResolve =
+        ts.isPropertyAccessExpression(expr) &&
+        ts.isIdentifier(expr.expression) &&
+        expr.expression.text === "require" &&
+        expr.name.text === "resolve"
+
+      if ((isDynamicImport || isRequireCall || isRequireResolve) && node.arguments.length > 0) {
+        const arg = node.arguments[0]
+        if (arg && ts.isStringLiteralLike(arg)) {
+          specifiers.add(arg.text)
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
   return specifiers
 }
 
 /**
- * Extracts all external package names imported in a source file content after stripping comments.
+ * Backward-compatible wrapper: import specifiers only.
  */
 export function extractImportsFromContent(content: string, isAlias?: (spec: string) => boolean): Set<string> {
-  const packages = new Set<string>()
-  const cleanContent = stripComments(content)
-  let match: RegExpExecArray | null
-
-  IMPORT_EXPORT_REGEX.lastIndex = 0
-  while ((match = IMPORT_EXPORT_REGEX.exec(cleanContent)) !== null) {
-    const specifier = match[1]
-    if (!specifier) continue
-    const pkg = extractPackageName(specifier, isAlias)
-    if (pkg) {
-      packages.add(pkg)
-    }
-  }
-
-  return packages
+  return parseSourceFile(content, "unknown.ts", isAlias).imports
 }
 
 /**
- * Extracts all potential package names referenced in configuration files after stripping comments.
+ * Walks a parsed JSON config value, collecting string leaves that sit
+ * under a known risk key (plugins/extends/presets/...), instead of
+ * matching every quoted string in the file.
+ */
+function collectJsonConfigReferences(
+  value: unknown,
+  refs: Set<string>,
+  isAlias: ((spec: string) => boolean) | undefined,
+  underRiskKey: boolean
+): void {
+  if (typeof value === "string") {
+    if (underRiskKey) {
+      const pkg = extractPackageName(value, isAlias)
+      if (pkg) refs.add(pkg)
+    }
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectJsonConfigReferences(item, refs, isAlias, underRiskKey)
+    return
+  }
+  if (value && typeof value === "object") {
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      collectJsonConfigReferences(val, refs, isAlias, CONFIG_REFERENCE_KEYS.has(key))
+    }
+  }
+}
+
+/**
+ * Extracts config-style package references from either a JSON config file
+ * or a JS/TS config file. Structurally scoped (see CONFIG_REFERENCE_KEYS)
+ * rather than matching any quoted string in the file.
  */
 export function extractReferencesFromConfig(
   content: string,
+  filePath = "config.ts",
   isAlias?: (spec: string) => boolean
 ): Set<string> {
-  const refs = new Set<string>()
-  const cleanContent = stripComments(content)
-  let match: RegExpExecArray | null
+  const ext = path.extname(filePath).toLowerCase()
 
-  STRING_LITERAL_REGEX.lastIndex = 0
-  while ((match = STRING_LITERAL_REGEX.exec(cleanContent)) !== null) {
-    const specifier = match[1]
-    if (!specifier) continue
-    const pkg = extractPackageName(specifier, isAlias)
-    if (pkg) {
-      refs.add(pkg)
+  if (JSON_CONFIG_EXTENSIONS.has(ext) || path.basename(filePath).toLowerCase().startsWith(".eslintrc")) {
+    let config: unknown
+    try {
+      const parsed = ts.parseConfigFileTextToJson(filePath.replace(/\\/g, "/"), content)
+      if (parsed.error || parsed.config === undefined) return new Set()
+      config = parsed.config
+    } catch {
+      return new Set()
     }
+    const refs = new Set<string>()
+    collectJsonConfigReferences(config, refs, isAlias, false)
+    return refs
   }
 
-  return refs
+  // JS/TS config file: real imports are captured by parseSourceFile's
+  // `imports` set already (handled at the call site); this covers only
+  // the bare-string config-key patterns.
+  return parseSourceFile(content, filePath, isAlias).configRefs
 }
 
 /**
@@ -637,9 +716,7 @@ export function extractPackagesFromScripts(scriptsRecord?: Record<string, string
       for (const token of tokens) {
         const cleanToken = token.trim().replace(/^npx\s+/, "")
         if (!cleanToken) continue
-
         referenced.add(cleanToken)
-
         if (KNOWN_CLI_ALIASES[cleanToken]) {
           referenced.add(KNOWN_CLI_ALIASES[cleanToken]!)
         }
@@ -661,9 +738,7 @@ export async function collectSourceFiles(
   results: string[] = []
 ): Promise<string[]> {
   const normalizedDirPath = path.resolve(dir).toLowerCase()
-  if (visitedDirs.has(normalizedDirPath)) {
-    return results
-  }
+  if (visitedDirs.has(normalizedDirPath)) return results
   visitedDirs.add(normalizedDirPath)
 
   let entries: fs.Dirent[]
@@ -675,11 +750,9 @@ export async function collectSourceFiles(
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
-
     let isDir = entry.isDirectory()
     let isFile = entry.isFile()
 
-    // Follow symlinks safely
     if (entry.isSymbolicLink()) {
       try {
         const stat = await fs.promises.stat(fullPath)
@@ -691,15 +764,9 @@ export async function collectSourceFiles(
     }
 
     if (isDir) {
-      if (IGNORED_DIR_NAMES.has(entry.name) || entry.name.startsWith(".")) {
-        continue
-      }
-
+      if (IGNORED_DIR_NAMES.has(entry.name) || entry.name.startsWith(".")) continue
       const normalizedSub = path.resolve(fullPath).toLowerCase()
-      if (childWorkspaceDirs.has(normalizedSub)) {
-        continue
-      }
-
+      if (childWorkspaceDirs.has(normalizedSub)) continue
       await collectSourceFiles(fullPath, childWorkspaceDirs, visitedDirs, results)
     } else if (isFile) {
       const ext = path.extname(entry.name).toLowerCase()
@@ -723,53 +790,39 @@ export function isConnectedEcosystemPackage(
 ): boolean {
   const lowerDep = depName.toLowerCase()
 
-  // 1. Scoped Ecosystem Connection (e.g. @fastify/*, @nestjs/*, @opentelemetry/*, @tanstack/*, @aws-sdk/*, @expo/*)
   if (lowerDep.startsWith("@")) {
     const scope = lowerDep.split("/")[0]!
     for (const active of activePackages) {
-      if (active.toLowerCase().startsWith(`${scope}/`)) {
-        return true
-      }
+      if (active.toLowerCase().startsWith(`${scope}/`)) return true
     }
   }
 
-  // 2. Generic Plugin / Preset / Config / Adapter / Driver Suffix Pairing
   const PLUGIN_PREFIX_REGEX =
     /^(@?[a-z0-9_-]+)[/-](?:plugin|preset|config|adapter|driver|theme|reporter|loader|transformer)(?:-[a-z0-9_-]+)?$/i
   const match = lowerDep.match(PLUGIN_PREFIX_REGEX)
   if (match && match[1]) {
     const baseTool = match[1].toLowerCase()
-    if (activePackages.has(baseTool)) {
-      return true
-    }
+    if (activePackages.has(baseTool)) return true
   }
 
-  // 3. Reverse Plugin Connection: if base tool matches active tool prefix
   for (const active of activePackages) {
     const activeLower = active.toLowerCase()
-    if (lowerDep.startsWith(`${activeLower}-`) || lowerDep.startsWith(`@${activeLower}/`)) {
-      return true
-    }
+    if (lowerDep.startsWith(`${activeLower}-`) || lowerDep.startsWith(`@${activeLower}/`)) return true
   }
 
-  // 4. Type Definitions (@types/<pkg>)
   if (lowerDep.startsWith("@types/")) {
     const basePkg = lowerDep.slice(7)
-    if (basePkg === "node" && (sourceFileExtensions.has(".ts") || sourceFileExtensions.has(".tsx"))) {
+    if (basePkg === "node" && (sourceFileExtensions.has(".ts") || sourceFileExtensions.has(".tsx")))
       return true
-    }
     if (
       (basePkg === "react" || basePkg === "react-dom") &&
       (sourceFileExtensions.has(".tsx") || sourceFileExtensions.has(".jsx"))
     ) {
       return true
     }
-    if (activePackages.has(basePkg)) {
-      return true
-    }
+    if (activePackages.has(basePkg)) return true
   }
 
-  // 5. Template & UI Runtimes
   if (
     (lowerDep === "react" || lowerDep === "react-dom" || lowerDep === "preact" || lowerDep === "solid-js") &&
     (sourceFileExtensions.has(".tsx") || sourceFileExtensions.has(".jsx"))
@@ -777,15 +830,9 @@ export function isConnectedEcosystemPackage(
     return true
   }
 
-  if (lowerDep === "vue" && sourceFileExtensions.has(".vue")) {
-    return true
-  }
+  if (lowerDep === "vue" && sourceFileExtensions.has(".vue")) return true
+  if (lowerDep === "svelte" && sourceFileExtensions.has(".svelte")) return true
 
-  if (lowerDep === "svelte" && sourceFileExtensions.has(".svelte")) {
-    return true
-  }
-
-  // 6. Common Decorator Polyfill
   if (lowerDep === "reflect-metadata" && sourceFileExtensions.has(".ts")) {
     for (const active of activePackages) {
       if (active.includes("nest") || active.includes("typeorm") || active.includes("routing-controllers")) {
@@ -811,38 +858,27 @@ function getSuggestedVersion(
   }
 
   const matches = globalDepVersions.get(depName) ?? []
-  if (matches.length === 0) {
-    return { suggestedVersion: null, hoistedFrom: null }
-  }
+  if (matches.length === 0) return { suggestedVersion: null, hoistedFrom: null }
 
-  // If root workspace declares it, prefer root version
   const rootMatch = matches.find((m) => m.workspace === ".")
-  if (rootMatch) {
-    return { suggestedVersion: rootMatch.version, hoistedFrom: "Root workspace" }
-  }
+  if (rootMatch) return { suggestedVersion: rootMatch.version, hoistedFrom: "Root workspace" }
 
-  // Tally frequency of each version across all workspaces
   const versionCounts = new Map<string, number>()
   const versionFirstWorkspace = new Map<string, string>()
 
   for (const m of matches) {
     versionCounts.set(m.version, (versionCounts.get(m.version) ?? 0) + 1)
-    if (!versionFirstWorkspace.has(m.version)) {
-      versionFirstWorkspace.set(m.version, m.workspace)
-    }
+    if (!versionFirstWorkspace.has(m.version)) versionFirstWorkspace.set(m.version, m.workspace)
   }
 
   let bestVersion = matches[0]!.version
   let maxCount = 0
-
   for (const [ver, count] of versionCounts.entries()) {
     if (count > maxCount) {
       maxCount = count
       bestVersion = ver
-    } else if (count === maxCount) {
-      if (compareSemver(ver, bestVersion) > 0) {
-        bestVersion = ver
-      }
+    } else if (count === maxCount && compareSemver(ver, bestVersion) > 0) {
+      bestVersion = ver
     }
   }
 
@@ -863,37 +899,26 @@ export async function scanWorkspaceDependencies(
   const unused: UnusedDependency[] = []
   let totalFilesScanned = 0
 
-  // Index all workspace absolute directory paths for boundary isolation
   const allWorkspaceDirPaths = new Map<string, string>()
   const monorepoPackageNames = new Set<string>()
 
   for (const ws of workspaces) {
     const wsDir = ws.absPath ? path.dirname(ws.absPath) : path.resolve(rootDir, ws.relPath)
     allWorkspaceDirPaths.set(ws.relPath, path.resolve(wsDir).toLowerCase())
-    if (ws.name) {
-      monorepoPackageNames.add(ws.name)
-    }
+    if (ws.name) monorepoPackageNames.add(ws.name)
   }
 
-  // Index all declared dependencies across the monorepo for hoisting lookups
   const globalDepVersions = new Map<string, { version: string; workspace: string }[]>()
   for (const ws of workspaces) {
     for (const [depName, depRecord] of Object.entries(ws.deps)) {
-      if (!globalDepVersions.has(depName)) {
-        globalDepVersions.set(depName, [])
-      }
-      globalDepVersions.get(depName)!.push({
-        version: depRecord.version,
-        workspace: ws.relPath,
-      })
+      if (!globalDepVersions.has(depName)) globalDepVersions.set(depName, [])
+      globalDepVersions.get(depName)!.push({ version: depRecord.version, workspace: ws.relPath })
     }
   }
 
-  // Index root workspace dependencies for monorepo test tool hoisting checks
   const rootWs = workspaces.find((w) => w.isRoot || w.relPath === ".")
   const rootDeps = rootWs ? rootWs.deps : {}
 
-  // Process workspaces concurrently using a worker pool for high performance on large monorepos
   const WORKSPACE_CONCURRENCY = 24
   const queue = [...workspaces]
 
@@ -902,20 +927,16 @@ export async function scanWorkspaceDependencies(
 
     const childWorkspaceDirs = new Set<string>()
     for (const [otherRelPath, otherAbsDir] of allWorkspaceDirPaths.entries()) {
-      if (otherRelPath !== ws.relPath) {
-        childWorkspaceDirs.add(otherAbsDir)
-      }
+      if (otherRelPath !== ws.relPath) childWorkspaceDirs.add(otherAbsDir)
     }
 
     const isAlias = loadPathAliasMatcher(wsDir, rootDir)
     const sourceFiles = await collectSourceFiles(wsDir, childWorkspaceDirs)
 
-    // Map: importedPackage -> Set of relative file paths where imported
     const importedInFiles = new Map<string, Set<string>>()
     const configReferences = new Set<string>()
     const fileExtensionsPresent = new Set<string>()
 
-    // Check package.json scripts for active CLI tool references
     let pkgJsonScripts: Record<string, string> | undefined
     try {
       const pkgJsonPath = ws.absPath ?? path.join(wsDir, "package.json")
@@ -928,12 +949,8 @@ export async function scanWorkspaceDependencies(
       // Ignore
     }
 
-    const scriptReferencedPkgs = extractPackagesFromScripts(pkgJsonScripts)
-    for (const p of scriptReferencedPkgs) {
-      configReferences.add(p)
-    }
+    for (const p of extractPackagesFromScripts(pkgJsonScripts)) configReferences.add(p)
 
-    // Read source files in parallel chunks
     const FILE_CHUNK_SIZE = 32
     for (let i = 0; i < sourceFiles.length; i += FILE_CHUNK_SIZE) {
       const chunk = sourceFiles.slice(i, i + FILE_CHUNK_SIZE)
@@ -953,47 +970,42 @@ export async function scanWorkspaceDependencies(
           const isConfigFile = isConfigurationFile(basename)
 
           if (isConfigFile) {
-            // Configuration files ONLY contribute tool/preset/plugin references to avoid marking tools as unused.
-            // They MUST NEVER be treated as runtime module imports!
-            const configRefs = extractReferencesFromConfig(content, isAlias)
-            for (const ref of configRefs) {
+            // Config files only contribute tool/preset/plugin references
+            // (never treated as runtime module imports for phantom/unused
+            // purposes) — but JS/TS config files' real `import` statements
+            // ARE genuine tool usages, so those still count.
+            for (const ref of extractReferencesFromConfig(content, filePath, isAlias)) {
               configReferences.add(ref)
+            }
+            if (/\.(?:[mc]?[jt]sx?)$/i.test(basename)) {
+              for (const pkg of parseSourceFile(content, filePath, isAlias).imports) {
+                configReferences.add(pkg)
+              }
             }
             return
           }
 
-          const fileImports = extractImportsFromContent(content, isAlias)
+          const fileImports = parseSourceFile(content, filePath, isAlias).imports
           const relFilePath = path.relative(rootDir, filePath).replace(/\\/g, "/")
 
           for (const pkg of fileImports) {
-            if (!importedInFiles.has(pkg)) {
-              importedInFiles.set(pkg, new Set())
-            }
+            if (!importedInFiles.has(pkg)) importedInFiles.set(pkg, new Set())
             importedInFiles.get(pkg)!.add(relFilePath)
           }
         })
       )
     }
 
-    // Combine all actively referenced packages in this workspace
     const activePackages = new Set<string>([...importedInFiles.keys(), ...configReferences])
     const wsPhantoms: PhantomDependency[] = []
     const wsUnused: UnusedDependency[] = []
 
-    // 1. Detect Phantom (Undeclared) Dependencies
     for (const [importedPkg, fileSet] of importedInFiles.entries()) {
-      // Valid if declared in this workspace's manifest
       if (ws.deps[importedPkg]) continue
-
-      // Valid if self-reference (workspace imports its own package name)
       if (ws.name && ws.name === importedPkg) continue
 
-      // If all files importing this package are test / fixture / documentation files,
-      // and it's declared in root package.json, it's a hoisted dev/test tool (e.g. @playwright/test, vitest)
       const isOnlyInTestOrDocs = [...fileSet].every((f) => isTestOrDocumentationFile(f))
-      if (isOnlyInTestOrDocs && rootDeps[importedPkg]) {
-        continue
-      }
+      if (isOnlyInTestOrDocs && rootDeps[importedPkg]) continue
 
       const isInternalMonorepoPkg = monorepoPackageNames.has(importedPkg)
       const { suggestedVersion, hoistedFrom } = getSuggestedVersion(
@@ -1011,40 +1023,22 @@ export async function scanWorkspaceDependencies(
       })
     }
 
-    // 2. Detect Unused Dependencies (excluding peer and optional dependencies)
     for (const [depName, depRecord] of Object.entries(ws.deps)) {
-      // Peer and optional dependencies are contracts, not mandatory imports
-      if (depRecord.type === "peer" || depRecord.type === "optional") {
-        continue
-      }
-
-      // Used if directly imported in source code
+      if (depRecord.type === "peer" || depRecord.type === "optional") continue
       if (importedInFiles.has(depName)) continue
-
-      // Used if referenced in config files or scripts
       if (configReferences.has(depName)) continue
-
-      // Used if connected generically via ecosystem, plugin pairing, type definition, or template runtime
-      if (isConnectedEcosystemPackage(depName, activePackages, fileExtensionsPresent)) {
-        continue
-      }
-
-      const isDevTool = isDevToolPackage(depName, depRecord.type)
+      if (isConnectedEcosystemPackage(depName, activePackages, fileExtensionsPresent)) continue
 
       wsUnused.push({
         name: depName,
         workspace: ws.relPath,
         version: depRecord.version,
         type: depRecord.type,
-        isDevTool,
+        isDevTool: isDevToolPackage(depName, depRecord.type),
       })
     }
 
-    return {
-      filesCount: sourceFiles.length,
-      phantoms: wsPhantoms,
-      unused: wsUnused,
-    }
+    return { filesCount: sourceFiles.length, phantoms: wsPhantoms, unused: wsUnused }
   }
 
   const workers = Array.from({ length: WORKSPACE_CONCURRENCY }, async () => {
@@ -1060,7 +1054,6 @@ export async function scanWorkspaceDependencies(
 
   await Promise.all(workers)
 
-  // Sort phantoms and unused for consistent, deterministic outputs
   phantoms.sort((a, b) => a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name))
   unused.sort((a, b) => {
     if (a.type === "prod" && b.type !== "prod") return -1
@@ -1068,9 +1061,5 @@ export async function scanWorkspaceDependencies(
     return a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name)
   })
 
-  return {
-    phantoms,
-    unused,
-    scannedFilesCount: totalFilesScanned,
-  }
+  return { phantoms, unused, scannedFilesCount: totalFilesScanned }
 }

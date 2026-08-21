@@ -1,0 +1,6 @@
+{
+  "key": "lodash",
+  "cachedAt": 1787297053691,
+  "ttlMs": 86400000,
+  "data": { "versionsDeprecated": { "4.18.0": "Bad release. Please use lodash@4.17.21 instead." } }
+}

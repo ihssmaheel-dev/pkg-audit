@@ -8,16 +8,19 @@ import {
   cleanVersion,
   findPatchedVersion,
 } from "../src/scan/security.js"
+import { resetScanCache } from "../src/scan/cache.js"
 import type { SecurityVulnerability, Workspace } from "../src/types.js"
 
 describe("Google OSV Security Vulnerability Scanner", () => {
   let tmpDir: string
 
   beforeEach(() => {
+    resetScanCache()
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pkg-audit-security-"))
   })
 
   afterEach(() => {
+    resetScanCache()
     vi.restoreAllMocks()
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true })
@@ -164,7 +167,7 @@ describe("Google OSV Security Vulnerability Scanner", () => {
       return { ok: false, status: 404 } as Response
     })
 
-    const result = await checkVulnerabilities(mockWorkspaces)
+    const result = await checkVulnerabilities(mockWorkspaces, { rootDir: tmpDir })
 
     // Should call batch query + 2 hydration queries
     expect(fetchSpy).toHaveBeenCalledTimes(3)

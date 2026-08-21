@@ -7,6 +7,7 @@ import type {
   Workspace,
 } from "../types.js"
 import { applyFixes, compareSemver, type FixResult, type PackageFix } from "./fix.js"
+import { getScanCache } from "./cache.js"
 
 const OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
 const OSV_VULN_URL = "https://api.osv.dev/v1/vulns"
@@ -173,8 +174,6 @@ function getAdvisoryUrl(vuln: OsvVuln): string {
   return `https://osv.dev/vulnerability/${vuln.id}`
 }
 
-import { getScanCache } from "./cache.js"
-
 /**
  * Hydrates full vulnerability records for a list of unique vuln IDs via GET /v1/vulns/{id}.
  */
@@ -243,6 +242,7 @@ export async function checkVulnerabilities(
 
   let catalogMap: Record<string, string> = {}
   if (options.rootDir) {
+    getScanCache({ rootDir: options.rootDir })
     try {
       const { readPnpmWorkspaceYaml } = await import("./catalog.js")
       const parsed = readPnpmWorkspaceYaml(options.rootDir)
@@ -310,62 +310,68 @@ export async function checkVulnerabilities(
     }
   }
 
-  // 1. Batch query Google OSV in chunks of 250 queries to get minimal vulnerability IDs
+  // 1. Batch query Google OSV concurrently in chunks of 250 queries
   const CHUNK_SIZE = 250
   const allVulnIds: string[] = []
   const itemVulnMap = new Map<PkgOccurrence, string[]>()
 
+  const chunks: PkgOccurrence[][] = []
   for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-    const chunk = items.slice(i, i + CHUNK_SIZE)
-    const queries: OsvQuery[] = chunk.map((item) => ({
-      package: {
-        name: item.pkg,
-        ecosystem: "npm",
-      },
-      version: item.cleanVersion,
-    }))
+    chunks.push(items.slice(i, i + CHUNK_SIZE))
+  }
 
-    try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let completedItems = 0
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const queries: OsvQuery[] = chunk.map((item) => ({
+        package: {
+          name: item.pkg,
+          ecosystem: "npm",
+        },
+        version: item.cleanVersion,
+      }))
 
-      const response = await fetch(OSV_BATCH_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ queries }),
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timer))
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-      if (!response.ok) {
-        continue
-      }
+        const response = await fetch(OSV_BATCH_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ queries }),
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timer))
 
-      const data = (await response.json()) as OsvBatchResponse
-      const results = data.results ?? []
+        if (response.ok) {
+          const data = (await response.json()) as OsvBatchResponse
+          const results = data.results ?? []
 
-      for (let j = 0; j < results.length; j++) {
-        const res = results[j]
-        const item = chunk[j]
-        if (!res || !item || !res.vulns || res.vulns.length === 0) continue
+          for (let j = 0; j < results.length; j++) {
+            const res = results[j]
+            const item = chunk[j]
+            if (!res || !item || !res.vulns || res.vulns.length === 0) continue
 
-        const ids = res.vulns.map((v) => v.id)
-        itemVulnMap.set(item, ids)
-        for (const id of ids) {
-          allVulnIds.push(id)
+            const ids = res.vulns.map((v) => v.id)
+            itemVulnMap.set(item, ids)
+            for (const id of ids) {
+              allVulnIds.push(id)
+            }
+          }
+        }
+      } catch {
+        // Network error or timeout during OSV query
+      } finally {
+        completedItems += chunk.length
+        if (options.onProgress) {
+          options.onProgress({
+            phase: "security",
+            done: Math.min(completedItems, items.length),
+            total: items.length,
+          })
         }
       }
-    } catch {
-      // Network error or timeout during OSV query
-    }
-
-    if (options.onProgress) {
-      options.onProgress({
-        phase: "security",
-        done: Math.min(i + CHUNK_SIZE, items.length),
-        total: items.length,
-      })
-    }
-  }
+    })
+  )
 
   // 2. Hydration step: Fetch full records for all unique vulnerability IDs
   const hydratedMap = await hydrateAllVulns(allVulnIds, concurrency, timeoutMs)

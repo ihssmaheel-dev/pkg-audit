@@ -1,0 +1,11 @@
+{
+  "key": "react",
+  "cachedAt": 1787297054052,
+  "ttlMs": 86400000,
+  "data": {
+    "versionsDeprecated": {
+      "0.7.1": "The jeffbski/react module has been renamed to 'autoflow'. Please update your dependencies to point to autoflow. react@0.8.0+ will now refer to facebook/react",
+      "16.6.2": "React 16.6.2 release is broken. Please update React to 16.6.3."
+    }
+  }
+}

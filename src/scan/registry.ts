@@ -66,7 +66,11 @@ export async function runPool<T, R>(
   async function next(): Promise<void> {
     while (cursor < items.length) {
       const i = cursor++
-      results[i] = await worker(items[i])
+      try {
+        results[i] = await worker(items[i]!)
+      } catch {
+        results[i] = undefined as unknown as R
+      }
     }
   }
 

@@ -237,7 +237,9 @@ export async function fetchPackageDeprecationInfo(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(`https://registry.npmjs.org/${encodeNpmName(name)}`, {
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/vnd.npm.install-v1+json, application/json;q=0.9",
+      },
       signal: controller.signal,
     })
     if (!res.ok) {
@@ -268,6 +270,8 @@ export async function fetchPackageDeprecationInfo(
           lastPublished = data.time.modified
         }
       }
+    } else if (latestInfo && "publish_time" in latestInfo && typeof latestInfo.publish_time === "string") {
+      lastPublished = latestInfo.publish_time
     }
 
     const versionsDeprecated: Record<string, string> = {}
@@ -286,13 +290,15 @@ export async function fetchPackageDeprecationInfo(
       repository = data.repository.url.replace(/^git\+/, "").replace(/\.git$/, "")
     }
 
-    return {
+    const result: PackageDeprecationInfo = {
       deprecated,
       lastPublished,
       repository,
       homepage: data.homepage,
       versionsDeprecated,
     }
+    cache.set("deprecation", name, result)
+    return result
   } catch {
     return {}
   } finally {
@@ -325,8 +331,10 @@ export async function auditDeprecations(
   const registryData = await runPool(
     names,
     async (name) => {
+      // If package is known static deprecation, fast-path
+      const isKnown = Boolean(KNOWN_DEPRECATIONS[name])
       const [info, weeklyDownloads] = await Promise.all([
-        fetchPackageDeprecationInfo(name, opts.timeoutMs ?? 8000),
+        fetchPackageDeprecationInfo(name, isKnown ? 3000 : (opts.timeoutMs ?? 8000)),
         fetchWeeklyDownloads(name, Math.min(opts.timeoutMs ?? 8000, 5000)),
       ])
       done++
